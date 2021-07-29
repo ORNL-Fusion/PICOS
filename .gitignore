@@ -1,0 +1,16 @@
+*.o
+*/*.o
+.DS_Store
+HDF5/
+arma_libs/
+picosFILES/Makefile
+picosFILES/compile.sh
+picosFILES/debug_run_pro.sh
+picosFILES/profile_run_pro.sh
+picosFILES/run_pro.sh
+picosFILES/bin/
+picosFILES/inputFiles/
+picosFILES/outputFiles/
+picosFILES/nohup*
+*.fig
+picosFILES/*.csv
