@@ -11,8 +11,8 @@
 
 // Include user-defined header files:
 // =============================================================================
+#include "types.h"
 /*
-#include "structures.h"
 #include "collisionOperator.h"
 #include "particleBoundaryConditions.h"
 #include "rfOperator.h"
@@ -37,6 +37,25 @@ using namespace arma;
 
 int main(int argc, char* argv[])
 {
+    /*
+    MPI_Init(&argc, &argv);
+    */
+
+    // Create simulation objects:
+    // =========================================================================
+    // MPI object to hold topology information:
+    /*
+    MPI_MAIN mpi_main;
+    */
+
+    // Input parameters for simulation:
+    /*
+    simulationParameters params;
+    */
+
+    // Ion species vector:
+    vector<ionSpecies_TYP> IONS;
+
     cout << "Hello from PICOS++!!" << endl;
 
 	return(0);
