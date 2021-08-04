@@ -1,1 +1,1 @@
-d605962 Started development of types.h
+c0eaaa0 Created MPI topology script, completed the types moslty, need to define the operators for vec_field_TYP

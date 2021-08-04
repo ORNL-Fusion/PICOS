@@ -224,7 +224,6 @@ class ionSpecies_TYP : public vfield_vec_TYP
 
 public:
 
-  /*
 	int SPECIES;
 	int IC; 					// Initial condition IC=1 (Maxwellian), IC=2 (ring-like)
 
@@ -239,7 +238,7 @@ public:
 	double pctSupPartOutput; 	//
 	unsigned int nSupPartOutput;//
 
-	double densityFraction;		//
+	//double densityFraction;
 
 	double go;					// Initial relativistic gamma
 	double LarmorRadius;		// Larmor radius.
@@ -248,7 +247,6 @@ public:
 	double Wc;					// Average cyclotron frequency.
 	double Wp;					// Plasma frequency.
 	double avg_mu; 				// Average magnetic moment
-  */
 
 	arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
 	arma::mat V; 				// Ions' velocity, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
@@ -609,7 +607,7 @@ struct params_TYP
 	// List of variables in the outputs
 	vector<string> outputs_variables;
 
-	int dimensionality;
+	//int dimensionality;
 
 	//Control parameters for the simulation:
 	// Path to save the outputs
@@ -630,7 +628,7 @@ struct params_TYP
 
 	// Consider deleting of not neded:
 	// ===============================
-	int loadFields;
+	//int loadFields;
 	int loadGrid;
 	int usingHDF5;
 	int outputCadenceIterations;

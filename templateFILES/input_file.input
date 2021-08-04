@@ -1,10 +1,7 @@
 // Input data:
 // =============================================================================
-dimensionality              1
 mpisForFields               2
 quietStart                  0
-restart                     0
-loadFields                  0
 numberOfRKIterations        5
 numberOfParticleSpecies     1
 numberOfTracerSpecies       0
