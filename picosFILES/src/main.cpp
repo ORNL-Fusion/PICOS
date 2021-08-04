@@ -105,9 +105,10 @@ int main(int argc, char* argv[])
 
     // Initialize electromagnetic field variable:
     init.initializeFields(&params, &fields);
-    
+
     // Initialize IONS: scalar, bulk and particle arrays
-    //init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
+    init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
+
     // HDF object constructor:
     //HDF<IT, FT> hdfObj(&params, &FS, &IONS);
     // Define time step based on CFL condition: Whistler and ion velocity

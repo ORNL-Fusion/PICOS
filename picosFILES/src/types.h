@@ -70,12 +70,10 @@ public:
 	vfield_vec_TYP operator /= (vfield_vec_TYP R);
   */
 
-  /*
 	void fill(double value);
 	void ones(unsigned int N);
 	void zeros();
 	void zeros(unsigned int N);
-  */
 
 };
 
@@ -225,8 +223,6 @@ class ionSpecies_TYP : public vfield_vec_TYP
 public:
 
 	int SPECIES;
-	int IC; 					// Initial condition IC=1 (Maxwellian), IC=2 (ring-like)
-
 	double NSP; 				// Initial number of superparticles for the given ion species.
 	double NCP; 				// Number of charged particles per superparticle.
 	double NPC; 				// Number of superparticles per cell. When its value is zero, the particles are loaded from external files.
@@ -238,8 +234,6 @@ public:
 	double pctSupPartOutput; 	//
 	unsigned int nSupPartOutput;//
 
-	//double densityFraction;
-
 	double go;					// Initial relativistic gamma
 	double LarmorRadius;		// Larmor radius.
 	double VTper;				// Thermal velocity.
@@ -248,14 +242,17 @@ public:
 	double Wp;					// Plasma frequency.
 	double avg_mu; 				// Average magnetic moment
 
+	// ************ Consider arma::vec X_p, arma::vec Vpar_p, arma::vec Vper_p ***********
 	arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
 	arma::mat V; 				// Ions' velocity, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
+	// ***********************
+
 	arma::mat P; 				// Ions' momentum, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
 	arma::vec g; 				// Ions' relativistic gamma factor.
+
 	arma::ivec mn; 			// Ions' position in terms of the index of mesh node
 
-
-  // ************ Consider arma::vec E, arma::vec B, arma::vec dB , arma::vec ddB ***********
+  // ************ Consider arma::vec EX_p, arma::vec BX_p, arma::vec dBX_p , arma::vec ddBX_p ***********
 	arma::mat E;				// Electric field seen by particles when advancing particles velocity
 	arma::mat B;				// Magnetic field seen by particles when advancing particles velocity
 // ***********************
@@ -281,9 +278,9 @@ public:
 	arma::vec n_m_; 				// Ion density at time level "l"
 	arma::vec n_m__; 				// Ion density at time level "l - 1"
 	arma::vec n_m___; 			// Ion density at time level "l - 2"
-	vfield_vec_TYP nv_m; 				// Ion bulk velocity at time level "l + 1/2"
-	vfield_vec_TYP nv_m_; 			// Ion bulk velocity at time level "l - 1/2"
-	vfield_vec_TYP nv_m__; 			// Ion bulk velocity at time level "l - 3/2"
+	arma::vec nv_m; 				// Ion bulk velocity at time level "l + 1/2"
+	arma::vec nv_m_; 			// Ion bulk velocity at time level "l - 1/2"
+	arma::vec nv_m__; 			// Ion bulk velocity at time level "l - 3/2"
   	arma::vec P11_m;				// Ion pressure tensor, component 1,1
   	arma::vec P22_m;				// Ion pressure tensor, component 2,2
   	arma::vec Tpar_m;			// Ion parallel temperature
@@ -329,22 +326,17 @@ class fields_TYP : public vfield_vec_TYP
 public:
 	vfield_vec_TYP E;   // **** Consider as arma::vec *******
 	vfield_vec_TYP B;   // **** Consider as arma::vec *******
-  vfield_vec_TYP dB;  // **** Consider as arma::vec *******
-  vfield_vec_TYP ddB; // **** Consider as arma::vec *******
+  	vfield_vec_TYP dB;  // **** Consider as arma::vec *******
+  	vfield_vec_TYP ddB; // **** Consider as arma::vec *******
 
 	fields_TYP(){};
 
-  /*
 	fields_TYP(unsigned int N) : E(N), B(N), dB(N), ddB(N) {};
-  */
 
 	~fields_TYP(){};
 
-  /*
 	void zeros(unsigned int N);
 	void fill(double A);
-  */
-
 };
 
 //  Define structure to store simulation geometry information:

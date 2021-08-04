@@ -13,3 +13,38 @@ vfield_vec_TYP::vfield_vec_TYP(unsigned int N)
 	Y = arma::zeros(N);
 	Z = arma::zeros(N);
 }
+
+void vfield_vec_TYP::ones(unsigned int N)
+{
+	X.ones(N);
+	Y.ones(N);
+	Z.ones(N);
+}
+
+void vfield_vec_TYP::zeros()
+{
+	X.zeros();
+	Y.zeros();
+	Z.zeros();
+}
+
+void vfield_vec_TYP::zeros(unsigned int N){
+	X.zeros(N);
+	Y.zeros(N);
+	Z.zeros(N);
+}
+
+void vfield_vec_TYP::fill(double value)
+{
+	X.fill(value);
+	Y.fill(value);
+	Z.fill(value);
+}
+
+void fields_TYP::zeros(unsigned int N)
+{
+	E.zeros(N);
+	B.zeros(N);
+	dB.zeros(N);
+	ddB.zeros(N);
+}

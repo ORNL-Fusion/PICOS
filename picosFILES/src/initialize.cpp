@@ -380,7 +380,6 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
             // Initial condition:
             // =================================================================
             name = "IC_type_" + ss.str();
-            ions.IC = stoi(parametersMap[name]);
             ions.p_IC.IC_type = stoi(parametersMap[name]);
             name.clear();
 
@@ -761,4 +760,178 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         // ===========
         fields->B.Z.fill(params->em_IC.BZ);
     }
+}
+
+
+void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    // Define total number of ions species:
+    // ====================================
+    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * SETTING UP IONS INITIAL CONDITION * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Loop over all species:
+    // ======================
+    for (int ii=0; ii<totalNumSpecies; ii++)
+    {
+        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        {
+            switch (IONS->at(ii).p_IC.IC_type)
+            {
+                case(1):
+                {
+                    if (params->quietStart)
+                    {
+                        // Create quiet start object:
+                        //QUIETSTART<IT> qs(params, &IONS->at(ii));
+                        // Use quiet start object:
+                        //qs.maxwellianVelocityDistribution(params, &IONS->at(ii));
+                    }
+                    else
+                    {
+                        // Create random start object:
+                        //RANDOMSTART<IT> rs(params);
+                        // Apply random start object: USES MH algorithm
+                        //rs.maxwellianVelocityDistribution_nonhomogeneous(params, &IONS->at(ii));
+                    }
+                    break;
+                }
+                default:
+                {
+                    if (params->quietStart)
+                    {
+                        //QUIETSTART<IT> qs(params, &IONS->at(ii));
+                        //qs.maxwellianVelocityDistribution(params, &IONS->at(ii));
+                    }
+                    else
+                    {
+                        //RANDOMSTART<IT> rs(params);
+                        //rs.maxwellianVelocityDistribution(params, &IONS->at(ii));
+                    }
+                }
+            } // switch
+
+            initializeParticlesArrays(params, fields, &IONS->at(ii));
+
+            initializeBulkVariablesArrays(params, &IONS->at(ii));
+
+        }
+        else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
+        {
+            initializeBulkVariablesArrays(params, &IONS->at(ii));
+        }
+
+        // Broadcast NSP (Number of super particles per process) and nSupPartPutput from ROOTS to COMM_WORLD:
+        MPI_Bcast(&IONS->at(ii).NSP, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
+        MPI_Bcast(&IONS->at(ii).nSupPartOutput, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
+
+        // Super particle to real particle weight factor:
+        double Ds = (params->mesh.LX)/(params->em_IC.BX_NX);
+        double NR = (IONS->at(ii).p_IC.densityFraction)*sum(((params->em_IC.BX*params->geometry.A_0)/(params->em_IC.Bx_profile))*(params->f_IC.ne))*Ds;
+        IONS->at(ii).NCP = (NR/(IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES));
+
+        // Print to the terminal:
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cout << "iON SPECIES: " << (ii + 1) << endl;
+
+            if (params->quietStart)
+            {
+                cout << "+ Using quiet start: YES" << endl;
+            }
+            else
+            {
+                cout << "+ Using quiet start: NO" << endl;
+            }
+
+            cout << "+ Super-particles used in simulation: " << IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES << endl;
+        }
+
+    }//Iteration over ion species
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * * IONS INITIAL CONDITION SET UP * * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS)
+{
+    // Set size and value to zero of arrays for ions' variables:
+    // ========================================================
+    IONS->mn.zeros(IONS->NSP);
+
+    IONS->E.zeros(IONS->NSP,3);
+    IONS->B.zeros(IONS->NSP,3);
+
+    IONS->wxc.zeros(IONS->NSP);
+    IONS->wxl.zeros(IONS->NSP);
+    IONS->wxr.zeros(IONS->NSP);
+
+    IONS->wxc_.zeros(IONS->NSP);
+    IONS->wxl_.zeros(IONS->NSP);
+    IONS->wxr_.zeros(IONS->NSP);
+
+    // Initialize particle-defined quantities:
+    // ==================================
+    IONS->n_p.zeros(IONS->NSP);
+    IONS->nv_p.zeros(IONS->NSP);
+    IONS->Tpar_p.zeros(IONS->NSP);
+    IONS->Tper_p.zeros(IONS->NSP);
+
+    // Initialize particle defined flags:
+    // ==================================
+    IONS->f1.zeros(IONS->NSP);
+    IONS->f2.zeros(IONS->NSP);
+    IONS->f3.zeros(IONS->NSP);
+
+    // Initialize particle kinetic energy at boundaries:
+    // ================================================
+    IONS->dE1.zeros(IONS->NSP);
+    IONS->dE2.zeros(IONS->NSP);
+    IONS->dE3.zeros(IONS->NSP);
+
+    // Initialize particle weight:
+    // ===========================
+    IONS->a.ones(IONS->NSP);
+
+    // Assign cell:
+    // ===========
+    // Populates wxc,wxl and wxr only
+    //PIC_TYP PIC;
+    //PIC.assignCell(params, fields, IONS);
+}
+
+void init_TYP::initializeBulkVariablesArrays(const params_TYP * params, ionSpecies_TYP * IONS)
+{
+    // Initialize mesh-defined quantities:
+    // ==================================
+    // Ion density:
+    IONS->n_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m_.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m__.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m___.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Ion flux density:
+    IONS->nv_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->nv_m_.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->nv_m__.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Pressure tensors:
+    IONS->P11_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->P22_m.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Derived quantities:
+    IONS->Tpar_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->Tper_m.zeros(params->mesh.NX_IN_SIM + 2);
 }

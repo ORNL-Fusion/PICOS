@@ -22,7 +22,6 @@ LIB_FLAGS=-L$(ARMADILLO_INSTALL)/lib	-L$(ARMADILLO_INSTALL)/lib64
 LIB=-lz	-ldl	-lm	-lhdf5_cpp	-larmadillo #-lgfortran
 OMP_LIB_FLAGS=-lgomp
 
-
 BINARIES = $(addprefix $(OBJ)/,\
 main.o	      \
 types.o   		\
