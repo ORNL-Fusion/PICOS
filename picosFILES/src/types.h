@@ -40,6 +40,7 @@ extern double F_ME_DS; 		// Dimensionless electron mass
 extern double F_MU_DS; 		// Dimensionless vacuum permeability
 extern double F_C_DS; 		// Dimensionless speed of light
 
+/*
 // Declare vector field types:
 // =============================================================================
 class vfield_vec_TYP
@@ -52,11 +53,11 @@ public:
 
 	vfield_vec_TYP(){};
 
-	vfield_vec_TYP(unsigned int N);
+	//vfield_vec_TYP(unsigned int N);
 
 	~vfield_vec_TYP(){};
 
-  /*
+
 	vfield_vec_TYP operator + (vfield_vec_TYP R);
 	vfield_vec_TYP operator += (vfield_vec_TYP R);
 	vfield_vec_TYP operator - (vfield_vec_TYP R);
@@ -68,15 +69,17 @@ public:
 	vfield_vec_TYP operator / (vfield_vec_TYP R);
 	vfield_vec_TYP operator /= (double s);
 	vfield_vec_TYP operator /= (vfield_vec_TYP R);
-  */
 
 	void fill(double value);
 	void ones(unsigned int N);
 	void zeros();
 	void zeros(unsigned int N);
 
-};
 
+};
+*/
+
+/*
 // Declare matrix field types:
 // =============================================================================
 class vfield_mat_TYP
@@ -89,13 +92,13 @@ public:
 
 	vfield_mat_TYP(){};
 
-  /*
 	vfield_mat_TYP(unsigned int N, unsigned int M);
-  */
+
+
 
 	~vfield_mat_TYP(){};
 
-  /*
+
 	vfield_mat_TYP operator + (vfield_mat_TYP R);
 	vfield_mat_TYP operator += (vfield_mat_TYP R);
 	vfield_mat_TYP operator - (vfield_mat_TYP R);
@@ -107,16 +110,14 @@ public:
 	vfield_mat_TYP operator / (vfield_mat_TYP R);
 	vfield_mat_TYP operator /= (double s);
 	vfield_mat_TYP operator /= (vfield_mat_TYP R);
-  */
 
-  /*
 	void fill(double value);
 	void ones(unsigned int N, unsigned int M);
 	void zeros();
 	void zeros(unsigned int N, unsigned int M);
-  */
 
 };
+*/
 
 //  Structure to store each ion species initial condition parameters:
 // =============================================================================
@@ -217,7 +218,7 @@ struct p_BC_TYP
 
 //  Define ION VARIABLES AND PARAMETERS DERIVED TYPES:
 // =============================================================================
-class ionSpecies_TYP : public vfield_vec_TYP
+class ionSpecies_TYP //: public vfield_vec_TYP
 {
 
 public:
@@ -243,20 +244,30 @@ public:
 	double avg_mu; 				// Average magnetic moment
 
 	// ************ Consider arma::vec X_p, arma::vec Vpar_p, arma::vec Vper_p ***********
-	arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
-	arma::mat V; 				// Ions' velocity, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
+	//arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
+	//arma::mat V; 				// Ions' velocity, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
 	// ***********************
 
-	arma::mat P; 				// Ions' momentum, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
-	arma::vec g; 				// Ions' relativistic gamma factor.
+	arma::vec X_p;
+	arma::mat V_p; // Velocity vector, V(0): parallel, V(1): perpendicular
+	arma::vec a_p; // Computational particle weight
+
+	// ************* Deprecate *************************************************
+	// arma::mat P; 				// Ions' momentum, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
+	// arma::vec g; 				// Ions' relativistic gamma factor.
+	// ************************************************************************
 
 	arma::ivec mn; 			// Ions' position in terms of the index of mesh node
 
-  // ************ Consider arma::vec EX_p, arma::vec BX_p, arma::vec dBX_p , arma::vec ddBX_p ***********
-	arma::mat E;				// Electric field seen by particles when advancing particles velocity
-	arma::mat B;				// Magnetic field seen by particles when advancing particles velocity
-// ***********************
+  	// ************ Consider arma::vec EX_p, arma::vec BX_p, arma::vec dBX_p , arma::vec ddBX_p ***********
+	//arma::mat E;				// Electric field seen by particles when advancing particles velocity
+	//arma::mat B;				// Magnetic field seen by particles when advancing particles velocity
+	// ***********************
 
+	arma::vec EX_p;
+	arma::vec BX_p;
+	arma::vec dBX_p;
+	arma::vec ddBX_p;
 
   // ***************** Consider deleting ************
 	// Guiding-center variables
@@ -302,9 +313,6 @@ public:
 	arma::ivec dE2;              // Right boundary
 	arma::ivec dE3;              // RF operator
 
-	// Particle weight:
-	arma::vec a;                // Computational particle weigth
-
 	// Initial condition parameters:
 	p_IC_TYP p_IC;
 
@@ -320,18 +328,25 @@ public:
 
 //  Define ELECTROMAGNETIC FIELDS DERIVED TYPES:
 // =============================================================================
-class fields_TYP : public vfield_vec_TYP
+class fields_TYP //: public vfield_vec_TYP
 {
 
 public:
+	/*
 	vfield_vec_TYP E;   // **** Consider as arma::vec *******
 	vfield_vec_TYP B;   // **** Consider as arma::vec *******
   	vfield_vec_TYP dB;  // **** Consider as arma::vec *******
   	vfield_vec_TYP ddB; // **** Consider as arma::vec *******
+	*/
+
+	arma::vec EX_m;
+	arma::vec BX_m;
+	arma::vec dBX_m;
+	arma::vec ddBX_m;
 
 	fields_TYP(){};
 
-	fields_TYP(unsigned int N) : E(N), B(N), dB(N), ddB(N) {};
+	fields_TYP(unsigned int N) : EX_m(N), BX_m(N), dBX_m(N), ddBX_m(N) {};
 
 	~fields_TYP(){};
 
@@ -359,7 +374,11 @@ struct geometry_TYP
 // =============================================================================
 struct mesh_params_TYP
 {
-	vfield_vec_TYP nodes;
+	//vfield_vec_TYP nodes;
+
+	arma::vec nodesX;
+	arma::vec nodesY;
+	arma::vec nodesZ;
 
 	int NX_PER_MPI; // Number of mesh nodes along x-axis in subdomain (no ghost nodes considered)
 	int NY_PER_MPI; // Number of mesh nodes along y-axis in subdomain (no ghost nodes considered)

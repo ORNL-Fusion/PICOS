@@ -48,6 +48,7 @@ int main(int argc, char* argv[])
     // Input parameters for simulation:
     params_TYP params;
 
+    /*
     // temp stuff:
     params.mpi.MPIS_FIELDS = 2;
     params.timeIterations = 100000;
@@ -55,6 +56,7 @@ int main(int argc, char* argv[])
     params.SW.Collisions == 1;
     params.SW.BfieldSolve == 1;
     params.SW.EfieldSolve == 1;
+    */
 
     // Ion species vector:
     vector<ionSpecies_TYP> IONS;

@@ -1,5 +1,5 @@
 #include "initialize.h"
-
+#include "initDistribution.h"
 
 // Function to split strings:
 // =============================================================================
@@ -569,29 +569,38 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
 
     // Set size of mesh and allocate memory:
     // =====================================
+    /*
     params->mesh.nodes.X.set_size(params->mesh.NX_IN_SIM);
     params->mesh.nodes.Y.set_size(params->mesh.NY_IN_SIM);
     params->mesh.nodes.Z.set_size(params->mesh.NZ_IN_SIM);
+    */
+
+    params->mesh.nodesX.set_size(params->mesh.NX_IN_SIM);
+    params->mesh.nodesY.set_size(params->mesh.NY_IN_SIM);
+    params->mesh.nodesZ.set_size(params->mesh.NZ_IN_SIM);
 
     // Create mesh nodes: X domain
     // ============================
     for(int ii=0; ii<params->mesh.NX_IN_SIM; ii++)
     {
-        params->mesh.nodes.X(ii) = (double)ii*params->mesh.DX;
+        //params->mesh.nodes.X(ii) = (double)ii*params->mesh.DX;
+        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX;
     }
 
     // Create mesh nodes: Y domain
     // ===========================
     for(int ii=0; ii<params->mesh.NY_IN_SIM; ii++)
     {
-        params->mesh.nodes.Y(ii) = (double)ii*params->mesh.DY;
+        //params->mesh.nodes.Y(ii) = (double)ii*params->mesh.DY;
+        params->mesh.nodesY(ii) = (double)ii*params->mesh.DY;
     }
 
     // Create mesh nodes: Z domain
     // ===========================
     for(int ii=0; ii<params->mesh.NZ_IN_SIM; ii++)
     {
-        params->mesh.nodes.Z(ii) = (double)ii*params->mesh.DZ;
+        //params->mesh.nodes.Z(ii) = (double)ii*params->mesh.DZ;
+        params->mesh.nodesZ(ii) = (double)ii*params->mesh.DZ;
     }
 
     // Define total length of each mesh:
@@ -702,15 +711,21 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
     // ================================================
     int NX(params->mesh.NX_IN_SIM + 2);
 
+    // Allocate memory to fields:
+    // ==========================
+    fields->zeros(NX);
+
     // Select how to initialize electromagnetic fields:
     // ================================================
-    fields->zeros(NX);
     if (params->quietStart)
     {
         // From "params" and assumes uniform fields:
+        /*
         fields->B.Z.fill(params->em_IC.BZ);
         fields->B.Y.fill(params->em_IC.BY);
         fields->B.X.fill(params->em_IC.BX);
+        */
+        fields->BX_m.fill(params->em_IC.BX);
     }
     else
     {
@@ -723,6 +738,9 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         // Load data from external file:
         // ============================
         params->em_IC.Bx_profile.load(fileName);
+
+        // Scale the normalize profile to Tesla:
+        // ====================================
         params->em_IC.Bx_profile *= params->em_IC.BX;
 
         //Interpolate at mesh points:
@@ -730,35 +748,44 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         // Query points:
         arma::vec xq = linspace(0,params->mesh.LX,NX);
         arma::vec yq(xq.size());
+
         // Sample points:
         int BX_NX  = params->em_IC.BX_NX;
 
+        // Spatial increment for external data:
         double dX = params->mesh.LX/((double)BX_NX);
 
-        double dBX_NX = params->mesh.LX/BX_NX;
+        //double dBX_NX = params->mesh.LX/BX_NX;
 
         arma::vec xt = linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
         arma:: vec yt(xt.size());
 
-        // Bx profile:
+        // BX profile:
         // ===========
         yt = params->em_IC.Bx_profile;
         interp1(xt,yt,xq,yq);
-        fields->B.X = yq;
+        fields->BX_m = yq;
 
-        // By profile:
+        // dBX profile:
         // ===========
-        arma::vec Br(BX_NX,1);
-        Br.subvec(0,BX_NX-2) = -0.5*(params->geometry.r2)*diff(params->em_IC.Bx_profile)/dX;
-        Br(BX_NX-1) = Br(BX_NX-2);
+        arma::vec dBX(BX_NX,1);
+        dBX.subvec(0,BX_NX-2) = diff(params->em_IC.Bx_profile,1)/dX;
+        dBX(BX_NX-1) = dBX(BX_NX-2);
 
-        yt = Br;
+        yt = dBX;
         interp1(xt,yt,xq,yq);
-        fields->B.Y = yq;
+        fields->dBX_m = yq;
 
-        // Bz profile:
-        // ===========
-        fields->B.Z.fill(params->em_IC.BZ);
+        // ddBX profile:
+        // ============
+        arma::vec ddBX(BX_NX,1);
+        ddBX.subvec(0,BX_NX-3) = diff(params->em_IC.Bx_profile,2)/(dX*dX);
+        ddBX(BX_NX-2) = ddBX(BX_NX-3);
+        ddBX(BX_NX-1) = ddBX(BX_NX-2);
+
+        yt = ddBX;
+        interp1(xt,yt,xq,yq);
+        fields->ddBX_m = yq;
     }
 }
 
@@ -782,38 +809,25 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
     {
         if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
+            // Create start object:
+            initDist_TYP initDist(params);
+            
             switch (IONS->at(ii).p_IC.IC_type)
             {
                 case(1):
                 {
                     if (params->quietStart)
                     {
-                        // Create quiet start object:
-                        //QUIETSTART<IT> qs(params, &IONS->at(ii));
-                        // Use quiet start object:
-                        //qs.maxwellianVelocityDistribution(params, &IONS->at(ii));
+                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ii));
                     }
                     else
                     {
-                        // Create random start object:
-                        //RANDOMSTART<IT> rs(params);
-                        // Apply random start object: USES MH algorithm
-                        //rs.maxwellianVelocityDistribution_nonhomogeneous(params, &IONS->at(ii));
+                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ii));
                     }
                     break;
                 }
                 default:
                 {
-                    if (params->quietStart)
-                    {
-                        //QUIETSTART<IT> qs(params, &IONS->at(ii));
-                        //qs.maxwellianVelocityDistribution(params, &IONS->at(ii));
-                    }
-                    else
-                    {
-                        //RANDOMSTART<IT> rs(params);
-                        //rs.maxwellianVelocityDistribution(params, &IONS->at(ii));
-                    }
                 }
             } // switch
 
@@ -871,8 +885,10 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     // ========================================================
     IONS->mn.zeros(IONS->NSP);
 
-    IONS->E.zeros(IONS->NSP,3);
-    IONS->B.zeros(IONS->NSP,3);
+    IONS->EX_p.zeros(IONS->NSP);
+    IONS->BX_p.zeros(IONS->NSP);
+    IONS->dBX_p.zeros(IONS->NSP);
+    IONS->ddBX_p.zeros(IONS->NSP);
 
     IONS->wxc.zeros(IONS->NSP);
     IONS->wxl.zeros(IONS->NSP);
@@ -903,7 +919,7 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
 
     // Initialize particle weight:
     // ===========================
-    IONS->a.ones(IONS->NSP);
+    IONS->a_p.ones(IONS->NSP);
 
     // Assign cell:
     // ===========
