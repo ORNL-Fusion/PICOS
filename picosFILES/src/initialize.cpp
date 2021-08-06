@@ -684,7 +684,6 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 
     // Initialize fields:
     // ================================
-    // The electromagnetic fields are being initialized in the runtime.
     initializeFieldsSizeAndValue(params,fields);
 
     // Print to terminal:
@@ -811,7 +810,7 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
         {
             // Create start object:
             initDist_TYP initDist(params);
-            
+
             switch (IONS->at(ii).p_IC.IC_type)
             {
                 case(1):
@@ -845,10 +844,33 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
         MPI_Bcast(&IONS->at(ii).NSP, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
         MPI_Bcast(&IONS->at(ii).nSupPartOutput, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
 
-        // Super particle to real particle weight factor:
-        double Ds = (params->mesh.LX)/(params->em_IC.BX_NX);
-        double NR = (IONS->at(ii).p_IC.densityFraction)*sum(((params->em_IC.BX*params->geometry.A_0)/(params->em_IC.Bx_profile))*(params->f_IC.ne))*Ds;
-        IONS->at(ii).NCP = (NR/(IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES));
+        // NR total number of real particles:
+        double ds    = params->mesh.LX/params->em_IC.BX_NX;
+        arma::vec ni = ones<vec>(params->em_IC.BX_NX);
+        arma::vec A  = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
+        int ne_calc_type = 2;
+        switch (ne_calc_type)
+        {
+            case(1):
+            {
+                ni *= params->f_IC.ne*IONS->at(ii).p_IC.densityFraction;
+            }
+            case(2):
+            {
+                ni = IONS->at(ii).p_IC.densityFraction_profile;
+            }
+        } // switch
+        double NR    = sum(ni%A)*ds;
+
+        // NCP conversion factor from super-particle to real particle:
+        double NSP  = IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES;
+        IONS->at(ii).NCP = NR/NSP;
+
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cout << "NR = " << NR << endl;
+            cout << "NCP = " << IONS->at(ii).NCP << endl;
+        }
 
         // Print to the terminal:
         if(params->mpi.MPI_DOMAIN_NUMBER == 0)

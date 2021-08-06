@@ -241,7 +241,7 @@ public:
 	double VTpar;				// Thermal velocity.
 	double Wc;					// Average cyclotron frequency.
 	double Wp;					// Plasma frequency.
-	double avg_mu; 				// Average magnetic moment
+	//double avg_mu; 				// Average magnetic moment
 
 	// ************ Consider arma::vec X_p, arma::vec Vpar_p, arma::vec Vper_p ***********
 	//arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
@@ -439,7 +439,7 @@ struct f_IC_TYP
 
 	f_IC_TYP()
 	{
-		ne 			= 0;
+		ne 		= 0;
 		Te      = 0;
 		Te_NX   = 0;
 	}

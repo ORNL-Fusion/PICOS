@@ -13,6 +13,7 @@
 #include "types.h"
 #include "initialize.h"
 #include "units.h"
+#include "outputHDF5.h"
 
 /*
 #include "collisionOperator.h"
@@ -20,7 +21,7 @@
 #include "rfOperator.h"
 #include "PIC.h"
 #include "fields.h"
-#include "outputHDF5.h"
+
 */
 
 // Include headers for parallelization:
@@ -111,12 +112,14 @@ int main(int argc, char* argv[])
     // Initialize IONS: scalar, bulk and particle arrays
     init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
 
-    // HDF object constructor:
-    //HDF<IT, FT> hdfObj(&params, &FS, &IONS);
-    // Define time step based on CFL condition: Whistler and ion velocity
-    //units.defineTimeStep(&params, &IONS);
-    // Normalize "params", "IONS", "EB" using "CS"
-    //units.normalizeVariables(&params, &IONS, &fields, &CS);
+    // HDF object constructor and create "main.h5"
+    HDF_TYP HDF(&params, &FS, &IONS);
+
+    // Define time step based on ion CFL condition:
+    units.defineTimeStep(&params, &IONS);
+
+    // Normalize "params", "IONS", "fields" using "CS"
+    units.normalizeVariables(&params, &IONS, &fields, &CS);
 
     // #########################################################################
     /**************** All the quantities below are dimensionless ****************/
@@ -148,7 +151,7 @@ int main(int argc, char* argv[])
 
     // Save 1st output:
     // =========================================================================
-    //hdfObj.saveOutputs(&params, &IONS, &fields, &CS, 0, 0);
+    HDF.saveOutputs(&params, &IONS, &fields, &CS, 0, 0);
 
     // Start timing simulations:
     // =========================================================================
@@ -245,19 +248,18 @@ int main(int argc, char* argv[])
 
         // Save data:
         // =====================================================================
-        /*
         if(fmod((double)(tt + 1), params.outputCadenceIterations) == 0)
         {
-            vector<IT> IONS_OUT = IONS;
+            vector<ionSpecies_TYP> IONS_OUT = IONS;
 
             // The ions' velocity is advanced in time in order to obtain V^(N+1):
-            ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
+            //ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
 
-            hdfObj.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, currentTime);
+            HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, currentTime);
 
             outputIterator++;
         }
-        */
+
 
         // Estimate simulation time:
         // =====================================================================

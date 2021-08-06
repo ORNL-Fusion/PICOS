@@ -47,6 +47,7 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
 	IONS->V_p = zeros(IONS->NSP,2);
 
     // Maxwellian distribution for the velocity using Box-Muller:
+    arma_rng::set_seed_random();
 	arma::vec R = randu(IONS->NSP);
 	arma_rng::set_seed_random();
 	arma::vec phi = 2.0*M_PI*randu<vec>(IONS->NSP);
@@ -119,10 +120,10 @@ double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, d
 
     double h= (k1*k2*k3)*exp(-sqrt(2)*(((V1*V1)*(s1*s1))+((V2*V2)*(s2*s2))+((V3*V3)*(s3*s3)))); // Pdf for 3-Velocities with temperature profile
 
-
     double g=0.0;
     arma::vec gg(1,1);
-    interp1(S, (params->em_IC.BX/params->em_IC.Bx_profile)%IONS->p_IC.densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
+    //interp1(S, (params->em_IC.BX/params->em_IC.Bx_profile)%IONS->p_IC.densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
+    interp1(S,IONS->p_IC.densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
     g = gg(0,0); //density profile
 
     return(g*h); //target 4-D Pdf
@@ -134,10 +135,7 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     // Initialize ion variables:
     // =========================
     IONS->X_p = zeros(IONS->NSP);
-    IONS->V_p = zeros(IONS->NSP,3);
-    //IONS->Ppar = zeros(IONS->NSP);
-    //IONS->g = zeros(IONS->NSP);
-    //IONS->mu = zeros(IONS->NSP);
+    IONS->V_p = zeros(IONS->NSP,2);
 
     // Apply MH algorith for sampling the 4-D target PDF:
     // ==================================================
@@ -222,19 +220,5 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     // Assign value to "x":
     // ====================
     IONS->X_p = X;
-
-    /*
-    // Change coordinate system:
-    for(int pp=0;pp<IONS->NSP;pp++)
-    {
-        IONS->V(pp,0) = V1(pp)*dot(b1,x) + V2(pp)*dot(b2,x) + V3(pp)*dot(b3,x);
-        IONS->V(pp,1) = V1(pp)*dot(b1,y) + V2(pp)*dot(b2,y) + V3(pp)*dot(b3,y);
-        IONS->V(pp,2) = V1(pp)*dot(b1,z) + V2(pp)*dot(b2,z) + V3(pp)*dot(b3,z);
-
-        IONS->g(pp) = 1.0/sqrt( 1.0 - dot(IONS->V.row(pp),IONS->V.row(pp))/(F_C*F_C) );
-        IONS->mu(pp) = 0.5*IONS->g(pp)*IONS->g(pp)*IONS->M*( V2(pp)*V2(pp) + V3(pp)*V3(pp) )/params->em_IC.BX;
-        IONS->Ppar(pp) = IONS->g(pp)*IONS->M*V1(pp);
-    }
-    */
 
 }

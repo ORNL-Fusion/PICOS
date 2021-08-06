@@ -28,6 +28,7 @@ types.o   			   \
 initialize.o		   \
 units.o						 \
 initDistribution.o \
+outputHDF5.o 			 \
 mpi_main.o)
 
 all: $(BIN)/PICOS++
