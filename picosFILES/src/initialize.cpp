@@ -240,11 +240,12 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
 
     // Magnetic field initial conditions:
     // -------------------------------------------------------------------------
-    params->em_IC.BX          = stod( parametersStringMap["IC_BX"] );
-    params->em_IC.BY          = stod( parametersStringMap["IC_BY"] );
-    params->em_IC.BZ          = stod( parametersStringMap["IC_BZ"] );
-    params->em_IC.BX_NX       = stoi( parametersStringMap["IC_BX_NX"] );
-    params->em_IC.BX_fileName = parametersStringMap["IC_BX_fileName"];
+    params->em_IC.uniformBfield = stoi( parametersStringMap["IC_uniformBfield"] );
+    params->em_IC.BX            = stod( parametersStringMap["IC_BX"] );
+    params->em_IC.BY            = stod( parametersStringMap["IC_BY"] );
+    params->em_IC.BZ            = stod( parametersStringMap["IC_BZ"] );
+    params->em_IC.BX_NX         = stoi( parametersStringMap["IC_BX_NX"] );
+    params->em_IC.BX_fileName   = parametersStringMap["IC_BX_fileName"];
 
     // Geometry:
     // -------------------------------------------------------------------------
@@ -716,7 +717,7 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
 
     // Select how to initialize electromagnetic fields:
     // ================================================
-    if (params->quietStart)
+    if (params->em_IC.uniformBfield)
     {
         // From "params" and assumes uniform fields:
         /*
@@ -833,7 +834,6 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
             initializeParticlesArrays(params, fields, &IONS->at(ii));
 
             initializeBulkVariablesArrays(params, &IONS->at(ii));
-
         }
         else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
         {
@@ -847,19 +847,17 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
         // NR total number of real particles:
         double ds    = params->mesh.LX/params->em_IC.BX_NX;
         arma::vec ni = ones<vec>(params->em_IC.BX_NX);
-        arma::vec A  = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
-        int ne_calc_type = 2;
-        switch (ne_calc_type)
+        arma::vec A  = ones<vec>(params->em_IC.BX_NX);
+        if (params->quietStart)
         {
-            case(1):
-            {
-                ni *= params->f_IC.ne*IONS->at(ii).p_IC.densityFraction;
-            }
-            case(2):
-            {
-                ni = IONS->at(ii).p_IC.densityFraction_profile;
-            }
-        } // switch
+            ni *= params->f_IC.ne*IONS->at(ii).p_IC.densityFraction;
+            A  = A*params->geometry.A_0;
+        }
+        else
+        {
+            ni = IONS->at(ii).p_IC.densityFraction_profile;
+            A  = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
+        }
         double NR    = sum(ni%A)*ds;
 
         // NCP conversion factor from super-particle to real particle:

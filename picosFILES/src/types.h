@@ -449,6 +449,7 @@ struct f_IC_TYP
 // =============================================================================
 struct em_IC_TYP
 {
+	int uniformBfield;
 	double BX;
 	double BY;
 	double BZ;
@@ -465,15 +466,16 @@ struct em_IC_TYP
 
 	em_IC_TYP()
 	{
-			BX     = 0;
-			BY     = 0;
-			BZ     = 0;
-			BX_NX  = 0;
+		uniformBfield = 0;
+		BX     = 0;
+		BY     = 0;
+		BZ     = 0;
+		BX_NX  = 0;
 
-			EX     = 0;
-			EY     = 0;
-			EZ     = 0;
-			EX_NX  = 0;
+		EX     = 0;
+		EY     = 0;
+		EZ     = 0;
+		EX_NX  = 0;
 	}
 };
 

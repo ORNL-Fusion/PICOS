@@ -14,12 +14,12 @@
 #include "initialize.h"
 #include "units.h"
 #include "outputHDF5.h"
+#include "PIC.h"
 
 /*
 #include "collisionOperator.h"
 #include "particleBoundaryConditions.h"
 #include "rfOperator.h"
-#include "PIC.h"
 #include "fields.h"
 
 */
@@ -104,9 +104,11 @@ int main(int argc, char* argv[])
 
     // HDF object constructor and create "main.h5"
     HDF_TYP HDF(&params, &FS, &IONS);
+    //cout << "checkpoint 2" << endl;
 
     // Define time step based on ion CFL condition:
     units.defineTimeStep(&params, &IONS);
+    //cout << "checkpoint 3" << endl;
 
     // Normalize "params", "IONS", "fields" using "CS"
     units.normalizeVariables(&params, &IONS, &fields, &CS);
@@ -126,17 +128,13 @@ int main(int argc, char* argv[])
     // Create objects:
     // =========================================================================
     //EMF_SOLVER fields_solver(&params, &CS); // Initializing the EMF_SOLVER class object.
-    //PIC ionsDynamics; // Initializing the PIC class object.
+    PIC_TYP PIC; // Initializing the PIC class object.
 
     // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
     // =========================================================================
     for(int tt=0; tt<3; tt++)
     {
-        //ionsDynamics.advanceIonsPosition(&params, &fields, &IONS, 0);
-
-        //ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS, 0);
-
-        //ionsDynamics.extrapolateIonsMoments(&params, &fields, &IONS);
+        //PIC.extrapolateIonsMoments(&params, &fields, &IONS);
     }
 
     // Save 1st output:
@@ -147,37 +145,23 @@ int main(int argc, char* argv[])
     // =========================================================================
     t1 = MPI_Wtime();
 
-
     // #########################################################################
     // Start time iterations:
     // #########################################################################
     for(int tt=0; tt<params.timeIterations; tt++)
     {
-        // Advance velocity:
-        // =====================================================================
-        if(tt == 0)
-        {
-             // Initial condition time level V^(1/2):
-            //ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS, 0.5*params.DT);
-        }
-        else
-        {
-             // Advance ions' velocity V^(N+1/2):
-            //ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS, params.DT);
-        }
-
-        // Advance position:
+        // Advance particles:
         // =====================================================================
         if (params.SW.advancePos == 1)
         {
-            // Advance ions' position in time to level X^(N+1).
-            //ionsDynamics.advanceIonsPosition(&params,&fields, &IONS, params.DT);
+            // Advance particle position and velocity to level X^(N+1):
+            PIC.advanceParticles(&params, &CS, &fields, &IONS);
+            cout << "tt = " << tt << endl;
         }
 
         // Check boundaries:
         // =====================================================================
         //particleBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
-
 
         // Calculate new particle weight:
         // =====================================================================
@@ -195,7 +179,7 @@ int main(int argc, char* argv[])
 
         // Calculate ion moments:
         // =====================================================================
-        //ionsDynamics.extrapolateIonsMoments(&params, &fields, &IONS);
+        //PIC.extrapolateIonsMoments(&params, &fields, &IONS);
         // - Apply the "a" on the extrapolation but not interpolation.
 
 
@@ -243,7 +227,7 @@ int main(int argc, char* argv[])
             vector<ionSpecies_TYP> IONS_OUT = IONS;
 
             // The ions' velocity is advanced in time in order to obtain V^(N+1):
-            //ionsDynamics.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
+            //PIC.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
 
             HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, currentTime);
 
