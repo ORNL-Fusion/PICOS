@@ -194,7 +194,7 @@ struct p_BC_TYP
 
 	// Variable to store new particle weight based on fueling:
 	// ======================================================
-	double a_new;
+	double a_p_new;
 
 	// Constructor:
 	// ===========
@@ -211,7 +211,7 @@ struct p_BC_TYP
 		GSUM      = 0;
 		S1        = 0;
 		S2        = 0;
-		a_new 	  = 0;
+		a_p_new   = 0;
 	};
 
 };
@@ -241,28 +241,12 @@ public:
 	double VTpar;				// Thermal velocity.
 	double Wc;					// Average cyclotron frequency.
 	double Wp;					// Plasma frequency.
-	//double avg_mu; 				// Average magnetic moment
-
-	// ************ Consider arma::vec X_p, arma::vec Vpar_p, arma::vec Vper_p ***********
-	//arma::mat X; 				// Ions position, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
-	//arma::mat V; 				// Ions' velocity, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
-	// ***********************
 
 	arma::vec X_p;
 	arma::mat V_p; // Velocity vector, V(0): parallel, V(1): perpendicular
 	arma::vec a_p; // Computational particle weight
 
-	// ************* Deprecate *************************************************
-	// arma::mat P; 				// Ions' momentum, the dimension should be (NSP,3), where NP is the number of particles of the ion species.
-	// arma::vec g; 				// Ions' relativistic gamma factor.
-	// ************************************************************************
-
 	arma::ivec mn; 			// Ions' position in terms of the index of mesh node
-
-  	// ************ Consider arma::vec EX_p, arma::vec BX_p, arma::vec dBX_p , arma::vec ddBX_p ***********
-	//arma::mat E;				// Electric field seen by particles when advancing particles velocity
-	//arma::mat B;				// Magnetic field seen by particles when advancing particles velocity
-	// ***********************
 
 	arma::vec EX_p;
 	arma::vec BX_p;

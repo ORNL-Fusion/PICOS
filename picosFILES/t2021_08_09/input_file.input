@@ -1,7 +1,7 @@
 // Input data:
 // =============================================================================
 mpisForFields               2
-quietStart                  0
+quietStart                  1
 numberOfRKIterations        5
 numberOfParticleSpecies     1
 numberOfTracerSpecies       0
@@ -16,7 +16,7 @@ CV_Tper                     25
 
 // Simulation time:
 // =============================================================================
-DTc                         1.0E-2
+DTc                         1.0E-1
 simulationTime              100.0
 
 // Switches:
@@ -31,6 +31,7 @@ SW_linearSolve               0
 
 // Magnetic field initial conditions:
 // =============================================================================
+IC_uniformBfield            0
 IC_BX                       0.05
 IC_BY                       0.0
 IC_BZ                       0.0

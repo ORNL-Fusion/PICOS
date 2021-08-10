@@ -407,6 +407,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 		IONS->at(ii).p_BC.sigma_x /= CS->length;
 		IONS->at(ii).p_BC.T /= CS->temperature;
 		IONS->at(ii).p_BC.E /= CS->temperature;
+        IONS->at(ii).p_BC.G *= CS->time;
 
 		// Particle parameters:
 		// -------------------

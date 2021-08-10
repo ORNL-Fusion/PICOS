@@ -15,10 +15,10 @@
 #include "units.h"
 #include "outputHDF5.h"
 #include "PIC.h"
+#include "particleBC.h"
 
 /*
 #include "collisionOperator.h"
-#include "particleBoundaryConditions.h"
 #include "rfOperator.h"
 #include "fields.h"
 
@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     //collisionOperator FPCOLL;
 
     // Particle boundary condition operator:
-    //PARTICLE_BC particleBC;
+    pBC_TYP pBC;
 
     // Initialize "params" based on input file:
     init_TYP init(&params, argc, argv);
@@ -159,23 +159,17 @@ int main(int argc, char* argv[])
             cout << "tt = " << tt << endl;
         }
 
-        // Check boundaries:
+        // Particle re-injection:
         // =====================================================================
-        //particleBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
+        // Check boundaries:
+        pBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
 
         // Calculate new particle weight:
-        // =====================================================================
-        //particleBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
-        // - Count how many left the domain
-        // - Calculate a_new
+        pBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
 
         // Re-inject particles:
-        // =====================================================================
-        //particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
-        // Loop over all Particles
-        // Use f1 and f2 flags and assigne a = a_new
-        // RE-inject particle states based on plasma source type
-        // reset f1 and f2
+        pBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
+
 
         // Calculate ion moments:
         // =====================================================================

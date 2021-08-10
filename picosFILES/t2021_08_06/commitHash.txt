@@ -1,1 +1,0 @@
-f8b7dcf Changed to arma::vec on V and X in IONS, using 2D for V: Vpar and Vperp, COmpleted initDist function but not tested yet. code compiles and runs to completion , results not chekced yet

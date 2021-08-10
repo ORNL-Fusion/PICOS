@@ -159,17 +159,25 @@ void PIC_TYP::interpEM(const params_TYP * params, CS_TYP * CS, const ionSpecies_
     double dx   = params->mesh.DX;
     int m       = round( 0.5 + (xp - xMin)/dx ) - 1;
 
+    // Correct "m" near boundaries:
+    // During RK4, some projections can be go out of bound
+    if ( m >= params->mesh.NX_IN_SIM)
+    {
+        m = params->mesh.NX_IN_SIM - 1;
+    }
+    if ( m < 0)
+    {
+        m = 0;
+    }
+
     // Distance to nearest grid point:
     double X    = params->mesh.nodesX(m) - xp;
 
     // Assignment function:
     arma::vec W = zeros<vec>(3);
-    // Left:
-    W(0) = 0.5*pow( 1.5 + ((X - dx)/dx) ,2);
-    // Center:
-    W(1) = 0.75 - pow(X/dx,2);
-    // Right:
-    W(2) = 0.5*pow(1.5 - ((X + dx)/dx) ,2 );
+    W(0) = 0.5*pow( 1.5 + ((X - dx)/dx) ,2); // Left:
+    W(1) = 0.75 - pow(X/dx,2);               // Center:
+    W(2) = 0.5*pow(1.5 - ((X + dx)/dx) ,2 ); // Right:
 
     // Nearest grid point:
     int ix = m + 1;
@@ -274,9 +282,6 @@ void PIC_TYP::advanceParticles(const params_TYP * params, CS_TYP * CS, fields_TY
 
             // Time step:
             double DT = params->DT;
-
-            // ******* what is this used for?
-            double A = IONS->at(ss).Q*params->DT/IONS->at(ss).M; // A = \alpha in the dimensionless equation for the ions' velocity. (Q*NCP/M*NCP=Q/M)
 
 			#pragma omp parallel for default(none) shared(IONS, params, fields, DT, ss) firstprivate(A, NSP, F_C_DS)
             for(int ii=0;ii<NSP;ii++)
