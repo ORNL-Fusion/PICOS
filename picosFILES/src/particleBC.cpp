@@ -3,11 +3,11 @@
 
 using namespace std;
 
-pBC_TYP::pBC_TYP()
+particleBC_TYP::particleBC_TYP()
 {}
 
 // =============================================================================
-void pBC_TYP::MPI_AllreduceDouble(const params_TYP * params, double * v)
+void particleBC_TYP::MPI_AllreduceDouble(const params_TYP * params, double * v)
 {
     double recvbuf = 0;
 
@@ -17,7 +17,7 @@ void pBC_TYP::MPI_AllreduceDouble(const params_TYP * params, double * v)
 }
 
 // =============================================================================
-void pBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
@@ -77,7 +77,7 @@ void pBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP * CS, 
 
 // =============================================================================
 template <typename vec_TYP>
-void pBC_TYP::MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V, double * S)
+void particleBC_TYP::MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V, double * S)
 {
     // Clear S:
     // =======
@@ -111,7 +111,7 @@ void pBC_TYP::MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V, doubl
 }
 
 // =============================================================================
-void pBC_TYP::calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     // Simulation time step:
     double DT = params->DT;
@@ -188,11 +188,18 @@ void pBC_TYP::calculateParticleWeight(const params_TYP * params, const CS_TYP * 
 }
 
 // =============================================================================
-void pBC_TYP::applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
+    // Check boundaries:
+    // ================
+    checkBoundaryAndFlag(params,CS,fields,IONS);
 
-    // Iterate over all ion species:
+    // Calculate new particle weight:
     // =============================
+    calculateParticleWeight(params,CS,fields,IONS);
+
+    // Apply re-injection:
+    // ===================
     for(int ss=0;ss<IONS->size();ss++)
     {
 		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
@@ -226,7 +233,7 @@ void pBC_TYP::applyParticleReinjection(const params_TYP * params, const CS_TYP *
 }
 
 // =============================================================================
-void pBC_TYP::particleReinjection(int ii, const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS)
+void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS)
 {
     // Particle velocity:
 	// =========================================================================

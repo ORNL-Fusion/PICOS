@@ -13,7 +13,7 @@
 using namespace std;
 using namespace arma;
 
-class pBC_TYP
+class particleBC_TYP
 {
 private:
 
@@ -25,12 +25,12 @@ private:
 
     template <typename vec_TYP> void MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V, double * S);
 
-public:
-    pBC_TYP();
-
     void checkBoundaryAndFlag(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
     void calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
+public:
+    particleBC_TYP();
 
     void applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 };

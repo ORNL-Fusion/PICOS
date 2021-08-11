@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     //collisionOperator FPCOLL;
 
     // Particle boundary condition operator:
-    pBC_TYP pBC;
+    particleBC_TYP particleBC;
 
     // Initialize "params" based on input file:
     init_TYP init(&params, argc, argv);
@@ -150,25 +150,34 @@ int main(int argc, char* argv[])
     // #########################################################################
     for(int tt=0; tt<params.timeIterations; tt++)
     {
-        // Advance particles:
+        // Advance particles and re-inject:
         // =====================================================================
         if (params.SW.advancePos == 1)
         {
             // Advance particle position and velocity to level X^(N+1):
             PIC.advanceParticles(&params, &CS, &fields, &IONS);
-            cout << "tt = " << tt << endl;
+
+            if (params.mpi.IS_PARTICLES_ROOT)
+            {
+                if (fmod((double)(tt + 1), 100) == 0)
+                {
+                    cout << "tt = " << tt << endl;
+                }
+            }
+
+            // Re-inject particles that leave computational domain:
+            particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
         }
 
         // Particle re-injection:
         // =====================================================================
+        /*
         // Check boundaries:
-        pBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
+        particleBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
 
         // Calculate new particle weight:
-        pBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
-
-        // Re-inject particles:
-        pBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
+        particleBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
+        */
 
 
         // Calculate ion moments:
