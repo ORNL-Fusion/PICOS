@@ -21,11 +21,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
 {
     if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
-        // Number of ION species:
-        // =====================
-        int numIonSpecies = IONS->size();
-
-        for (int aa=0; aa<numIonSpecies; aa++)
+        for (int aa=0; aa < IONS->size(); aa++)
         {
             // Number of particles is "aa" species:
             // ===================================
@@ -51,7 +47,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
                     IONS->at(aa).dE1(ii) = KE;
 
                     // Reinject:
-                    IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) + params->mesh.LX;
+                    //IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) + params->mesh.LX;
                 }
 
                 // Right boundary:
@@ -65,7 +61,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
                     IONS->at(aa).dE2(ii) = KE;
 
                     // Reinject:
-                    IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) - params->mesh.LX;
+                    //IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) - params->mesh.LX;
                 }
             } // Particle loop
 
@@ -120,70 +116,72 @@ void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS
     // =============================
     for(int ss=0;ss<IONS->size();ss++)
     {
-        // Select only PARTICLE MPIs:
-        // ==========================
-        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        if (IONS->at(ss).p_BC.BC_type == 1 || IONS->at(ss).p_BC.BC_type == 2)
         {
-            // Super particle conversion factor:
-            double alpha = IONS->at(ss).NCP;
-
-            // Fueling rate:
-            double G = IONS->at(ss).p_BC.G;
-
-            // Computational particle leak rate over all PARTICLE MPIs:
-            // ========================================================
-            // Store total number of comp particles leaked over all threads and ranks:
-            double S1_global = 0;
-            double S2_global = 0;
-
-            MPI_OMP_AllreduceVec(params,&IONS->at(ss).f1, &S1_global);
-            MPI_OMP_AllreduceVec(params,&IONS->at(ss).f2, &S2_global);
-
-            // Accumulate computational particles and fueling rate:
-            // ==================================
-            IONS->at(ss).p_BC.S1   += S1_global;
-            IONS->at(ss).p_BC.S2   += S2_global;
-            IONS->at(ss).p_BC.GSUM += G;
-
-            // Calculate particle weight:
+            // Select only PARTICLE MPIs:
             // ==========================
-            // Minimum number of computational particles to trigger fueling:
-            double S_min = 3;
-
-            // Total number of computational particles that have leaked:
-            double S_total  = IONS->at(ss).p_BC.S1 + IONS->at(ss).p_BC.S2;
-
-            // Check if enough particles have left the domain:
-            if ( S_total >= S_min )
+            if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
             {
-                // Calculate computational particle leak rate:
-                double uN_total = (alpha/DT)*S_total;
+                // Super particle conversion factor:
+                double alpha = IONS->at(ss).NCP;
+
+                // Fueling rate:
+                double G = IONS->at(ss).p_BC.G;
+
+                // Computational particle leak rate over all PARTICLE MPIs:
+                // ========================================================
+                // Store total number of comp particles leaked over all threads and ranks:
+                double S1_global = 0;
+                double S2_global = 0;
+
+                MPI_OMP_AllreduceVec(params,&IONS->at(ss).f1, &S1_global);
+                MPI_OMP_AllreduceVec(params,&IONS->at(ss).f2, &S2_global);
+
+                // Accumulate computational particles and fueling rate:
+                // ==================================
+                IONS->at(ss).p_BC.S1   += S1_global;
+                IONS->at(ss).p_BC.S2   += S2_global;
+                IONS->at(ss).p_BC.GSUM += G;
 
                 // Calculate particle weight:
-                double GSUM  = IONS->at(ss).p_BC.GSUM;
-                double a_p_new = GSUM/uN_total;
+                // ==========================
+                // Minimum number of computational particles to trigger fueling:
+                double S_min = 3;
 
-                if (a_p_new > 1000)
+                // Total number of computational particles that have leaked:
+                double S_total  = IONS->at(ss).p_BC.S1 + IONS->at(ss).p_BC.S2;
+
+                // Check if enough particles have left the domain:
+                if ( S_total >= S_min )
                 {
-                    if (params->mpi.IS_PARTICLES_ROOT)
+                    // Calculate computational particle leak rate:
+                    double uN_total = (alpha/DT)*S_total;
+
+                    // Calculate particle weight:
+                    double GSUM  = IONS->at(ss).p_BC.GSUM;
+                    double a_p_new = GSUM/uN_total;
+
+                    if (a_p_new > 1000)
                     {
-                        cout << "S_total:" << S_total << endl;
-                        cout << "uN_total:" << uN_total << endl;
-                        cout << "a_p_new:" << a_p_new << endl;
-                        cout << "GSUM:" << GSUM << endl;
+                        if (params->mpi.IS_PARTICLES_ROOT)
+                        {
+                            cout << "S_total:" << S_total << endl;
+                            cout << "uN_total:" << uN_total << endl;
+                            cout << "a_p_new:" << a_p_new << endl;
+                            cout << "GSUM:" << GSUM << endl;
+                        }
+                        a_p_new = 1000;
                     }
-                    a_p_new = 1000;
+                    IONS->at(ss).p_BC.a_p_new = a_p_new;
+
+                    // Reset accumulators:
+                    IONS->at(ss).p_BC.S1   = 0;
+                    IONS->at(ss).p_BC.S2   = 0;
+                    IONS->at(ss).p_BC.GSUM = 0;
                 }
-                IONS->at(ss).p_BC.a_p_new = a_p_new;
 
-                // Reset accumulators:
-                IONS->at(ss).p_BC.S1   = 0;
-                IONS->at(ss).p_BC.S2   = 0;
-                IONS->at(ss).p_BC.GSUM = 0;
-            }
-
-        } // Particle MPIs
-
+            } // Particle MPIs
+        } // BC
     } //  Species
 }
 
@@ -338,7 +336,7 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 	}
 
     //4: Periodic:
-	if (IONS->p_BC.BC_type == 4)
+	if (IONS->p_BC.BC_type == 3)
 	{
 		if (IONS->X_p(ii) > params->mesh.LX)
 		{

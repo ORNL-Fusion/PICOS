@@ -214,6 +214,7 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->numberOfRKIterations    = stoi( parametersStringMap["numberOfRKIterations"] );
     params->numberOfParticleSpecies = stoi( parametersStringMap["numberOfParticleSpecies"] );
     params->numberOfTracerSpecies   = stoi( parametersStringMap["numberOfTracerSpecies"] );
+    params->advanceParticleMethod   = stoi( parametersStringMap["advanceParticleMethod"] );
 
     // Characteristic values:
     // -------------------------------------------------------------------------
@@ -586,6 +587,9 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
     {
         //params->mesh.nodes.X(ii) = (double)ii*params->mesh.DX;
         params->mesh.nodesX(ii) = (double)ii*params->mesh.DX;
+
+        // ****** does the above expresion reequire + 0.5*DX as in the fortran code?
+        // ****** Notice that the above rnage goes from ii = 0 - (NX_IN_SIM - 1)
     }
 
     // Create mesh nodes: Y domain
@@ -940,6 +944,10 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     // Initialize particle weight:
     // ===========================
     IONS->a_p.ones(IONS->NSP);
+
+    // Initialize magnetic moment:
+    // ===========================
+    IONS->mu_p.zeros(IONS->NSP);
 
     // Assign cell:
     // ===========

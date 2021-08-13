@@ -104,7 +104,6 @@ int main(int argc, char* argv[])
 
     // HDF object constructor and create "main.h5"
     HDF_TYP HDF(&params, &FS, &IONS);
-    //cout << "checkpoint 2" << endl;
 
     // Define time step based on ion CFL condition:
     units.defineTimeStep(&params, &IONS);
@@ -125,17 +124,23 @@ int main(int argc, char* argv[])
     int outputIterator = 0;
     int numberOfIterationsForEstimator = 1000;
 
-    // Create objects:
+    // Create EM solver:
     // =========================================================================
     //EMF_SOLVER fields_solver(&params, &CS); // Initializing the EMF_SOLVER class object.
-    PIC_TYP PIC; // Initializing the PIC class object.
 
+    // Create PIC solver:
+    // =========================================================================
+    PIC_TYP PIC(&params, &fields, &IONS);
+
+    /*
     // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
     // =========================================================================
     for(int tt=0; tt<3; tt++)
     {
-        //PIC.extrapolateIonsMoments(&params, &fields, &IONS);
+        PIC.extrapolateIonsMoments(&params, &fields, &IONS);
+        PIC.extrapolateMoments_AllSpecies(&params, &fields, &IONS);
     }
+    */
 
     // Save 1st output:
     // =========================================================================
@@ -150,16 +155,17 @@ int main(int argc, char* argv[])
     // #########################################################################
     for(int tt=0; tt<params.timeIterations; tt++)
     {
+
         // Advance particles and re-inject:
         // =====================================================================
         if (params.SW.advancePos == 1)
         {
             // Advance particle position and velocity to level X^(N+1):
-            PIC.advanceParticles(&params, &CS, &fields, &IONS);
+            PIC.advanceParticles(&params, &fields, &IONS);
 
             if (params.mpi.IS_PARTICLES_ROOT)
             {
-                if (fmod((double)(tt + 1), 100) == 0)
+                if (fmod((double)(tt + 1), 1000) == 0)
                 {
                     cout << "tt = " << tt << endl;
                 }
@@ -167,6 +173,16 @@ int main(int argc, char* argv[])
 
             // Re-inject particles that leave computational domain:
             particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
+
+            // Assign cell:
+            PIC.assignCell_AllSpecies(&params,&IONS);
+
+            // Interpolate all fields:
+            PIC.interpolateFields_AllSpecies(&params,&IONS,&fields);
+
+            // Could potential interpolate fields onto particles to keep then consistent
+            // "advanceParticle" and "injection" are the only operations that change X_p
+            // hence, at this point we can safely calculate all weights and interpolate the fields
         }
 
         // Particle re-injection:
@@ -179,18 +195,22 @@ int main(int argc, char* argv[])
         particleBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
         */
 
-
         // Calculate ion moments:
         // =====================================================================
-        //PIC.extrapolateIonsMoments(&params, &fields, &IONS);
-        // - Apply the "a" on the extrapolation but not interpolation.
-
+        PIC.extrapolateMoments_AllSpecies(&params, &fields, &IONS);
 
         // Apply collision operator:
         // =====================================================================
         if (params.SW.Collisions == 1)
         {
             //FPCOLL.ApplyCollisionOperator(&params,&CS,&IONS);
+        }
+
+        // Apply RF operator:
+        // =====================================================================
+        if (params.SW.RFheating == 1)
+        {
+
         }
 
         // Field solve:
@@ -222,6 +242,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         currentTime += params.DT*CS.time;
 
+        MPI_Barrier(MPI_COMM_WORLD);
 
         // Save data:
         // =====================================================================

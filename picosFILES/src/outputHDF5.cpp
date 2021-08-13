@@ -821,6 +821,7 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 					name = "V_p";
 					#ifdef HDF5_DOUBLE
 					mat_values = CS->velocity*IONS->at(ii).V_p;
+
 					saveToHDF5(group_ionSpecies, name, &mat_values);
 					#elif defined HDF5_FLOAT
 					fmat_values = conv_to<fmat>::from(CS->velocity*IONS->at(ii).V_p);
@@ -828,6 +829,19 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 					#endif
 					name.clear();
 				}
+				if(params->outputs_variables.at(ov) == "mu_p")
+				{
+					//Saving the x-axis coordinates
+					name = "mu_p";
+					#ifdef HDF5_DOUBLE
+					vec_values = IONS->at(ii).mu_p*CS->magneticMoment;
+					saveToHDF5(group_ionSpecies, name, &vec_values);
+					#elif defined HDF5_FLOAT
+					fvec_values = conv_to<fvec>::from(IONS->at(ii).mu_p*CS->magneticMoment);
+					saveToHDF5(group_ionSpecies, name, &fvec_values);
+					#endif
+					name.clear();
+				 }
 				else if(params->outputs_variables.at(ov) == "EX_p")
 				{
 					name = "EX_p";

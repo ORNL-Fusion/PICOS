@@ -243,8 +243,9 @@ public:
 	double Wp;					// Plasma frequency.
 
 	arma::vec X_p;
-	arma::mat V_p; // Velocity vector, V(0): parallel, V(1): perpendicular
-	arma::vec a_p; // Computational particle weight
+	arma::mat V_p;  // Velocity vector, V(0): parallel, V(1): perpendicular
+	arma::vec a_p;  // Computational particle weight
+	arma::vec mu_p; // Magnetic moment
 
 	arma::ivec mn; 			// Ions' position in terms of the index of mesh node
 
@@ -276,10 +277,10 @@ public:
 	arma::vec nv_m; 				// Ion bulk velocity at time level "l + 1/2"
 	arma::vec nv_m_; 			// Ion bulk velocity at time level "l - 1/2"
 	arma::vec nv_m__; 			// Ion bulk velocity at time level "l - 3/2"
-  	arma::vec P11_m;				// Ion pressure tensor, component 1,1
-  	arma::vec P22_m;				// Ion pressure tensor, component 2,2
-  	arma::vec Tpar_m;			// Ion parallel temperature
-  	arma::vec Tper_m;			// Ion perpendicular temperature
+	arma::vec P11_m;				// Ion pressure tensor, component 1,1
+	arma::vec P22_m;				// Ion pressure tensor, component 2,2
+	arma::vec Tpar_m;			// Ion parallel temperature
+	arma::vec Tper_m;			// Ion perpendicular temperature
 
 	// Particle-defined ion moments:
 	arma::vec n_p;
@@ -604,7 +605,8 @@ struct params_TYP
 	// List of variables in the outputs
 	vector<string> outputs_variables;
 
-	//int dimensionality;
+	// Select method for particle RK4 integrator
+	int advanceParticleMethod;
 
 	//Control parameters for the simulation:
 	// Path to save the outputs
