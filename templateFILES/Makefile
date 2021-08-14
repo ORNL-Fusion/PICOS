@@ -29,6 +29,8 @@ initialize.o		   \
 units.o						 \
 initDistribution.o \
 outputHDF5.o 			 \
+PIC.o 						 \
+particleBC.o			 \
 mpi_main.o)
 
 all: $(BIN)/PICOS++
