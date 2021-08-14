@@ -1,23 +1,24 @@
 // Input data:
 // =============================================================================
 mpisForFields               2
-quietStart                  0
+quietStart                  1
 numberOfRKIterations        5
 numberOfParticleSpecies     1
 numberOfTracerSpecies       0
+advanceParticleMethod       2
 
 // Characteristic values:
 // =============================================================================
 CV_ne                       5.0E19
 CV_Te                       25
-CV_B                        0.5
+CV_B                        10
 CV_Tpar                     25
 CV_Tper                     25
 
 // Simulation time:
 // =============================================================================
-DTc                         1.0E-2
-simulationTime              100.0
+DTc                         2
+simulationTime              5000.0
 
 // Switches:
 // =============================================================================
@@ -31,7 +32,8 @@ SW_linearSolve               0
 
 // Magnetic field initial conditions:
 // =============================================================================
-IC_BX                       0.05
+IC_uniformBfield            0
+IC_BX                       0.5
 IC_BY                       0.0
 IC_BZ                       0.0
 IC_BX_NX                    200
@@ -67,8 +69,8 @@ RF_numit                    1000
 
 // Output variables:
 // =============================================================================
-outputCadence               10
-outputs_variables           {X_p,V_p,BX_m,dBX_m,ddBX_m}
+outputCadence               500
+outputs_variables           {X_p,V_p,mu_p,BX_p,BX_m,n_m,u_m,Tpar_m,Tper_m}
 
 // Data smoothing:
 // =============================================================================

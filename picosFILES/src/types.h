@@ -621,6 +621,7 @@ struct params_TYP
 	int numberOfRKIterations;
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation
+	double currentTime = 0;
 	int timeIterations;
 	double DT;//Time step
 	double DTc;//Cyclotron period fraction.

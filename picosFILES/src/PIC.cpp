@@ -636,7 +636,8 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 
 		// 0th and 1st moments at various time levels are sent to fields processes:
         // =============================================================
-		MPI_Barrier(params->mpi.COMM);
+		//MPI_Barrier(params->mpi.COMM);
+		MPI_Barrier(MPI_COMM_WORLD);
         MPI_SendVec(params, &IONS->at(ss).n_m);
         MPI_SendVec(params, &IONS->at(ss).n_m_);
         MPI_SendVec(params, &IONS->at(ss).n_m__);
@@ -702,25 +703,31 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 			double vper = IONS->V_p(ii,1);
 
 			// vx component:
-			arma_rng::set_seed_random();
-			arma::vec phi = 2*M_PI*randu(1);
+			//arma_rng::set_seed_random();
+			arma::vec phi = 2*M_PI*randu<vec>(1);
 			double vy = vper*cos(phi(0));
 
-			/*
+
 			if (params->mpi.IS_PARTICLES_ROOT)
 			{
-				cout << "phi: " << phi(0) << endl;
+				//cout << "phi/2*pi: " << phi/(2*M_PI) << endl;
+				//cout << "vpar: " << vpar << endl;
+				//cout << "vy: " << vper << endl;
+				//cout << "cos(phi): " << cos(phi(0)) << endl;
 			}
-			*/
-
-			// Particle weight:
-			double a = IONS->a_p(ii);
 
 			// Particle-defined magnetic field:
 			double B = IONS->BX_p(ii);
 
 			// Compression factor:
 			double c = B/B0;
+
+			// Particle weight:
+			if (params->currentTime == 0)
+			{
+				IONS->a_p(ii) = 1/c;
+			}
+			double a = IONS->a_p(ii);
 
 			// Density:
 			n(ix-1) += IONS->wxl(ii)*a*c;

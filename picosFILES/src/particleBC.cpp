@@ -360,7 +360,8 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
     // 3: Periodic or 4: basic re-injection
     if (IONS->p_BC.BC_type == 3 || IONS->p_BC.BC_type == 4)
     {
-        IONS->a_p(ii) = 1;
+        // Do nothing
+        //IONS->a_p(ii) = 1;
     }
 
     /*

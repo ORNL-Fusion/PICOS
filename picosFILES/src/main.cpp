@@ -120,7 +120,8 @@ int main(int argc, char* argv[])
     // =========================================================================
     double t1 = 0.0;
     double t2 = 0.0;
-    double currentTime = 0.0;
+    //double currentTime = 0.0;
+    params.currentTime = 0.0;
     int outputIterator = 0;
     int numberOfIterationsForEstimator = 1000;
 
@@ -130,8 +131,8 @@ int main(int argc, char* argv[])
 
     // Create PIC solver:
     // =========================================================================
-    PIC_TYP PIC(&params, &fields, &IONS);
 
+    PIC_TYP PIC(&params, &fields, &IONS);
     /*
     // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
     // =========================================================================
@@ -156,20 +157,20 @@ int main(int argc, char* argv[])
     for(int tt=0; tt<params.timeIterations; tt++)
     {
 
+        if (params.mpi.IS_PARTICLES_ROOT)
+        {
+            if (fmod((double)(tt + 1), 1000) == 0)
+            {
+                cout << "tt = " << tt << endl;
+            }
+        }
+
         // Advance particles and re-inject:
         // =====================================================================
         if (params.SW.advancePos == 1)
         {
             // Advance particle position and velocity to level X^(N+1):
             PIC.advanceParticles(&params, &fields, &IONS);
-
-            if (params.mpi.IS_PARTICLES_ROOT)
-            {
-                if (fmod((double)(tt + 1), 1000) == 0)
-                {
-                    cout << "tt = " << tt << endl;
-                }
-            }
 
             // Re-inject particles that leave computational domain:
             particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
@@ -240,9 +241,7 @@ int main(int argc, char* argv[])
 
         // Advance time:
         // =====================================================================
-        currentTime += params.DT*CS.time;
-
-        MPI_Barrier(MPI_COMM_WORLD);
+        params.currentTime += params.DT*CS.time;
 
         // Save data:
         // =====================================================================
@@ -253,7 +252,7 @@ int main(int argc, char* argv[])
             // The ions' velocity is advanced in time in order to obtain V^(N+1):
             //PIC.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
 
-            HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, currentTime);
+            HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, params.currentTime);
 
             outputIterator++;
         }

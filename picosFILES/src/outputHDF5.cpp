@@ -925,10 +925,10 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 						//Saving ions species density
 						name = "n_m";
 						#ifdef HDF5_DOUBLE
-						vec_values = IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM)/CS->length;
+						vec_values = IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM)/CS->volume;
 						saveToHDF5(group_ionSpecies, name, &vec_values);
 						#elif defined HDF5_FLOAT
-						fvec_values = conv_to<fvec>::from(IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM)/CS->length);
+						fvec_values = conv_to<fvec>::from(IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM)/CS->volume);
 						saveToHDF5(group_ionSpecies, name, &fvec_values);
 						#endif
 						name.clear();
