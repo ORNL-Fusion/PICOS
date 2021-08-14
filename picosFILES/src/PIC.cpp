@@ -407,7 +407,7 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 			// Ion mass:
 			double Ma = IONS->at(ss).M;
 
-			#pragma omp parallel for default(none) shared(IONS, params, fields, DT, ss) firstprivate(NSP, F_C_DS)
+			#pragma omp parallel for default(none) shared(IONS, params, fields, DT, ss, Ma) firstprivate(NSP, F_C_DS)
             for(int ii=0;ii<NSP;ii++)
 			{
                 // Start RK4 solution:
@@ -541,7 +541,7 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
     IONS->wxl.zeros();
     IONS->wxr.zeros();
 
-	#pragma omp parallel for default(none) shared(IONS, params) firstprivate(NSP)
+	#pragma omp parallel for default(none) shared(IONS, params, std::cout) firstprivate(NSP)
     for(int ii=0; ii<NSP; ii++)
     {
 		// Calculate nearest grid point:
@@ -680,7 +680,7 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 	IONS->P11_m.zeros();
 	IONS->P22_m.zeros();
 
-	#pragma omp parallel default(none) shared(params, IONS) firstprivate(NSP)
+	#pragma omp parallel default(none) shared(params, IONS, B0) firstprivate(NSP)
 	{
 		// Create private moments:
 		// ======================
