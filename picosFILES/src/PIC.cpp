@@ -139,9 +139,10 @@ void PIC_TYP::include4GhostsContributions(arma::vec * v)
 
 void PIC_TYP::fill4Ghosts(arma::vec * v)
 {
-	//int N = v->n_elem;
-	//v->subvec(N-2,N-1) = v->subvec(2,3);
-	//v->subvec(0,1) = v->subvec(N-4,N-3);
+	int NX = v->n_elem;
+
+	v->subvec(0,1)       = v->subvec(2,3);
+	v->subvec(NX-2,NX-1) = v->subvec(NX-4,NX-3);
 }
 
 void PIC_TYP::smooth(arma::vec * v, double as)
@@ -407,7 +408,7 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 			// Ion mass:
 			double Ma = IONS->at(ss).M;
 
-			#pragma omp parallel for default(none) shared(IONS, params, fields, DT, ss, Ma) firstprivate(NSP, F_C_DS)
+			#pragma omp parallel for default(none) shared(IONS, params, fields, DT, ss, Ma, std::cout) firstprivate(NSP, F_C_DS)
             for(int ii=0;ii<NSP;ii++)
 			{
                 // Start RK4 solution:
@@ -458,11 +459,13 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 				{
 				case 1:
 					// Do nothing
+					break;
 				case 2:
 					// Use magnetic moment
 					B  = EM(1);
 					double mu = 0.5*Ma*pow(vper,2)/B;
 					Z0(2) = mu;
+					break;
 				}
 
                 // Step 1:
@@ -502,6 +505,7 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 				{
 				case 1:
 					// Do nothing, RK4 solved for (x, vpar, vper)
+					break;
 				case 2:
 					// Calculate vper since RK4 solved for (x, vpar, mu)
 					B  = EM(1);
@@ -599,11 +603,13 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
     // =============================
     for(int ss=0;ss<IONS->size();ss++)
     {
+
         // Assign cell and calculate partial ion moments:
         if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
 			//Calculate partial moments:
 			calculateIonMoments(params, fields, &IONS->at(ss));
+
 
 			// Reduce IONS moments to PARTICLE ROOT:
 			// =====================================
@@ -612,12 +618,15 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			MPI_ReduceVec(params, &IONS->at(ss).P11_m);
 			MPI_ReduceVec(params, &IONS->at(ss).P22_m);
 
+
 			// Broadcast to all PARTICLE ranks:
 			// ================================
 			MPI_Bcast(IONS->at(ss).n_m.memptr()  , IONS->at(ss).n_m.size()  , MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).nv_m.memptr() , IONS->at(ss).nv_m.size() , MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).P11_m.memptr(), IONS->at(ss).P11_m.size(), MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).P22_m.memptr(), IONS->at(ss).P22_m.size(), MPI_DOUBLE, 0, params->mpi.COMM);
+
+
 
 			// Apply smoothing:
 			// ===============
@@ -629,15 +638,18 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			  smooth(&IONS->at(ss).P22_m, params->smoothingParameter);
 			}
 
+
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
 			calculateDerivedIonMoments(params, &IONS->at(ss));
         }
 
+
 		// 0th and 1st moments at various time levels are sent to fields processes:
         // =============================================================
 		//MPI_Barrier(params->mpi.COMM);
-		MPI_Barrier(MPI_COMM_WORLD);
+		//MPI_Barrier(MPI_COMM_WORLD);
+
         MPI_SendVec(params, &IONS->at(ss).n_m);
         MPI_SendVec(params, &IONS->at(ss).n_m_);
         MPI_SendVec(params, &IONS->at(ss).n_m__);
@@ -646,6 +658,7 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 		MPI_SendVec(params, &IONS->at(ss).nv_m);
 		MPI_SendVec(params, &IONS->at(ss).nv_m_);
 		MPI_SendVec(params, &IONS->at(ss).nv_m__);
+
 
 	}
 }
@@ -670,6 +683,9 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 	// Number of particles:
 	int NSP(IONS->NSP);
 
+	// Ion mass:
+	double Ma = IONS->M;
+
 	// Reference magnetic field:
 	double B0 = params->em_IC.BX; // Maybe use the current value at the reference location
 
@@ -680,11 +696,10 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 	IONS->P11_m.zeros();
 	IONS->P22_m.zeros();
 
-	#pragma omp parallel default(none) shared(params, IONS, B0) firstprivate(NSP)
+	#pragma omp parallel default(none) shared(params, IONS, B0, Ma) firstprivate(NSP)
 	{
 		// Create private moments:
 		// ======================
-		double Ma     = IONS->M;
 		arma::vec n   = zeros(params->mesh.NX_IN_SIM + 4);
 		arma::vec nv  = zeros(params->mesh.NX_IN_SIM + 4);
 		arma::vec P11 = zeros(params->mesh.NX_IN_SIM + 4);
@@ -741,16 +756,6 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 
 			// Unitary particle flux may be needed here
 
-			/*
-			nv.Y(ix-1) 	+= IONS->wxl(ii)*a*IONS->V(ii,1);
-			nv.Y(ix) 	+= IONS->wxc(ii)*a*IONS->V(ii,1);
-			nv.Y(ix+1) 	+= IONS->wxr(ii)*a*IONS->V(ii,1);
-
-			nv.Z(ix-1) 	+= IONS->wxl(ii)*a*IONS->V(ii,2);
-			nv.Z(ix) 	+= IONS->wxc(ii)*a*IONS->V(ii,2);
-			nv.Z(ix+1) 	+= IONS->wxr(ii)*a*IONS->V(ii,2);
-			*/
-
 			// Stress tensor P11:
 			P11(ix-1) += IONS->wxl(ii)*a*Ma*pow(vpar,2)*c;
 			P11(ix)   += IONS->wxc(ii)*a*Ma*pow(vpar,2)*c;
@@ -764,10 +769,16 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 
 		// Ghost contributions:
 		// ====================
+		fill4Ghosts(&n);
+		fill4Ghosts(&nv);
+		fill4Ghosts(&P11);
+		fill4Ghosts(&P22);
+		/*
 		include4GhostsContributions(&n);
 		include4GhostsContributions(&nv);
 		include4GhostsContributions(&P11);
 		include4GhostsContributions(&P22);
+		*/
 
 		// Reduce partial moments from each thread:
 		// ========================================

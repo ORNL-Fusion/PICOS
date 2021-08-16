@@ -39,6 +39,7 @@ using namespace arma;
 int main(int argc, char* argv[])
 {
     // Initialize MPI process:
+    // =========================================================================
     MPI_Init(&argc, &argv);
 
     // Create simulation objects:
@@ -248,9 +249,6 @@ int main(int argc, char* argv[])
         if(fmod((double)(tt + 1), params.outputCadenceIterations) == 0)
         {
             vector<ionSpecies_TYP> IONS_OUT = IONS;
-
-            // The ions' velocity is advanced in time in order to obtain V^(N+1):
-            //PIC.advanceIonsVelocity(&params, &CS, &fields, &IONS_OUT, 0.5*params.DT);
 
             HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, params.currentTime);
 

@@ -723,12 +723,6 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
     // ================================================
     if (params->em_IC.uniformBfield)
     {
-        // From "params" and assumes uniform fields:
-        /*
-        fields->B.Z.fill(params->em_IC.BZ);
-        fields->B.Y.fill(params->em_IC.BY);
-        fields->B.X.fill(params->em_IC.BX);
-        */
         fields->BX_m.fill(params->em_IC.BX);
     }
     else
@@ -759,23 +753,22 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         // Spatial increment for external data:
         double dX = params->mesh.LX/((double)BX_NX);
 
-        //double dBX_NX = params->mesh.LX/BX_NX;
-
         arma::vec xt = linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
-        arma:: vec yt(xt.size());
+        arma::vec yt(xt.size());
 
         // BX profile:
         // ===========
-        yt = params->em_IC.Bx_profile;
+        arma::vec BX = params->em_IC.Bx_profile;
+        yt = BX;
         interp1(xt,yt,xq,yq);
         fields->BX_m = yq;
 
         // dBX profile:
         // ===========
         arma::vec dBX(BX_NX,1);
-        dBX.subvec(0,BX_NX-2) = diff(params->em_IC.Bx_profile,1)/dX;
+        dBX.subvec(1,BX_NX-2) = (BX.subvec(2,BX_NX-1) - BX.subvec(0,BX_NX-3))/(2*dX);
+        dBX(0)       = dBX(1);
         dBX(BX_NX-1) = dBX(BX_NX-2);
-
         yt = dBX;
         interp1(xt,yt,xq,yq);
         fields->dBX_m = yq;
