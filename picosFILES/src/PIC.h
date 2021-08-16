@@ -61,7 +61,7 @@ protected:
 	void MPI_Recv_AllFields(const params_TYP * params, fields_TYP * fields);
 
 	// Ghost contributions:
-	void include4GhostsContributions(arma::vec * v);
+	//void include4GhostsContributions(arma::vec * v);
 
 	void fillGhosts(arma::vec * C);
 

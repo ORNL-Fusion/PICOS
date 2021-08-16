@@ -129,6 +129,7 @@ void PIC_TYP::fillGhost_AllFields(const params_TYP * params, fields_TYP * fields
 	}
 }
 
+/*
 void PIC_TYP::include4GhostsContributions(arma::vec * v)
 {
 	int N = v->n_elem;
@@ -136,6 +137,7 @@ void PIC_TYP::include4GhostsContributions(arma::vec * v)
 	v->subvec(0,1)     = v->subvec(2,3);
 	v->subvec(N-2,N-1) = v->subvec(N-4,N-3);
 }
+*/
 
 void PIC_TYP::fill4Ghosts(arma::vec * v)
 {
@@ -168,13 +170,6 @@ void PIC_TYP::smooth(arma::vec * v, double as)
 // Constructor:
 PIC_TYP::PIC_TYP(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-	// Before we start time stepping, we need to do the following:
-	// - Make sure all PARTICLE ranks have the most up to date field data
-	// - Given the present particle positions:
-	// 		+ populate weight function "w" via assignCell
-	// 		+ Populate particle-defined field variables in IONS via field interpolation
-	//		+ Populate mesh-defined ion moments via moment extrapolation
-
 	// Get latest mesh-defined values from FIELDS ranks:
 	// =================================================
 	MPI_Recv_AllFields(params,fields);
@@ -185,17 +180,6 @@ PIC_TYP::PIC_TYP(const params_TYP * params, fields_TYP * fields, vector<ionSpeci
 	// Assign cell for all particles:
     // =============================
 	assignCell_AllSpecies(params,IONS);
-
-	/*
-    for(int ss=0;ss<IONS->size();ss++)
-    {
-        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-        {
-            // Assign cell:
-        	PIC_TYP::assignCell(params, &IONS->at(ss));
-		}
-	}
-	*/
 
 	// Interpolate all fields on all species:
 	// ======================================
@@ -219,7 +203,6 @@ void PIC_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP *
 
     // Take care of ghost cells:
     fill4Ghosts(&F);
-    // fillGhosts(&F);
 
     #pragma omp parallel for default(none) shared(params, IONS, F_p, F) firstprivate(NSP)
     for(int ii=0; ii<NSP; ii++)
@@ -233,7 +216,6 @@ void PIC_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP *
     }// omp parallel for
 }
 
-// This might not be needed:
 void PIC_TYP::interpolateFields(const params_TYP * params, ionSpecies_TYP * IONS, const fields_TYP * fields)
 {
 	// Need to use SW in order to enable/disable ddBX interpolation
@@ -283,7 +265,6 @@ void PIC_TYP::interpEM(const params_TYP * params, const ionSpecies_TYP * IONS, c
     double DX   = params->mesh.DX;
     int m       = round( 0.5 + (xp - xMin)/DX ) - 1;
 
-    // Correct "m" near boundaries:
     // During RK4, some projections can be go out of bound
     if ( m >= params->mesh.NX_IN_SIM)
     {
@@ -321,27 +302,6 @@ void PIC_TYP::interpEM(const params_TYP * params, const ionSpecies_TYP * IONS, c
     f(1) = fields->BX_m(ix);
     f(2) = fields->BX_m(ix + 1);
     (*EM)(1) = arma::dot(f,W);
-
-	/*
-    int m_test = 10000;
-    if (params->mpi.IS_PARTICLES_ROOT)
-    {
-        if (m == m_test)
-        {
-            cout<< " " << endl;
-            cout << "xp ="<< xp*CS->length << endl;
-            cout << "m = "<< m << endl;
-
-            cout << "sum(W) = " << sum(W) << endl;
-
-            cout << "BX = "<< (*EM)(1)*CS->bField << endl;
-            cout<< " " << endl;
-
-            cout << "f(0) = "<< f(0)*CS->bField << endl;
-            cout << "f(1) = "<< f(1)*CS->bField << endl;
-            cout << "f(2) = "<< f(2)*CS->bField << endl;
-        }
-    }*/
 
     // dBX:
     f(0) = fields->dBX_m(ix - 1);
@@ -497,9 +457,6 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 				// Interpolate fields at new particle position:
 				interpEM(params, &IONS->at(ss), fields, &Z1, &EM);
 
-				// ****
-				// Could extract a W arma::vec for the weight function. This could be reused in the particleBC codes
-
 				// Assign solution to output vector:
 				switch (params->advanceParticleMethod)
 				{
@@ -523,13 +480,6 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
                 IONS->at(ss).V_p(ii,1) = Z1(2); // vper
 				IONS->at(ss).mu_p(ii)  = 0.5*Ma*pow(Z1(2),2)/EM(1) ; // mu
 
-				/*
-				// Update new particle-defined fields:
-				IONS->at(ss).EX_p(ii)  = EM(0);
-				IONS->at(ss).BX_p(ii)  = EM(1);
-				IONS->at(ss).dBX_p(ii) = EM(2);
-				*/
-
 			} // End of parallel region
 		}
 	}//structure to iterate over all the ion species.
@@ -552,7 +502,6 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
 		double X_p     = IONS->X_p(ii);
 		double X_p_min = 0;
 		double DX      = params->mesh.DX;
-		//int m = floor((IONS->X_p(ii) + 0.5*params->mesh.DX)/params->mesh.DX);
 		int m = round( 0.5 + (X_p - X_p_min)/DX ) - 1;
 
 		// Correct "m" near boundaries if out of bound:
@@ -610,7 +559,6 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			//Calculate partial moments:
 			calculateIonMoments(params, fields, &IONS->at(ss));
 
-
 			// Reduce IONS moments to PARTICLE ROOT:
 			// =====================================
 			MPI_ReduceVec(params, &IONS->at(ss).n_m);
@@ -618,15 +566,12 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			MPI_ReduceVec(params, &IONS->at(ss).P11_m);
 			MPI_ReduceVec(params, &IONS->at(ss).P22_m);
 
-
 			// Broadcast to all PARTICLE ranks:
 			// ================================
 			MPI_Bcast(IONS->at(ss).n_m.memptr()  , IONS->at(ss).n_m.size()  , MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).nv_m.memptr() , IONS->at(ss).nv_m.size() , MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).P11_m.memptr(), IONS->at(ss).P11_m.size(), MPI_DOUBLE, 0, params->mpi.COMM);
 			MPI_Bcast(IONS->at(ss).P22_m.memptr(), IONS->at(ss).P22_m.size(), MPI_DOUBLE, 0, params->mpi.COMM);
-
-
 
 			// Apply smoothing:
 			// ===============
@@ -638,27 +583,23 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			  smooth(&IONS->at(ss).P22_m, params->smoothingParameter);
 			}
 
-
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
 			calculateDerivedIonMoments(params, &IONS->at(ss));
         }
 
-
 		// 0th and 1st moments at various time levels are sent to fields processes:
         // =============================================================
-		//MPI_Barrier(params->mpi.COMM);
-		//MPI_Barrier(MPI_COMM_WORLD);
-
+		// Ion density:
         MPI_SendVec(params, &IONS->at(ss).n_m);
         MPI_SendVec(params, &IONS->at(ss).n_m_);
         MPI_SendVec(params, &IONS->at(ss).n_m__);
         MPI_SendVec(params, &IONS->at(ss).n_m___);
 
+		// Ion parallel flux:
 		MPI_SendVec(params, &IONS->at(ss).nv_m);
 		MPI_SendVec(params, &IONS->at(ss).nv_m_);
 		MPI_SendVec(params, &IONS->at(ss).nv_m__);
-
 
 	}
 }
@@ -718,18 +659,8 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 			double vper = IONS->V_p(ii,1);
 
 			// vx component:
-			//arma_rng::set_seed_random();
 			arma::vec phi = 2*M_PI*randu<vec>(1);
 			double vy = vper*cos(phi(0));
-
-
-			if (params->mpi.IS_PARTICLES_ROOT)
-			{
-				//cout << "phi/2*pi: " << phi/(2*M_PI) << endl;
-				//cout << "vpar: " << vpar << endl;
-				//cout << "vy: " << vper << endl;
-				//cout << "cos(phi): " << cos(phi(0)) << endl;
-			}
 
 			// Particle-defined magnetic field:
 			double B = IONS->BX_p(ii);
@@ -767,17 +698,13 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 			P22(ix+1) += IONS->wxr(ii)*a*Ma*pow(vy,2)*c;
 		}
 
+		/*
 		// Ghost contributions:
 		// ====================
 		fill4Ghosts(&n);
 		fill4Ghosts(&nv);
 		fill4Ghosts(&P11);
 		fill4Ghosts(&P22);
-		/*
-		include4GhostsContributions(&n);
-		include4GhostsContributions(&nv);
-		include4GhostsContributions(&P11);
-		include4GhostsContributions(&P22);
 		*/
 
 		// Reduce partial moments from each thread:
@@ -792,19 +719,12 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 
 	}//End of the parallel region
 
-
-	/*
-	// Calculate compression factor:
-	arma::vec compressionFactor = (EB->B.X.subvec(1,params->mesh.NX_IN_SIM)/params->em_IC.BX)/params->geometry.A_0;
-
-	// Apply magnetic compression:
-	IONS->n.subvec(1,params->mesh.NX_IN_SIM) = IONS->n.subvec(1,params->mesh.NX_IN_SIM)% compressionFactor;
-	IONS->nv.X.subvec(1,params->mesh.NX_IN_SIM) = IONS->nv.X.subvec(1,params->mesh.NX_IN_SIM)%compressionFactor;
-	//IONS->nv.Y.subvec(1,params->mesh.NX_IN_SIM) = IONS->nv.Y.subvec(1,params->mesh.NX_IN_SIM) % compressionFactor;
-	//IONS->nv.Z.subvec(1,params->mesh.NX_IN_SIM) = IONS->nv.Z.subvec(1,params->mesh.NX_IN_SIM) % compressionFactor;
-	IONS->P11.subvec(1,params->mesh.NX_IN_SIM) = IONS->P11.subvec(1,params->mesh.NX_IN_SIM)% compressionFactor;
-	IONS->P22.subvec(1,params->mesh.NX_IN_SIM) = IONS->P22.subvec(1,params->mesh.NX_IN_SIM)% compressionFactor;
-	*/
+	// Ghost contributions:
+	// ====================
+	fill4Ghosts(&IONS->n_m);
+	fill4Ghosts(&IONS->nv_m);
+	fill4Ghosts(&IONS->P11_m);
+	fill4Ghosts(&IONS->P22_m);
 
 	// Scale:
 	double A = params->geometry.A_0;

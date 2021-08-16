@@ -571,12 +571,6 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
 
     // Set size of mesh and allocate memory:
     // =====================================
-    /*
-    params->mesh.nodes.X.set_size(params->mesh.NX_IN_SIM);
-    params->mesh.nodes.Y.set_size(params->mesh.NY_IN_SIM);
-    params->mesh.nodes.Z.set_size(params->mesh.NZ_IN_SIM);
-    */
-
     params->mesh.nodesX.set_size(params->mesh.NX_IN_SIM);
     params->mesh.nodesY.set_size(params->mesh.NY_IN_SIM);
     params->mesh.nodesZ.set_size(params->mesh.NZ_IN_SIM);
@@ -585,18 +579,18 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
     // ============================
     for(int ii=0; ii<params->mesh.NX_IN_SIM; ii++)
     {
-        //params->mesh.nodes.X(ii) = (double)ii*params->mesh.DX;
-        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX;
-
+        //params->mesh.nodesX(ii) = (double)ii*params->mesh.DX;
         // ****** does the above expresion reequire + 0.5*DX as in the fortran code?
         // ****** Notice that the above rnage goes from ii = 0 - (NX_IN_SIM - 1)
+
+        // Mesh points at the center of each cell:
+        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX + 0.5*params->mesh.DX;
     }
 
     // Create mesh nodes: Y domain
     // ===========================
     for(int ii=0; ii<params->mesh.NY_IN_SIM; ii++)
     {
-        //params->mesh.nodes.Y(ii) = (double)ii*params->mesh.DY;
         params->mesh.nodesY(ii) = (double)ii*params->mesh.DY;
     }
 
@@ -604,7 +598,6 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
     // ===========================
     for(int ii=0; ii<params->mesh.NZ_IN_SIM; ii++)
     {
-        //params->mesh.nodes.Z(ii) = (double)ii*params->mesh.DZ;
         params->mesh.nodesZ(ii) = (double)ii*params->mesh.DZ;
     }
 

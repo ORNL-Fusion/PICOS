@@ -121,7 +121,6 @@ int main(int argc, char* argv[])
     // =========================================================================
     double t1 = 0.0;
     double t2 = 0.0;
-    //double currentTime = 0.0;
     params.currentTime = 0.0;
     int outputIterator = 0;
     int numberOfIterationsForEstimator = 1000;
@@ -181,21 +180,7 @@ int main(int argc, char* argv[])
 
             // Interpolate all fields:
             PIC.interpolateFields_AllSpecies(&params,&IONS,&fields);
-
-            // Could potential interpolate fields onto particles to keep then consistent
-            // "advanceParticle" and "injection" are the only operations that change X_p
-            // hence, at this point we can safely calculate all weights and interpolate the fields
         }
-
-        // Particle re-injection:
-        // =====================================================================
-        /*
-        // Check boundaries:
-        particleBC.checkBoundaryAndFlag(&params,&CS,&fields,&IONS);
-
-        // Calculate new particle weight:
-        particleBC.calculateParticleWeight(&params,&CS,&fields,&IONS);
-        */
 
         // Calculate ion moments:
         // =====================================================================
@@ -254,7 +239,6 @@ int main(int argc, char* argv[])
 
             outputIterator++;
         }
-
 
         // Estimate simulation time:
         // =====================================================================

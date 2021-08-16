@@ -1,1 +1,0 @@
-37321ee Corrected some omp syntax errors
