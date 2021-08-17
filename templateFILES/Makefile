@@ -23,14 +23,15 @@ LIB=-lz	-ldl	-lm	-lhdf5_cpp	-larmadillo #-lgfortran
 OMP_LIB_FLAGS=-lgomp
 
 BINARIES = $(addprefix $(OBJ)/,\
-main.o	           \
-types.o   			   \
-initialize.o		   \
-units.o						 \
-initDistribution.o \
-outputHDF5.o 			 \
-PIC.o 						 \
-particleBC.o			 \
+main.o	            \
+types.o   			    \
+initialize.o		    \
+units.o						  \
+initDistribution.o  \
+outputHDF5.o 			  \
+PIC.o 						  \
+particleBC.o			  \
+collisionOperator.o \
 mpi_main.o)
 
 all: $(BIN)/PICOS++

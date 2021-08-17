@@ -129,16 +129,6 @@ void PIC_TYP::fillGhost_AllFields(const params_TYP * params, fields_TYP * fields
 	}
 }
 
-/*
-void PIC_TYP::include4GhostsContributions(arma::vec * v)
-{
-	int N = v->n_elem;
-
-	v->subvec(0,1)     = v->subvec(2,3);
-	v->subvec(N-2,N-1) = v->subvec(N-4,N-3);
-}
-*/
-
 void PIC_TYP::fill4Ghosts(arma::vec * v)
 {
 	int NX = v->n_elem;

@@ -16,9 +16,9 @@
 #include "outputHDF5.h"
 #include "PIC.h"
 #include "particleBC.h"
+#include "collisionOperator.h"
 
 /*
-#include "collisionOperator.h"
 #include "rfOperator.h"
 #include "fields.h"
 
@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     fields_TYP fields;
 
     // Collision operator object:
-    //collisionOperator FPCOLL;
+    coll_operator_TYP coll_operator;
 
     // Particle boundary condition operator:
     particleBC_TYP particleBC;
@@ -190,7 +190,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.Collisions == 1)
         {
-            //FPCOLL.ApplyCollisionOperator(&params,&CS,&IONS);
+            coll_operator.ApplyCollisions_AllSpecies(&params,&CS,&IONS);
         }
 
         // Apply RF operator:
