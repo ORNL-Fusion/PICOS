@@ -270,12 +270,14 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                     DT_CFL_I = (DT_CFL_I > *(DT_CFL_I_MPI + ii)) ? *(DT_CFL_I_MPI + ii) : DT_CFL_I;
                 }
 
+                /*
                 // Check against user defined time step:
                 if (DT > DT_CFL_I)
                 {
                         DT = DT_CFL_I;
                         CFL_I = true;
                 }
+                */
 
 				//Assign final DT for the simulation
 				//==================================
@@ -311,6 +313,7 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                 cout << "+ Simulation time step defined by USER: " <<  scientific << DT << fixed  << endl;
             }
 
+            cout << "+ Time step defined by USER: " << scientific << DT << fixed << endl;
             cout << "+ Time step defined by CFL condition for ions: " << scientific << DT_CFL_I << fixed << endl;
             cout << "+ Time step used in simulation: " << scientific << params->DT << fixed << endl;
             cout << "+ Time steps in simulation: " << params->timeIterations << endl;

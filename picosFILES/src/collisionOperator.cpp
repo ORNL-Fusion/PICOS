@@ -234,8 +234,8 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 
 					// Interpolate moments:
 					interpolateIonMoments(params,IONS,aa,bb);
-					arma::vec n_p    = IONS->at(aa).n_p/CS->density;
-					arma::vec nv_p   = IONS->at(aa).nv_p*CS->velocity/CS->density;
+					arma::vec n_p    = IONS->at(aa).n_p/CS->volume;
+					arma::vec nv_p   = IONS->at(aa).nv_p*CS->velocity/CS->volume;
 					arma::vec Tpar_p = IONS->at(aa).Tpar_p*CS->temperature*F_KB/F_E;
 					arma::vec Tper_p = IONS->at(aa).Tper_p*CS->temperature*F_KB/F_E;
 
