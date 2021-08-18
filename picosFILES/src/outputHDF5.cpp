@@ -1,5 +1,6 @@
 #include "outputHDF5.h"
 
+/*
 void HDF_TYP::MPI_Allgathervec(const params_TYP * params, arma::vec * field)
 {
 	unsigned int iIndex = params->mpi.iIndex;
@@ -43,7 +44,7 @@ void HDF_TYP::MPI_Allgathermat(const params_TYP * params, arma::mat * field)
 		field->submat(ir,ic,fr,fc) = reshape(recvbuf.subvec(ie,fe), params->mesh.NX_PER_MPI, params->mesh.NY_PER_MPI);
 	}
 }
-
+*/
 
 // Function to save a single integer value
 void HDF_TYP::saveToHDF5(H5File * file, string name, int * value)
@@ -842,6 +843,19 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 					#endif
 					name.clear();
 				 }
+				 if(params->outputs_variables.at(ov) == "a_p")
+ 				{
+ 					//Saving the x-axis coordinates
+ 					name = "a_p";
+ 					#ifdef HDF5_DOUBLE
+ 					vec_values = IONS->at(ii).a_p;
+ 					saveToHDF5(group_ionSpecies, name, &vec_values);
+ 					#elif defined HDF5_FLOAT
+ 					fvec_values = conv_to<fvec>::from(IONS->at(ii).a_p);
+ 					saveToHDF5(group_ionSpecies, name, &fvec_values);
+ 					#endif
+ 					name.clear();
+ 				 }
 				else if(params->outputs_variables.at(ov) == "EX_p")
 				{
 					name = "EX_p";
@@ -1044,7 +1058,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 		for(int ov=0; ov<params->outputs_variables.size(); ov++)
 		{
 			if(params->outputs_variables.at(ov) == "EX_m")
-			{				
+			{
 				Group * group_field = new Group( group_fields->createGroup( "EX_m" ) );//Electric fields
 
 				//x-component of electric field

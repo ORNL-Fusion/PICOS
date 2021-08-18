@@ -573,9 +573,16 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 			  smooth(&IONS->at(ss).P22_m, params->smoothingParameter);
 			}
 
+			// It might be worth to performing a time-averaging of all update_ion_moments
+			// This would be accomplished by keeping previous time step profiles:
+			// n_m_, n_m__, ___
+			// P11_m_, P11_m__, ___
+
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
 			calculateDerivedIonMoments(params, &IONS->at(ss));
+
+			// Could perform a time-averaging of u_m and Tper_m and Tpar_m
         }
 
 		// 0th and 1st moments at various time levels are sent to fields processes:
@@ -590,7 +597,6 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 		MPI_SendVec(params, &IONS->at(ss).nv_m);
 		MPI_SendVec(params, &IONS->at(ss).nv_m_);
 		MPI_SendVec(params, &IONS->at(ss).nv_m__);
-
 	}
 }
 
@@ -688,15 +694,6 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 			P22(ix+1) += IONS->wxr(ii)*a*Ma*pow(vy,2)*c;
 		}
 
-		/*
-		// Ghost contributions:
-		// ====================
-		fill4Ghosts(&n);
-		fill4Ghosts(&nv);
-		fill4Ghosts(&P11);
-		fill4Ghosts(&P22);
-		*/
-
 		// Reduce partial moments from each thread:
 		// ========================================
 		#pragma omp critical (update_ion_moments)
@@ -711,12 +708,13 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 
 	// Ghost contributions:
 	// ====================
-	fill4Ghosts(&IONS->n_m);
-	fill4Ghosts(&IONS->nv_m);
-	fill4Ghosts(&IONS->P11_m);
-	fill4Ghosts(&IONS->P22_m);
+	fillGhosts(&IONS->n_m);
+	fillGhosts(&IONS->nv_m);
+	fillGhosts(&IONS->P11_m);
+	fillGhosts(&IONS->P22_m);
 
 	// Scale:
+	// =====
 	double A = params->geometry.A_0;
 	IONS->n_m   *= (1/A)*IONS->NCP/params->mesh.DX;
 	IONS->nv_m  *= (1/A)*IONS->NCP/params->mesh.DX;

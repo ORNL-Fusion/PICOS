@@ -4,7 +4,7 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 {
     // Generation of communicators for fields and particles:
     // =====================================================
-    // params->mpi.MPI_DOMAIN_NUMBER is defined in constructor is INITIALIZE
+    // params->mpi.MPI_DOMAIN_NUMBER is defined in constructor in INITIALIZE
 
 	// Define the color of each MPI sub-communicator:
 	if (params->mpi.MPI_DOMAIN_NUMBER < params->mpi.MPIS_FIELDS)
@@ -122,6 +122,19 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 			// Calculate mesh index range (iIndex,fIndex) associated with each RANK:
             params->mpi.iIndex = params->mesh.NX_PER_MPI*params->mpi.MPI_DOMAIN_NUMBER_CART+1;
             params->mpi.fIndex = params->mesh.NX_PER_MPI*(params->mpi.MPI_DOMAIN_NUMBER_CART+1);
+
+			/*
+			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , Cart Rank: "<< params->mpi.MPI_DOMAIN_NUMBER_CART << endl;
+			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , iIndex: "<< params->mpi.iIndex << endl;
+			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , fIndex: "<< params->mpi.fIndex << endl;
+
+			World Rank: 0 , Cart Rank: 0
+			World Rank: 0 , iIndex: 1
+			World Rank: 0 , fIndex: 250
+			World Rank: 1 , Cart Rank: 1
+			World Rank: 1 , iIndex: 251
+			World Rank: 1 , fIndex: 500
+			*/
 
 			if (params->mpi.MPI_DOMAIN_NUMBER_CART == 0)
             {

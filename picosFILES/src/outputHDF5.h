@@ -12,8 +12,6 @@
 
 #include <armadillo>
 #include "types.h"
-//#include "boundaryConditions.h"
-//#include "energyDiagnostic.h"
 
 #include "H5Cpp.h"
 
@@ -32,11 +30,11 @@ class HDF_TYP
 		#define CPP_TYPE float
 	#endif
 
-
+	/*
 	void MPI_Allgathervec(const params_TYP * params, arma::vec * field);
 
 	void MPI_Allgathermat(const params_TYP * params, arma::mat * field);
-
+	*/
 
 	void saveToHDF5(H5File * file, string name, int * value);
 

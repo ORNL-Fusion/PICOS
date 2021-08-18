@@ -32,6 +32,7 @@ outputHDF5.o 			  \
 PIC.o 						  \
 particleBC.o			  \
 collisionOperator.o \
+fieldSolve.o				\
 mpi_main.o)
 
 all: $(BIN)/PICOS++

@@ -17,11 +17,10 @@
 #include "PIC.h"
 #include "particleBC.h"
 #include "collisionOperator.h"
+#include "fieldSolve.h"
 
 /*
 #include "rfOperator.h"
-#include "fields.h"
-
 */
 
 // Include headers for parallelization:
@@ -127,11 +126,10 @@ int main(int argc, char* argv[])
 
     // Create EM solver:
     // =========================================================================
-    //EMF_SOLVER fields_solver(&params, &CS); // Initializing the EMF_SOLVER class object.
+    fields_solver_TYP fields_solver(&params, &CS); // Initializing the EMF_SOLVER class object.
 
     // Create PIC solver:
     // =========================================================================
-
     PIC_TYP PIC(&params, &fields, &IONS);
     /*
     // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
@@ -206,23 +204,33 @@ int main(int argc, char* argv[])
         if (params.SW.BfieldSolve == 1)
         {
             // Use Faraday's law to advance the magnetic field to level B^(N+1).
-            //fields_solver.advanceBField(&params, &fields, &IONS);
+            //fields_solver.advanceBfield(&params, &fields, &IONS);
         }
 
         if (params.SW.EfieldSolve == 1)
         {
+            // Use Ohm's law to advance the electric field:
+            fields_solver.advanceEfield(&params,&fields,&IONS);
+
+/*
+            if (params.mpi.IS_PARTICLES_ROOT)
+            {
+                cout <<"Max Ex"<< arma::max(fields.EX_m*CS.eField) << endl;
+            }
+
             // Electric field:
             if(tt > 2)
             {
                 // We use the generalized Ohm's law to advance in time the Electric field to level E^(N+1).
                 // Using the Bashford-Adams extrapolation.
-                //fields_solver.advanceEField(&params, &fields, &IONS, true, true);
+                //fields_solver.advanceEfield(&params, &fields, &IONS, true, true);
             }
             else
             {
                 // Using basic velocity extrapolation:
-                //fields_solver.advanceEField(&params, &fields, &IONS, true, false);
+                //fields_solver.advanceEfield(&params, &fields, &IONS, true, false);
             }
+            */
         }
 
         // Advance time:
