@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
 
     // Create PIC solver:
     // =========================================================================
-    PIC_TYP PIC(&params, &fields, &IONS);
+    PIC_TYP PIC(&params, &CS, &fields, &IONS);
     /*
     // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
     // =========================================================================
@@ -159,7 +159,9 @@ int main(int argc, char* argv[])
         {
             if (fmod((double)(tt + 1), 1000) == 0)
             {
-                cout << "tt = " << tt << endl;
+                //cout << "tt = " << tt << endl;
+                cout << "time = " << tt*params.DT*CS.time*1E3 << " [ms] "<< endl;
+
             }
         }
 
@@ -182,7 +184,7 @@ int main(int argc, char* argv[])
 
         // Calculate ion moments:
         // =====================================================================
-        PIC.extrapolateMoments_AllSpecies(&params, &fields, &IONS);
+        PIC.extrapolateMoments_AllSpecies(&params,&CS,&fields,&IONS);
 
         // Apply collision operator:
         // =====================================================================
@@ -210,7 +212,7 @@ int main(int argc, char* argv[])
         if (params.SW.EfieldSolve == 1)
         {
             // Use Ohm's law to advance the electric field:
-            fields_solver.advanceEfield(&params,&fields,&IONS);
+            fields_solver.advanceEfield(&params,&fields,&CS,&IONS);
 
 /*
             if (params.mpi.IS_PARTICLES_ROOT)

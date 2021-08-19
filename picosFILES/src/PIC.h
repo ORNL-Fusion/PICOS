@@ -79,15 +79,15 @@ protected:
 
 	void calculateF(const params_TYP * params, const ionSpecies_TYP * IONS, arma::rowvec * ZN, arma::rowvec * EM, arma::rowvec * F);
 
-	void eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS);
+	void eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
 
-	void calculateIonMoments(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS);
+	void calculateIonMoments(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
 
-	void calculateDerivedIonMoments(const params_TYP * params, ionSpecies_TYP * IONS);
+	void calculateDerivedIonMoments(const params_TYP * params, CS_TYP * CS, ionSpecies_TYP * IONS);
 
   public:
 
-	PIC_TYP(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+	PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
 	void assignCell(const params_TYP * params, ionSpecies_TYP * IONS);
 
@@ -97,7 +97,7 @@ protected:
 
 	void interpolateFields_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const fields_TYP * fields);
 
-  	void extrapolateMoments_AllSpecies(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+  	void extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
 };
 

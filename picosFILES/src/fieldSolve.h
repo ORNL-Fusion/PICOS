@@ -62,7 +62,7 @@ class fields_solver_TYP
 
   	//void advanceBField(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
-  	void advanceEfield(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+  	void advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
 };
 
 #endif

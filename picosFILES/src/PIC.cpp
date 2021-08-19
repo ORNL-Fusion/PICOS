@@ -158,7 +158,7 @@ void PIC_TYP::smooth(arma::vec * v, double as)
 }
 
 // Constructor:
-PIC_TYP::PIC_TYP(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
 	// Get latest mesh-defined values from FIELDS ranks:
 	// =================================================
@@ -177,7 +177,7 @@ PIC_TYP::PIC_TYP(const params_TYP * params, fields_TYP * fields, vector<ionSpeci
 
 	// Calculate ion moments and populate mesh-defined ion moments:
 	// ============================================================
-	extrapolateMoments_AllSpecies(params,fields,IONS);
+	extrapolateMoments_AllSpecies(params,CS,fields,IONS);
 }
 
 void PIC_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p)
@@ -536,7 +536,7 @@ void PIC_TYP::assignCell_AllSpecies(const params_TYP * params, vector<ionSpecies
 	}
 }
 
-void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
 	// Iterate over all ion species:
     // =============================
@@ -547,7 +547,7 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
         if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
 			//Calculate partial moments:
-			calculateIonMoments(params, fields, &IONS->at(ss));
+			calculateIonMoments(params,CS,fields,&IONS->at(ss));
 
 			// Reduce IONS moments to PARTICLE ROOT:
 			// =====================================
@@ -596,7 +596,7 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
-			calculateDerivedIonMoments(params, &IONS->at(ss));
+			calculateDerivedIonMoments(params, CS, &IONS->at(ss));
 
 			// Could perform a time-averaging of u_m and Tper_m and Tpar_m
         }
@@ -618,7 +618,7 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 	}
 }
 
-void PIC_TYP::calculateIonMoments(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS)
+void PIC_TYP::calculateIonMoments(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS)
 {
 	// Ion density:
 	IONS->n_m___ = IONS->n_m__;
@@ -630,10 +630,10 @@ void PIC_TYP::calculateIonMoments(const params_TYP * params, fields_TYP * fields
 	IONS->nv_m_  = IONS->nv_m;
 
 	// Calculate ion moments:
-	eim(params, fields, IONS);
+	eim(params,CS,fields,IONS);
 }
 
-void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS)
+void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS)
 {
 	// Number of particles:
 	int NSP(IONS->NSP);
@@ -738,9 +738,12 @@ void PIC_TYP::eim(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP
 	IONS->nv_m  *= (1/A)*IONS->NCP/params->mesh.DX;
 	IONS->P11_m *= (1/A)*IONS->NCP/params->mesh.DX;
 	IONS->P22_m *= (1/A)*IONS->NCP/params->mesh.DX;
+
+	// Add finite number for density to avoid zero:
+	IONS->n_m += 1E14*CS->volume;
 }
 
-void PIC_TYP::calculateDerivedIonMoments(const params_TYP * params, ionSpecies_TYP * IONS)
+void PIC_TYP::calculateDerivedIonMoments(const params_TYP * params, CS_TYP * CS, ionSpecies_TYP * IONS)
 {
 	double Ma(IONS->M);
 

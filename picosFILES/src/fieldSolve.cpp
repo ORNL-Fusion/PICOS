@@ -108,7 +108,7 @@ void fields_solver_TYP::MPI_SendVec(const params_TYP * params, arma::vec * v)
 
 // Electric field solve:
 // ============================================================================================
-void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS)
 {
 	if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
 	{
