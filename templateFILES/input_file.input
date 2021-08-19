@@ -18,7 +18,7 @@ CV_Tper                     250
 // Simulation time:
 // =============================================================================
 DTc                         5
-simulationTime              20000.0
+simulationTime              1000000.0
 
 // Switches:
 // =============================================================================
@@ -69,8 +69,8 @@ RF_numit                    1000
 
 // Output variables:
 // =============================================================================
-outputCadence               200
-outputs_variables           {X_p,V_p,mu_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
+outputCadence               10000
+outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
 
 // Data smoothing:
 // =============================================================================

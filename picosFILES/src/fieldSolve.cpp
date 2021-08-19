@@ -145,7 +145,6 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 			ne__  += Z*IONS->at(ss).n_m__.subvec(iIndex - 1, fIndex + 1);
 			ne___ += Z*IONS->at(ss).n_m___.subvec(iIndex - 1, fIndex + 1);
 
-
 			// Bulk plasma flux:
 			//nU += Z*IONS->at(ss).nv_m.subvec(iIndex - 1, fIndex + 1);
 		}

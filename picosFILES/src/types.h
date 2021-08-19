@@ -193,14 +193,27 @@ public:
 	arma::vec nv_m;
 	arma::vec nv_m_;
 	arma::vec nv_m__;
-	// arma::vec nv_m___;
+	arma::vec nv_m___;
 
 	arma::vec P11_m;				// Ion pressure tensor, component 1,1
-	//arma::vec P11_m_;
-	// arma::vec P11_m__;				
+	arma::vec P11_m_;
+	arma::vec P11_m__;
+	arma::vec P11_m___;
+
 	arma::vec P22_m;				// Ion pressure tensor, component 2,2
+	arma::vec P22_m_;
+	arma::vec P22_m__;
+	arma::vec P22_m___;	
+
 	arma::vec Tpar_m;			// Ion parallel temperature
+	arma::vec Tpar_m_;
+	arma::vec Tpar_m__;
+	arma::vec Tpar_m___;
+
 	arma::vec Tper_m;			// Ion perpendicular temperature
+	arma::vec Tper_m_;
+	arma::vec Tper_m__;
+	arma::vec Tper_m___;
 
 	// Particle-defined ion moments:
 	arma::vec n_p;
