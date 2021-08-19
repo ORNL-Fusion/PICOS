@@ -40,85 +40,6 @@ extern double F_ME_DS; 		// Dimensionless electron mass
 extern double F_MU_DS; 		// Dimensionless vacuum permeability
 extern double F_C_DS; 		// Dimensionless speed of light
 
-/*
-// Declare vector field types:
-// =============================================================================
-class vfield_vec_TYP
-{
-
-public:
-	arma::vec X;
-	arma::vec Y;
-	arma::vec Z;
-
-	vfield_vec_TYP(){};
-
-	//vfield_vec_TYP(unsigned int N);
-
-	~vfield_vec_TYP(){};
-
-
-	vfield_vec_TYP operator + (vfield_vec_TYP R);
-	vfield_vec_TYP operator += (vfield_vec_TYP R);
-	vfield_vec_TYP operator - (vfield_vec_TYP R);
-	vfield_vec_TYP operator -= (vfield_vec_TYP R);
-	vfield_vec_TYP operator * (double s);
-	vfield_vec_TYP operator *= (double s);
-  friend vfield_vec_TYP operator * (double s, vfield_vec_TYP R );
-	vfield_vec_TYP operator / (double s);
-	vfield_vec_TYP operator / (vfield_vec_TYP R);
-	vfield_vec_TYP operator /= (double s);
-	vfield_vec_TYP operator /= (vfield_vec_TYP R);
-
-	void fill(double value);
-	void ones(unsigned int N);
-	void zeros();
-	void zeros(unsigned int N);
-
-
-};
-*/
-
-/*
-// Declare matrix field types:
-// =============================================================================
-class vfield_mat_TYP
-{
-
-public:
-	arma::mat X;
-	arma::mat Y;
-	arma::mat Z;
-
-	vfield_mat_TYP(){};
-
-	vfield_mat_TYP(unsigned int N, unsigned int M);
-
-
-
-	~vfield_mat_TYP(){};
-
-
-	vfield_mat_TYP operator + (vfield_mat_TYP R);
-	vfield_mat_TYP operator += (vfield_mat_TYP R);
-	vfield_mat_TYP operator - (vfield_mat_TYP R);
-	vfield_mat_TYP operator -= (vfield_mat_TYP R);
-	vfield_mat_TYP operator * (double s);
-	vfield_mat_TYP operator *= (double s);
-  friend vfield_mat_TYP operator * (double s, vfield_mat_TYP R );
-	vfield_mat_TYP operator / (double s);
-	vfield_mat_TYP operator / (vfield_mat_TYP R);
-	vfield_mat_TYP operator /= (double s);
-	vfield_mat_TYP operator /= (vfield_mat_TYP R);
-
-	void fill(double value);
-	void ones(unsigned int N, unsigned int M);
-	void zeros();
-	void zeros(unsigned int N, unsigned int M);
-
-};
-*/
-
 //  Structure to store each ion species initial condition parameters:
 // =============================================================================
 struct p_IC_TYP
@@ -254,12 +175,6 @@ public:
 	arma::vec dBX_p;
 	arma::vec ddBX_p;
 
-  // ***************** Consider deleting ************
-	// Guiding-center variables
-	//arma::vec mu; 				// Ions' magnetic moment.
-	//arma::vec Ppar; 			// Parallel momentum used in guiding-center orbits
-  // ***************** Consider deleting ************
-
 	//These weights are used in the charge extrapolation and the force interpolation
 	arma::vec wxl;				// Particles' weights w.r.t. the vertices of the grid cells
 	arma::vec wxc;				// Particles' weights w.r.t. the vertices of the grid cells
@@ -270,14 +185,19 @@ public:
 	arma::vec wxr_;				// Particles' weights w.r.t. the vertices of the grid cells
 
     // Mesh-defined ion moments:
-	arma::vec n_m; 				// Ion density at time level "l + 1"
-	arma::vec n_m_; 				// Ion density at time level "l"
-	arma::vec n_m__; 				// Ion density at time level "l - 1"
-	arma::vec n_m___; 			// Ion density at time level "l - 2"
-	arma::vec nv_m; 				// Ion bulk velocity at time level "l + 1/2"
-	arma::vec nv_m_; 			// Ion bulk velocity at time level "l - 1/2"
-	arma::vec nv_m__; 			// Ion bulk velocity at time level "l - 3/2"
+	arma::vec n_m;
+	arma::vec n_m_;
+	arma::vec n_m__;
+	arma::vec n_m___;
+
+	arma::vec nv_m;
+	arma::vec nv_m_;
+	arma::vec nv_m__;
+	// arma::vec nv_m___;
+
 	arma::vec P11_m;				// Ion pressure tensor, component 1,1
+	//arma::vec P11_m_;
+	// arma::vec P11_m__;				
 	arma::vec P22_m;				// Ion pressure tensor, component 2,2
 	arma::vec Tpar_m;			// Ion parallel temperature
 	arma::vec Tper_m;			// Ion perpendicular temperature

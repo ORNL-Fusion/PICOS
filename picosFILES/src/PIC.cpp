@@ -575,8 +575,23 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
 
 			// It might be worth to performing a time-averaging of all update_ion_moments
 			// This would be accomplished by keeping previous time step profiles:
-			// n_m_, n_m__, ___
-			// P11_m_, P11_m__, ___
+			// applyTimeAveraging(&params,&IONS->at(ss),flag)
+			// {
+			//		if (flag == 1)
+			//		{
+			// 			IONS->at(ss).n_m   = (IONS->at(ss).n_m   + IONS->at(ss).n_m_   + IONS->at(ss).n_m__   + IONS->at(ss).n_m___)/4;
+			//			IONS->at(ss).nv_m  = (IONS->at(ss).nv_m  + IONS->at(ss).nv_m_  + IONS->at(ss).nv_m__  + IONS->at(ss).nv_m___)/4;
+			//			IONS->at(ss).P11_m = (IONS->at(ss).P11_m + IONS->at(ss).P11_m_ + IONS->at(ss).P11_m__ + IONS->at(ss).P11_m___)/4;
+			//			IONS->at(ss).P22_m = (IONS->at(ss).P22_m + IONS->at(ss).P22_m_ + IONS->at(ss).P22_m__ + IONS->at(ss).P22_m___)/4;
+			//		}
+			//		if (flag == 2)
+			//		{
+			// 			IONS->at(ss).u_m    = (IONS->at(ss).u_m     + IONS->at(ss).u_m_    + IONS->at(ss).u_m__    + IONS->at(ss).u_m___)/4;
+			//			IONS->at(ss).Tpar_m = (IONS->at(ss).Tpar_m  + IONS->at(ss).Tpar_m_ + IONS->at(ss).Tpar_m__ + IONS->at(ss).Tpar_m___)/4;
+			//			IONS->at(ss).Tper_m = (IONS->at(ss).Tper_m  + IONS->at(ss).Tper_m_ + IONS->at(ss).Tper_m__ + IONS->at(ss).Tper_m___)/4;
+			//		}
+			// }
+
 
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
@@ -593,10 +608,13 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, fields_TY
         MPI_SendVec(params, &IONS->at(ss).n_m__);
         MPI_SendVec(params, &IONS->at(ss).n_m___);
 
+		// For ES solution, we dont need to send these to the field ranks:
 		// Ion parallel flux:
 		MPI_SendVec(params, &IONS->at(ss).nv_m);
 		MPI_SendVec(params, &IONS->at(ss).nv_m_);
 		MPI_SendVec(params, &IONS->at(ss).nv_m__);
+		//MPI_SendVec(params, &IONS->at(ss).nv_m___);
+
 	}
 }
 

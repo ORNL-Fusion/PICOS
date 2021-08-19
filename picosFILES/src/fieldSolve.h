@@ -20,8 +20,6 @@ class fields_solver_TYP
   	int NX_T; // Number of grid cells in entire simulation domain, including 2 ghost cells.
   	int NX_R; // Number of grid cells in entire simulation domain, not including ghost cells.
 
-    double n_cs;
-
   	// Electron density:
   	arma::vec ne;    // Current time tt
   	arma::vec ne_;   // tt - 1
@@ -50,6 +48,8 @@ class fields_solver_TYP
 
     // Ghost cells:
     void fillGhosts(arma::vec * C);
+
+    void fill4Ghosts(arma::vec * v);
 
   	// Smoothing:
   	void smooth(arma::vec * v, double as);

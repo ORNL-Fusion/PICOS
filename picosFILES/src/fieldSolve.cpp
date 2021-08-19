@@ -14,8 +14,6 @@ fields_solver_TYP::fields_solver_TYP(const params_TYP * params, CS_TYP * CS)
 	ne__.zeros(NX_S);
 	ne___.zeros(NX_S);
 
-    n_cs = CS->volume*CS->density;
-
 	//nU.zeros(NX_S);
     //U.zeros(NX_S);
 
@@ -35,6 +33,14 @@ void fields_solver_TYP::fillGhosts(arma::vec * C)
 
 	(*C)(0)    = (*C)(1);
 	(*C)(NX-1) = (*C)(NX-2);
+}
+
+void fields_solver_TYP::fill4Ghosts(arma::vec * v)
+{
+	int NX = v->n_elem;
+
+	v->subvec(0,1)       = v->subvec(2,3);
+	v->subvec(NX-2,NX-1) = v->subvec(NX-4,NX-3);
 }
 
 // Smoothing:
@@ -118,6 +124,9 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 		ne__.zeros();
 		ne___.zeros();
 
+        // Initialize the gradient:
+        dne.zeros();
+
 		// Initialize the bulk plasma flux and flow:
 		//nU.zeros();
 		//U.zeros();
@@ -143,43 +152,16 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 
 		// Time-averaged electron density;
 		ne = (ne + ne_ + ne__ + ne___)/4;
-        //ne /= n_cs;
-
-        /*
-        ne /=CS->volume
-
-        Te *= CS->temperature; [K]
-        Te_eV = Te*K_B/E_C
-        DX *= CS->length
-
-        CS->temperature = CS->mass*CS->velocity*CS->velocity/F_KB;
-
-        Te/dx = M*C/(F_KB*time)
-
-        EX_m ~ (k_B/E_C)*Te/dx ~ (_KB/E_C)*CS->mass*CS->velocity*CS->velocity/(F_KB*CS->length)
-
-        EX_m ~ (k_B/E_C)*Te/dx ~ (1/E_C)*CS->mass*CS->velocity*CS->velocity/(*CS->length)
-        EX_m ~ (k_B/E_C)*Te/dx ~ (1/E_C)*M*C/(time)
-
-
-        EX_m *= CS->eField
-
-        CS->eField = CS->mass*CS->velocity/( CS->charge*CS->time );
-        CS->eField = M*C/( CS->charge*time );
-
-        */
-
-		// Bulk plasma flow:
-		//U = nU/ne;
+        fill4Ghosts(&ne);
 
 		// Gradient of electron density:
 		dne.subvec(1,NX_S - 2) = 0.5*( ne.subvec(2,NX_S-1) - ne.subvec(0,NX_S-3) );
-        fillGhosts(&dne);
+        fill4Ghosts(&dne);
 
 		// Electric field based on Ohm's law:
-        EX_m = -F_KB*(Te/F_E_DS)*(1/ne)%dne/dx; // *CS->temperature/(CS->length*CS->charge) = (1/F_KB)*(CS->mass*CS->velocity)/(CS->time*CS->charge)
+        EX_m = -(Te/F_E_DS)*(1/ne)%dne/dx;
 		fields->EX_m.subvec(iIndex,fIndex) = EX_m.subvec(1,NX_S - 2);
-        fillGhosts(&fields->EX_m);
+        fill4Ghosts(&fields->EX_m);
 
 		// Error checks:
 		// =============
