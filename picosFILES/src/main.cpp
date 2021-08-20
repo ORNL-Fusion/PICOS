@@ -18,10 +18,7 @@
 #include "particleBC.h"
 #include "collisionOperator.h"
 #include "fieldSolve.h"
-
-/*
 #include "rfOperator.h"
-*/
 
 // Include headers for parallelization:
 // =============================================================================
@@ -141,6 +138,10 @@ int main(int argc, char* argv[])
     }
     */
 
+    // Create RF operator object:
+    // =========================================================================
+    RF_Operator_TYP RF_operator(&params,&CS,&fields,&IONS);
+
     // Save 1st output:
     // =========================================================================
     HDF.saveOutputs(&params, &IONS, &fields, &CS, 0, 0);
@@ -159,7 +160,6 @@ int main(int argc, char* argv[])
         {
             if (fmod((double)(tt + 1), 1000) == 0)
             {
-                //cout << "tt = " << tt << endl;
                 cout << "time = " << tt*params.DT*CS.time*1E3 << " [ms] "<< endl;
 
             }
@@ -197,7 +197,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.RFheating == 1)
         {
-            //rf_operator.ApplyRF_AllSpecies();
+            RF_operator.ApplyRfHeating(&params,&CS,&fields,&IONS);
         }
 
         // Field solve:
@@ -213,26 +213,6 @@ int main(int argc, char* argv[])
         {
             // Use Ohm's law to advance the electric field:
             fields_solver.advanceEfield(&params,&fields,&CS,&IONS);
-
-/*
-            if (params.mpi.IS_PARTICLES_ROOT)
-            {
-                cout <<"Max Ex"<< arma::max(fields.EX_m*CS.eField) << endl;
-            }
-
-            // Electric field:
-            if(tt > 2)
-            {
-                // We use the generalized Ohm's law to advance in time the Electric field to level E^(N+1).
-                // Using the Bashford-Adams extrapolation.
-                //fields_solver.advanceEfield(&params, &fields, &IONS, true, true);
-            }
-            else
-            {
-                // Using basic velocity extrapolation:
-                //fields_solver.advanceEfield(&params, &fields, &IONS, true, false);
-            }
-            */
         }
 
         // Advance time:

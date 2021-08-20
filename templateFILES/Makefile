@@ -33,6 +33,7 @@ PIC.o 						  \
 particleBC.o			  \
 collisionOperator.o \
 fieldSolve.o				\
+rfOperator.o				\
 mpi_main.o)
 
 all: $(BIN)/PICOS++

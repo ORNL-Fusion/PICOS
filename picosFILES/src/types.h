@@ -203,7 +203,7 @@ public:
 	arma::vec P22_m;				// Ion pressure tensor, component 2,2
 	arma::vec P22_m_;
 	arma::vec P22_m__;
-	arma::vec P22_m___;	
+	arma::vec P22_m___;
 
 	arma::vec Tpar_m;			// Ion parallel temperature
 	arma::vec Tpar_m_;
@@ -230,6 +230,10 @@ public:
 	arma::ivec dE1;              // left boundary
 	arma::ivec dE2;              // Right boundary
 	arma::ivec dE3;              // RF operator
+
+	// Resonance numnber:
+	arma::vec resNum;
+	arma::vec resNum_;
 
 	// Initial condition parameters:
 	p_IC_TYP p_IC;
@@ -531,6 +535,53 @@ struct CS_TYP
 	}
 };
 
+// Define structure to hold RF operator parameters and global values:
+// =============================================================================
+struct RF_TYP
+{
+	// RF parameters:
+	// =============
+	double Prf;
+	int n_harmonic;	
+	double freq;
+	double x1;
+	double x2;
+	double kpar;
+	double kper;
+	int handedness;
+
+	// Name and storage time-dependent RF power trace:
+	// ========================================
+	string Prf_fileName;
+	int Prf_NS;
+	arma::vec Prf_profile;
+
+	// Total RF power accumulated over all species:
+	// ============================================
+	double E3;
+
+	// Global RF electric field:
+	// =========================
+	double Erf;
+
+	// Constructor:
+	// ============
+	RF_TYP()
+	{
+		Prf  = 0;
+		n_harmonic = 1;
+		freq = 0;
+		x1   = 0;
+		x2   = 0;
+		kpar = 0;
+		kper = 0;
+		Prf_NS = 0;
+		handedness = 0;
+		E3   = 0;
+		Erf  = 0;
+	}
+};
+
 //  Define structure to store simulation parameters:
 // =============================================================================
 struct params_TYP
@@ -592,6 +643,9 @@ struct params_TYP
 
 	// Simulation switches:
 	SW_TYP SW;
+
+	// RF operator conditions:
+	RF_TYP RF;
 
 	int filtersPerIterationFields;
 	int filtersPerIterationIons;

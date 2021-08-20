@@ -400,6 +400,15 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->mesh.LY /= CS->length;
 	params->mesh.LZ /= CS->length;
 
+    // RF parameters:
+    // -------------
+    params->RF.Prf  /= CS->energy/CS->time;
+    params->RF.freq *= CS->time;
+    params->RF.x1   /= CS->length;
+    params->RF.x2   /= CS->length;
+    params->RF.kpar *= CS->length;
+    params->RF.kper *= CS->length;
+    
 	// Normalizing IONS:
     // =========================================================================
 	for(int ii=0;ii<IONS->size();ii++)

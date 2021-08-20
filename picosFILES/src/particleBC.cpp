@@ -192,6 +192,10 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
     // ================
     checkBoundaryAndFlag(params,CS,fields,IONS);
 
+    // Calculate particle and energy flux accross boundaries:
+    // ======================================================
+    // getFluxesAtBoundaries(params,CS,fields,IONS);
+
     // Calculate new particle weight:
     // =============================
     calculateParticleWeight(params,CS,fields,IONS);
@@ -227,6 +231,10 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
 		} // Particle MPIs
 
 	} //  Species
+
+    // Calculate actual volume-averaged fueling rate and power:
+    // =======================================================
+    // getVolumeAveragedRates(params,CS,fields,IONS);
 
 }
 

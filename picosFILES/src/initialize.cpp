@@ -263,6 +263,19 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->f_IC.ne      = stod( parametersStringMap["IC_ne"] );
     params->f_IC.Te      = stod( parametersStringMap["IC_Te"] )*F_E/F_KB; // Te in eV in input file
 
+    // RF parameters
+    // -------------------------------------------------------------------------
+    params->RF.Prf        = stod( parametersStringMap["RF_Prf"] );
+    params->RF.n_harmonic = stoi( parametersStringMap["RF_n_harmonic"] );
+    params->RF.freq       = stod( parametersStringMap["RF_freq"]);
+    params->RF.x1         = stod( parametersStringMap["RF_x1"]  );
+    params->RF.x2         = stod( parametersStringMap["RF_x2"]  );
+    params->RF.kpar       = stod( parametersStringMap["RF_kpar"]);
+    params->RF.kper       = stod( parametersStringMap["RF_kper"]);
+    params->RF.handedness = stoi( parametersStringMap["RF_handedness"]);
+    params->RF.Prf_NS     = stoi( parametersStringMap["RF_Prf_NS"] );
+    params->RF.Prf_fileName = parametersStringMap["RF_Prf_fileName"];
+
     // Output variables:
     // -------------------------------------------------------------------------
     params->outputCadence           = stod( parametersStringMap["outputCadence"] );
@@ -926,6 +939,11 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     IONS->dE1.zeros(IONS->NSP);
     IONS->dE2.zeros(IONS->NSP);
     IONS->dE3.zeros(IONS->NSP);
+
+    // Initialize resonance number:
+    // ============================
+    IONS->resNum.zeros(IONS->NSP);
+    IONS->resNum_.zeros(IONS->NSP);
 
     // Initialize particle weight:
     // ===========================

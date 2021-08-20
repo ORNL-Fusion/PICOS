@@ -57,6 +57,7 @@ IC_Te                       250
 // RF operator:
 // =============================================================================
 RF_Prf                      10E3
+RF_n_harmonic               1
 RF_freq                     15E6
 RF_x1                       1.2
 RF_x2                       1.5
@@ -65,7 +66,6 @@ RF_kper                     100
 RF_handedness               -1
 RF_Prf_fileName             Prf_profile.txt
 RF_Prf_NS                   200
-RF_numit                    1000
 
 // Output variables:
 // =============================================================================
