@@ -197,7 +197,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.RFheating == 1)
         {
-            RF_operator.ApplyRfHeating(&params,&CS,&fields,&IONS);
+            RF_operator.ApplyRfHeating_AllSpecies(&params,&CS,&fields,&IONS);
         }
 
         // Field solve:

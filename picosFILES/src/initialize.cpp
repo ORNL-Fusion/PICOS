@@ -484,11 +484,12 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
             ions.VTpar = sqrt(2.0*F_KB*params->CV.Tpar/ions.M);
             ions.LarmorRadius = ions.VTper/ions.Wc;
 
-            //Definition of the initial total number of superparticles for each species
+            // Number of computational particles for species "ss" per MPI process:
             ions.NSP = ceil( ions.NPC*(double)params->mesh.NUM_CELLS_IN_SIM/(double)params->mpi.MPIS_PARTICLES );
 
-            // ******************
-            // What is this for?
+            // Number of super-particles for species "ss" per MPI process:
+            // Need to reduce "a_p" but only for each process
+
             ions.nSupPartOutput = floor( (ions.pctSupPartOutput/100.0)*ions.NSP );
 
             // Create new element on IONS vector:
@@ -861,7 +862,11 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
             ni = IONS->at(ii).p_IC.densityFraction_profile;
             A  = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
         }
-        double NR    = sum(ni%A)*ds;
+        double NR = sum(ni%A)*ds;
+        //IONS->at(ii).NR  = NR;
+
+        // Total number of computational particles:
+        //double NC =
 
         // NCP conversion factor from super-particle to real particle:
         double NSP  = IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES;
@@ -944,6 +949,12 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     // ============================
     IONS->resNum.zeros(IONS->NSP);
     IONS->resNum_.zeros(IONS->NSP);
+
+    // Rf terms:
+    // ========
+    IONS->udErf.zeros(IONS->NSP);
+    IONS->doppler.zeros(IONS->NSP);
+    IONS->udE3.zeros(IONS->NSP);
 
     // Initialize particle weight:
     // ===========================

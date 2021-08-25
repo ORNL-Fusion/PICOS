@@ -145,7 +145,9 @@ class ionSpecies_TYP //: public vfield_vec_TYP
 public:
 
 	int SPECIES;
+	//double NR;          // Total number of real particles represented in simulation
 	double NSP; 				// Initial number of superparticles for the given ion species.
+	//double NC;          // Total number of computational particles used over entire simulation
 	double NCP; 				// Number of charged particles per superparticle.
 	double NPC; 				// Number of superparticles per cell. When its value is zero, the particles are loaded from external files.
 	double Q; 					// Charge.
@@ -234,6 +236,11 @@ public:
 	// Resonance numnber:
 	arma::vec resNum;
 	arma::vec resNum_;
+
+	// Rf terms:
+	arma::vec udErf;
+	arma::vec doppler;
+	arma::vec udE3;
 
 	// Initial condition parameters:
 	p_IC_TYP p_IC;
@@ -542,7 +549,7 @@ struct RF_TYP
 	// RF parameters:
 	// =============
 	double Prf;
-	int n_harmonic;	
+	int n_harmonic;
 	double freq;
 	double x1;
 	double x2;
@@ -559,6 +566,10 @@ struct RF_TYP
 	// Total RF power accumulated over all species:
 	// ============================================
 	double E3;
+
+	// Power accumulated over all species per unit electric field:
+	// ==========================================================
+	double uE3;
 
 	// Global RF electric field:
 	// =========================
@@ -578,6 +589,7 @@ struct RF_TYP
 		Prf_NS = 0;
 		handedness = 0;
 		E3   = 0;
+		uE3  = 0;
 		Erf  = 0;
 	}
 };
