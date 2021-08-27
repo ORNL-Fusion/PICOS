@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
 
         if (params.mpi.IS_PARTICLES_ROOT)
         {
-            if (fmod((double)(tt + 1), 1000) == 0)
+            if (fmod((double)(tt + 1), 100) == 0)
             {
                 cout << "time = " << tt*params.DT*CS.time*1E3 << " [ms] "<< endl;
 

@@ -183,8 +183,9 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 			smooth(&fields->EX_m, params->smoothingParameter);
 		}
 
-		// Send to PARTICLE ranks:
-		// ======================
-		MPI_SendVec(params,&fields->EX_m);
-	}
+	} // FIELDS MPI
+
+	// Send to PARTICLE ranks:
+	// ======================
+	//MPI_SendVec(params,&fields->EX_m);
 }

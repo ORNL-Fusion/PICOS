@@ -39,6 +39,7 @@ void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, d
 
         // Random number between 0 and 1:
         double randomNumber = (double) rand()/RAND_MAX;
+        //  double randomNumber = uniform_distribution(generator);
         double Rm;
 
         // -1 or +1 function:

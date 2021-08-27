@@ -8,7 +8,7 @@
 #include <string>
 #include <map>
 
-#include<omp.h>
+#include <omp.h>
 #include "mpi.h"
 
 using namespace std;
@@ -229,9 +229,9 @@ public:
 	arma::ivec f3;              // Flag for RF operator
 
 	// Particle kinetic energy at boundaries:
-	arma::ivec dE1;              // left boundary
-	arma::ivec dE2;              // Right boundary
-	arma::ivec dE3;              // RF operator
+	arma::vec dE1;              // left boundary
+	arma::vec dE2;              // Right boundary
+	arma::vec dE3;              // RF operator
 
 	// Resonance numnber:
 	arma::vec resNum;

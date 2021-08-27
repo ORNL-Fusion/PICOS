@@ -178,18 +178,18 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     if (Z > 0) // Positive ions
     {
         double E_m = 0;
-        double E_p = 1/CS->eField;
+        double E_p = 1;
         mean_dKE_per = 0.5*(pow(e,2)/Ma)*pow(abs(E_p*J_nm1 + E_m*J_np1)*tau_rf,2); // [J] normalized energy
     }
     if (Z < 0) // Negative particles
     {
-        double E_m = 1/CS->eField;
+        double E_m = 1;
         double E_p = 0;
         mean_dKE_per = 0.5*(pow(e,2)/Ma)*pow(abs(E_m*J_nm1 + E_p*J_np1)*tau_rf,2); // [J] normalized energy
     }
 
     // Populate output:
-    IONS->udErf(ii)   = mean_dKE_per;
+    IONS->udErf(ii)   = mean_dKE_per; // [J] normalized energy
     IONS->doppler(ii) = kpar*vpar/(n*Omega);
     IONS->udE3(ii)    = IONS->udErf(ii)*(1 + IONS->doppler(ii)); // [J] normalized energy
 }
@@ -208,7 +208,8 @@ void RF_Operator_TYP::calculateRfTerms_AllSpecies(params_TYP * params, CS_TYP * 
                 calculateRfTerms(ii,params,CS,fields,&IONS->at(ss));
             }
 
-        } // particles
+        } // OMP parallel for
+
     } // Species
 }
 
@@ -239,9 +240,6 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
                     // Accumulate power:
                     uEdot3_private += (NCP/DT)*a_p*udE3;
 
-                    // Clear flags:
-                    IONS->at(ss).f3(ii)  = 0;
-
                 } // if
 
             } // omp for
@@ -259,43 +257,182 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
     // Assign to output:
     params->RF.uE3 = uEdot3;
 
+    /*
     if (params->mpi.IS_PARTICLES_ROOT)
     {
         cout << "uEdot3 = " << params->RF.uE3*CS->energy/CS->time << endl;
     }
+    */
 
 }
 
 void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
+    // Calculate electric field:
+    double E_rf = sqrt(params->RF.Prf/params->RF.uE3);
 
-    //  Calculate E_rf based on global_uEdot3 and params->P_RF
-    //  loop over all species
-    //      loop over all particles(OMP)
-    //      {
-    //          if (f3(ii) == 1)
-    //          {
-    //              Apply monte carlo RF operatio bsded om E_rf and produce Eperp and Eparp
-    //              Comvert to Vpar and Vper
-    //              IONS->at(ss).dE3 = dKE;
-    //          }
-    //      }
+    /*
+    if (params->mpi.IS_PARTICLES_ROOT)
+    {
+        cout << "E_RF = " << E_rf*CS->eField << endl;
+    }
+    */
+
+    // Seed the random number generator:
+    std::default_random_engine generator(params->mpi.MPI_DOMAIN_NUMBER+1);
+
+    // Create uniform random number generator in [0,1]:
+    std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0);
+
+    for (int ss=0; ss<IONS->size();ss++)
+    {
+        int NSP = IONS->at(ss).NSP;
+        int Ma  = IONS->at(ss).M;
+
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution) firstprivate(generator)
+        {
+            #pragma omp for
+            for(int ii=0; ii<NSP; ii++)
+            {
+                if (IONS->at(ss).f3(ii) == 1)
+                {
+                    //  Particle states:
+                    double vpar = IONS->at(ss).V_p(ii,0);
+                    double vper = IONS->at(ss).V_p(ii,1);
+
+                    // Sign of vpar:
+                    double eps  = abs(vpar)/vpar;
+
+                    // RF terms:
+                    double mean_udKE_per = IONS->at(ss).udErf(ii);
+                    double doppler       = IONS->at(ss).doppler(ii);
+
+                    // Derived quantities:
+                    double KE_par = Ma*vpar*vpar/2;
+                    double KE_per = Ma*vper*vper/2;
+
+                    // Calculate mean RF energy kick:
+                    double mean_dKE_per = mean_udKE_per*pow(E_rf,2);
+
+                    // Random number between 0 and 1:
+                    double randomNumber = uniform_distribution(generator);
+                    double Rm = (2*randomNumber - 1);
+
+                    // Monte-Carlo operaton in kinetic energy:
+                    double dKE_per = mean_dKE_per + Rm*sqrt(2*KE_per*mean_dKE_per);
+
+                    // Total change in kinetic energy:
+                    double dKE = dKE_per*(1 + doppler);
+
+                    // Final perpendicular kinetic energy:
+                    KE_per += dKE_per;
+
+                    if (KE_per < 0)
+                    {
+                        cout << "KE_per is negative" << endl;
+                    }
+
+                    // Convert back to velocities:
+                    vpar += (doppler/vpar)*(dKE_per/Ma);
+                    vper = sqrt(2*KE_per/Ma);
+
+                    // Output data:
+                    IONS->at(ss).V_p(ii,0) = vpar;
+                    IONS->at(ss).V_p(ii,1) = vper;
+
+                    // Energy increments:
+                    IONS->at(ss).dE3(ii) = dKE;
+
+                    /*
+                    if (params->mpi.IS_PARTICLES_ROOT)
+                    {
+                        cout << "mean_dKE_per [eV] = " << mean_dKE_per*CS->energy/F_E << endl;
+                        cout << "dKE_per [eV] = " << dKE_per*CS->energy/F_E << endl;
+                        cout << "dE3 [eV] = " << IONS->at(ss).dE3(ii)*CS->energy/F_E << endl;
+                        cout << "dKE [eV] = " << dKE*CS->energy/F_E << endl;
+                        cout << "vpar = " << vpar*CS->velocity << endl;
+
+                        cout << "vper = " << vper*CS->velocity << endl;
+
+                    }
+                    */
+
+
+                } // f3
+
+            } // OMP for
+
+        } // OMP parallel
+
+    } // Species
 
 }
 
 void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
+    double Edot3 = 0;
+    double DT = params->DT;
 
-    //      Edot_3_global = 0;
-    //      Loop over all Species
-    //      {
-    //         loop over all PARTICLES
-    //          {
-    //              Edot_3_local += dE3*terms
-    //          }
-    //          MPI_AllreduceDouble(Edot_3_global,Edot_3_local)
-    //      }
-    //      params->RF.Edot3 =  Edot_3_global;
+    for (int ss=0; ss<IONS->size();ss++)
+    {
+        double NCP = IONS->at(ss).NCP;
+        int NSP    = IONS->at(ss).NSP;
+
+        #pragma omp parallel default(none) shared(Edot3, params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,NCP,DT)
+        {
+            // Private variables:
+            double Edot3_private = 0;
+
+            #pragma omp for
+            for(int ii=0; ii<NSP; ii++)
+            {
+                if ( IONS->at(ss).f3(ii) == 1 )
+                {
+                    // Rf terms:
+                    double dE3 = IONS->at(ss).dE3(ii);
+                    double a_p = IONS->at(ss).a_p(ii);
+
+                    /*
+                    if (params->mpi.IS_PARTICLES_ROOT)
+                    {
+                        cout << "a_p = " << a_p << endl;
+                        cout << "dE3 [eV] = " << IONS->at(ss).dE3(ii)*CS->energy/F_E << endl;
+                        cout << "vpar = " << IONS->at(ss).V_p(ii,0)*CS->velocity << endl;
+                        cout << "vper = " << IONS->at(ss).V_p(ii,1)*CS->velocity << endl;
+                    }
+                    */
+
+                    // Accumulate power:
+                    Edot3_private += (NCP/DT)*a_p*dE3;
+
+                    // Clear flags:
+                    IONS->at(ss).f3(ii)  = 0;
+                    IONS->at(ss).dE3(ii) = 0;
+
+                } // if
+
+            } // omp for
+
+            #pragma omp critical
+            {
+                Edot3 += Edot3_private;
+            }
+
+        } // omp parallel
+
+    } // Species
+
+    // Reduce over all MPI process
+    MPI_AllreduceDouble(params,&Edot3);
+
+    // Assign to output:
+    params->RF.E3 = Edot3;
+
+
+    if (params->mpi.IS_PARTICLES_ROOT)
+    {
+        //cout << (params->RF.E3*CS->energy/CS->time)/1000 << endl;
+    }
 
 }
 
@@ -323,84 +460,3 @@ void RF_Operator_TYP::ApplyRfHeating_AllSpecies(params_TYP * params, CS_TYP * CS
 
     } // PARTICLE MPI
 }
-
-
-
-
-
-
-
-// Calculate resNum in RF operator constructor
-// rf_operator.ApplyRfHeating()
-// {
-//    calciulateResNum_AllSpecies()
-//   For all species and for all particles (OMP)
-//   {
-//      calculateResNumber()
-//      {
-//           IONS->at(ss).resNum_(ii) = IONS->at(ss).resNum(ii);
-//          calculateResNum(params,fields,IONS);
-//      }
-//    }
-
-
-//   calculateRFterms_AllSpecies()
-//   For all species and for all particles (OMP)
-//   {
-//      checkResonanceCondition(params,fields,IONS)
-//      {
-//          Compare resNum_ and resNum, have they changed sign?
-//          {
-//              IONS->at(ss).f3(ii) = 1;
-//              calculateRFterms();
-//              {
-//                  Apply unit RF kick
-//                  Calculate interatction time, besselterms, dopplerterms
-//                  IONS->at(ss).u_mean_dErf(ii);
-//                  IONS->at(ss).udE3(ii);
-//              }
-//           }
-//      }
-//
-//   calculatePowerPerUnitErf();
-//   {
-//   global_uEdot3 - 0;
-//   For all species
-//   {
-//      local_uEdot3 = 0;
-//      For all particles (OMP)
-//      {
-//          local_uEdot3 += udE3(ii)*otherTerms like alpha/dt
-//      }
-//      MPI_AllreduceDouble(local_uEdot3)
-//   }
-//   }
-//
-//  ApplyRF_AllSpecies(params,fields,IONS,global_uEdot3)
-// {
-//  Calculate E_rf based on global_uEdot3 and params->P_RF
-//  loop over all species
-//      loop over all particles(OMP)
-//      {
-//          if (f3(ii) == 1)
-//          {
-//              Apply monte carlo RF operatio bsded om E_rf and produce Eperp and Eparp
-//              Comvert to Vpar and Vper
-//              IONS->at(ss).dE3 = dKE;
-//          }
-//      }
-// }
-//
-// calculateAbsorbedPower_AllSpecies(params,fields,IONS)
-// {
-//      Edot_3_global = 0;
-//      Loop over all Species
-//      {
-//         loop over all PARTICLES
-//          {
-//              Edot_3_local += dE3*terms
-//          }
-//          MPI_AllreduceDouble(Edot_3_global,Edot_3_local)
-//      }
-//      params->RF.Edot3 =  Edot_3_global;
-//  }
