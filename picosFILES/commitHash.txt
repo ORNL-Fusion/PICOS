@@ -1,1 +1,1 @@
-7c261ea Continued development on the RF operator, not yet completed though
+b528234 Added #define arma... in main.cpp
