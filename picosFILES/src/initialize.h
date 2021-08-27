@@ -14,6 +14,7 @@
 
 // Armadillo header:
 // =================
+#define ARMA_ALLOW_FAKE_GCC
 #include <armadillo>
 
 // User-defined headers:

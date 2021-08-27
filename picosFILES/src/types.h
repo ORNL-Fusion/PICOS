@@ -4,6 +4,7 @@
 #include <typeinfo>
 #include <iostream>
 #include <vector>
+#define ARMA_ALLOW_FAKE_GCC
 #include <armadillo>
 #include <string>
 #include <map>
