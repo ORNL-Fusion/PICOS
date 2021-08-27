@@ -107,6 +107,8 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 				params->mpi.MPI_CART_COORDS.push_back(new int[2]);
 				*(params->mpi.MPI_CART_COORDS.at(mpis)) = *(COORDS + 2*mpis);
 				*(params->mpi.MPI_CART_COORDS.at(mpis) + 1) = *(COORDS + 2*mpis + 1);
+
+				delete[] COORDS;
 			}
 
 			// Calculate neighboring RANKS:

@@ -24,31 +24,16 @@
 #include <omp.h>
 #include "mpi_main.h"
 
-/*
-//#include <cfenv>
-//#pragma STDC FENV_ACCESS ON
-*/
-
 using namespace std;
 using namespace arma;
 
 class PIC_TYP
 {
-  /*
-  int NX;
-	int NY;
-	int NZ;
-	int ix;
-	int iy;
-	int iz;
-	arma::vec x;
-	uvec logic;
-  */
 
 protected:
 
 	// MPI methods:
-	//void MPI_AllreduceVec(const params_TYP * params, arma::vec * v);
+	void MPI_AllreduceVec(const params_TYP * params, arma::vec * v);
 
 	void MPI_SendVec(const params_TYP * params, arma::vec * v);
 

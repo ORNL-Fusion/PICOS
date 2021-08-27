@@ -83,19 +83,6 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
             if ( dresNum_sign & (xp > x1) & (xp < x2) )
             {
                 IONS->at(ss).f3(ii) = 1;
-
-                /*
-                if (params->mpi.MPI_DOMAIN_NUMBER == 2)
-                {
-                    cout << "resNum_: " << resNum_ << endl;
-                    cout << "resNum: " << resNum << endl;
-                    cout << "x1: " << x1*CS->length << "[m]" << endl;
-                    cout << "x2: " << x2*CS->length << "[m]" << endl;
-                    cout << "xp: " << xp*CS->length << "[m]" << endl;
-                    cout << "Bp: " << IONS->at(ss).BX_p(ii)*CS->bField << "[T]" << endl;
-                }
-                */
-
             }
 
         } // particles
@@ -148,13 +135,11 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
         // tau_b
         // Approximate Ai(x) ~ 0.3833
         tau_rf = (2*M_PI)*pow(abs(2/(n*Omega_ddot)),1.0/3.0)*0.3833;
-        //cout << "tau_b = " << tau_rf*CS->time << "[s]" << endl;
     }
     else
     {
         // tau_a
         tau_rf = sqrt(2*M_PI/abs(n*Omega_dot));
-        //cout << "tau_a = " << tau_rf*CS->time << "[s]" << endl;
     }
 
     // Calculate bessel terms:
@@ -257,13 +242,6 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
     // Assign to output:
     params->RF.uE3 = uEdot3;
 
-    /*
-    if (params->mpi.IS_PARTICLES_ROOT)
-    {
-        cout << "uEdot3 = " << params->RF.uE3*CS->energy/CS->time << endl;
-    }
-    */
-
 }
 
 void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
@@ -343,21 +321,6 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                     // Energy increments:
                     IONS->at(ss).dE3(ii) = dKE;
 
-                    /*
-                    if (params->mpi.IS_PARTICLES_ROOT)
-                    {
-                        cout << "mean_dKE_per [eV] = " << mean_dKE_per*CS->energy/F_E << endl;
-                        cout << "dKE_per [eV] = " << dKE_per*CS->energy/F_E << endl;
-                        cout << "dE3 [eV] = " << IONS->at(ss).dE3(ii)*CS->energy/F_E << endl;
-                        cout << "dKE [eV] = " << dKE*CS->energy/F_E << endl;
-                        cout << "vpar = " << vpar*CS->velocity << endl;
-
-                        cout << "vper = " << vper*CS->velocity << endl;
-
-                    }
-                    */
-
-
                 } // f3
 
             } // OMP for
@@ -392,16 +355,6 @@ void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_
                     double dE3 = IONS->at(ss).dE3(ii);
                     double a_p = IONS->at(ss).a_p(ii);
 
-                    /*
-                    if (params->mpi.IS_PARTICLES_ROOT)
-                    {
-                        cout << "a_p = " << a_p << endl;
-                        cout << "dE3 [eV] = " << IONS->at(ss).dE3(ii)*CS->energy/F_E << endl;
-                        cout << "vpar = " << IONS->at(ss).V_p(ii,0)*CS->velocity << endl;
-                        cout << "vper = " << IONS->at(ss).V_p(ii,1)*CS->velocity << endl;
-                    }
-                    */
-
                     // Accumulate power:
                     Edot3_private += (NCP/DT)*a_p*dE3;
 
@@ -428,11 +381,12 @@ void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_
     // Assign to output:
     params->RF.E3 = Edot3;
 
-
+    /*
     if (params->mpi.IS_PARTICLES_ROOT)
     {
-        //cout << (params->RF.E3*CS->energy/CS->time)/1000 << endl;
+        cout << (params->RF.E3*CS->energy/CS->time)/1000 << endl;
     }
+    */
 
 }
 

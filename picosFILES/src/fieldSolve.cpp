@@ -116,8 +116,6 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 		unsigned int iIndex = params->mpi.iIndex;
 		unsigned int fIndex = params->mpi.fIndex;
 
-        //arma::vec dne.zeros(NX_S);
-
 		// Initialize the electron density:
 		ne.zeros();
 		ne_.zeros();

@@ -257,6 +257,8 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->dp           = stod( parametersStringMap["dp"] );
     params->geometry.r1  = stod( parametersStringMap["r1"] );
     params->geometry.r2  = stod( parametersStringMap["r2"] );
+    params->geometry.LX_min  = stod( parametersStringMap["LX_min"] );
+    params->geometry.LX_max  = stod( parametersStringMap["LX_max"] );
 
     // Electron initial conditions:
     // -------------------------------------------------------------------------
@@ -545,7 +547,6 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-
 void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
 {
 
@@ -636,7 +637,6 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
     }
 }
 
-
 void init_TYP::loadPlasmaProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
     // Define number of mesh points with Ghost cells included:
@@ -681,7 +681,6 @@ void init_TYP::loadPlasmaProfiles(params_TYP * params, vector<ionSpecies_TYP> * 
     }
 
 }
-
 
 void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 {
@@ -792,7 +791,6 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         fields->ddBX_m = yq;
     }
 }
-
 
 void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {

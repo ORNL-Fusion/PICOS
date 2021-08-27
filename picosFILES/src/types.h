@@ -261,12 +261,6 @@ class fields_TYP //: public vfield_vec_TYP
 {
 
 public:
-	/*
-	vfield_vec_TYP E;   // **** Consider as arma::vec *******
-	vfield_vec_TYP B;   // **** Consider as arma::vec *******
-  	vfield_vec_TYP dB;  // **** Consider as arma::vec *******
-  	vfield_vec_TYP ddB; // **** Consider as arma::vec *******
-	*/
 
 	arma::vec EX_m;
 	arma::vec BX_m;
@@ -290,12 +284,16 @@ struct geometry_TYP
 	double r1;
 	double r2;
 	double A_0;
+	double LX_min;
+	double LX_max;
 
 	geometry_TYP()
 	{
 		r1  = 0;
 		r2  = 0;
 		A_0 = 0;
+		LX_min = 0;
+		LX_max = 0;
 	}
 };
 

@@ -1,6 +1,5 @@
 #include "PIC.h"
 
-/*
 void PIC_TYP::MPI_AllreduceVec(const params_TYP * params, arma::vec * v)
 {
 	arma::vec recvbuf = zeros(v->n_elem);
@@ -9,7 +8,6 @@ void PIC_TYP::MPI_AllreduceVec(const params_TYP * params, arma::vec * v)
 
 	*v = recvbuf;
 }
-*/
 
 void PIC_TYP::MPI_SendVec(const params_TYP * params, arma::vec * v)
 {
@@ -177,7 +175,12 @@ PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ve
 
 	// Calculate ion moments and populate mesh-defined ion moments:
 	// ============================================================
-	extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+	// Run 3 dummy cycles to load "n" and "nv" at previous time steps:
+	for(int tt=0; tt<3; tt++)
+	{
+		extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+	}
+
 }
 
 void PIC_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p)
@@ -573,32 +576,9 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * 
 			  smooth(&IONS->at(ss).P22_m, params->smoothingParameter);
 			}
 
-			/*
-			// It might be worth to performing a time-averaging of all update_ion_moments
-			// This would be accomplished by keeping previous time step profiles:
-			// applyTimeAveraging(&params,&IONS->at(ss),flag)
-			// {
-			//		if (flag == 1)
-			//		{
-			// 			IONS->at(ss).n_m   = (IONS->at(ss).n_m   + IONS->at(ss).n_m_   + IONS->at(ss).n_m__   + IONS->at(ss).n_m___)/4;
-			//			IONS->at(ss).nv_m  = (IONS->at(ss).nv_m  + IONS->at(ss).nv_m_  + IONS->at(ss).nv_m__  + IONS->at(ss).nv_m___)/4;
-			//			IONS->at(ss).P11_m = (IONS->at(ss).P11_m + IONS->at(ss).P11_m_ + IONS->at(ss).P11_m__ + IONS->at(ss).P11_m___)/4;
-			//			IONS->at(ss).P22_m = (IONS->at(ss).P22_m + IONS->at(ss).P22_m_ + IONS->at(ss).P22_m__ + IONS->at(ss).P22_m___)/4;
-			//		}
-			//		if (flag == 2)
-			//		{
-			// 			IONS->at(ss).u_m    = (IONS->at(ss).u_m     + IONS->at(ss).u_m_    + IONS->at(ss).u_m__    + IONS->at(ss).u_m___)/4;
-			//			IONS->at(ss).Tpar_m = (IONS->at(ss).Tpar_m  + IONS->at(ss).Tpar_m_ + IONS->at(ss).Tpar_m__ + IONS->at(ss).Tpar_m___)/4;
-			//			IONS->at(ss).Tper_m = (IONS->at(ss).Tper_m  + IONS->at(ss).Tper_m_ + IONS->at(ss).Tper_m__ + IONS->at(ss).Tper_m___)/4;
-			//		}
-			// }
-			*/
-
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
 			calculateDerivedIonMoments(params, CS, &IONS->at(ss));
-
-			// Could perform a time-averaging of u_m and Tper_m and Tpar_m
         }
 
 		// 0th and 1st moments at various time levels are sent to fields processes:

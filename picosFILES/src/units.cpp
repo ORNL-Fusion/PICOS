@@ -381,6 +381,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->geometry.r1 /= CS->length;
 	params->geometry.r2 /= CS->length;
     params->geometry.A_0 /= pow(CS->length,2);
+    params->geometry.LX_min /= CS->length;
+    params->geometry.LX_max /= CS->length;
 
 	// Fundamental scales:
 	// -------------------
@@ -408,7 +410,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     params->RF.x2   /= CS->length;
     params->RF.kpar *= CS->length;
     params->RF.kper *= CS->length;
-    
+
 	// Normalizing IONS:
     // =========================================================================
 	for(int ii=0;ii<IONS->size();ii++)

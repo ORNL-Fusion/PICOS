@@ -37,7 +37,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
             for(int ii=0; ii<NSP; ii++)
             {
                 // left boundary:
-                if (IONS->at(aa).X_p(ii) <= 0)
+                if (IONS->at(aa).X_p(ii) <= params->geometry.LX_min)
                 {
                     // Particle flag:
                     IONS->at(aa).f1(ii) = 1;
@@ -45,13 +45,10 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
                     // Particle kinetic energy:
                     double KE = 0.5*Ma*dot(IONS->at(aa).V_p.row(ii), IONS->at(aa).V_p.row(ii));
                     IONS->at(aa).dE1(ii) = KE;
-
-                    // Reinject:
-                    //IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) + params->mesh.LX;
                 }
 
                 // Right boundary:
-                if (IONS->at(aa).X_p(ii) >= params->mesh.LX)
+                if (IONS->at(aa).X_p(ii) >= params->geometry.LX_max)
                 {
                     // Particle flag:
                     IONS->at(aa).f2(ii) = 1;
@@ -60,8 +57,6 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP * params,const CS_TYP
                     double KE = 0.5*Ma*dot(IONS->at(aa).V_p.row(ii), IONS->at(aa).V_p.row(ii));
                     IONS->at(aa).dE2(ii) = KE;
 
-                    // Reinject:
-                    //IONS->at(aa).X_p(ii) = IONS->at(aa).X_p(ii) - params->mesh.LX;
                 }
             } // Particle loop
 
@@ -322,22 +317,33 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 		arma::vec phi = 2.0*M_PI*randu<vec>(1);
 
 		// Gaussian distribution in space:
-		double mean_x = IONS->p_BC.mean_x;
-		double sigma_x  =  IONS->p_BC.sigma_x;
-		double new_x = mean_x  + (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
-		double dLX = abs(new_x - mean_x);
+		double mean_x  = IONS->p_BC.mean_x;
+		double sigma_x =  IONS->p_BC.sigma_x;
+		double new_x   = mean_x  + (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
+		//double inc_x   = abs(new_x - mean_x);
+
+        // Domain boundaries:
+        double LX_min = params->geometry.LX_min;
+        double LX_max = params->geometry.LX_max;
 
         // Correction to prevent injecting out of bounds:
-		while(dLX > params->mesh.LX/2)
+        while( (new_x < LX_min) || (new_x > LX_max) )
 		{
-			 std::cout<<"Out of bound X= "<< new_x;
+			 cout<<"Out of bound, Xp(ii) = "<< new_x << endl;
+
+             // Random number:
 			 arma_rng::set_seed_random();
 			 R = randu(1);
 			 phi = 2.0*M_PI*randu<vec>(1);
 
+             // Assign new postion:
 			 new_x = mean_x  + (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
-			 dLX  = abs(new_x - mean_x);
-			 std::cout<< "Out of bound corrected X= " << new_x;
+			 //inc_x  = abs(new_x - mean_x);
+
+             if ( (new_x > LX_min) && (new_x < LX_max) )
+             {
+                 cout<< "Out of bound corrected X = " << new_x <<  endl;
+             }
 		}
 
 		IONS->X_p(ii) = new_x;
@@ -346,15 +352,16 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
     //4: Periodic:
 	if (IONS->p_BC.BC_type == 3)
 	{
-		if (IONS->X_p(ii) > params->mesh.LX)
-		{
-			IONS->X_p(ii) -= params->mesh.LX;
-		}
+        if (IONS->X_p(ii) > params->geometry.LX_max)
+        {
+            IONS->X_p(ii) = params->geometry.LX_min;
+        }
 
-		if (IONS->X_p(ii) < 0)
-		{
-			IONS->X_p(ii) += params->mesh.LX;
-		}
+        if (IONS->X_p(ii) < params->geometry.LX_min)
+        {
+            IONS->X_p(ii) = params->geometry.LX_max;
+        }
+
 	}
 
 	// Particle weight:
@@ -372,45 +379,4 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
         //IONS->a_p(ii) = 1;
     }
 
-    /*
-    // Cartesian unit vectors:
-    // ===========================
-    arma::vec x = params->mesh.e_x;
-    arma::vec y = params->mesh.e_y;
-    arma::vec z = params->mesh.e_z;
-
-    // B field PIC interpolation needed at this point:
-    // Becuase some particles have now new position and thus their weigth finalizeCommunications
-    // and particle-defined EM fields needs to be recalculated
-
-    // Field-alinged unit vectors:
-    // ===========================
-    arma::vec b1; // Unitary vector along B field
-    arma::vec b2; // Unitary vector perpendicular to b1
-    arma::vec b3; // Unitary vector perpendicular to b1 and b2
-
-    b1 = {params->em_IC.BX, params->em_IC.BY, params->em_IC.BZ};
-    b1 = arma::normalise(b1);
-
-    if (arma::dot(b1,y) < PRO_ZERO)
-    {
-        b2 = arma::cross(b1,y);
-    }
-    else
-    {
-        b2 = arma::cross(b1,z);
-    }
-
-    // Unitary vector perpendicular to b1 and b2
-    b3 = arma::cross(b1,b2);
-
-    IONS->V_p(ii) = V1(0)*dot(b1,x) + V2(0)*dot(b2,x) + V3(0)*dot(b3,x);
-    IONS->V(ii,1) = V1(0)*dot(b1,y) + V2(0)*dot(b2,y) + V3(0)*dot(b3,y);
-    IONS->V(ii,2) = V1(0)*dot(b1,z) + V2(0)*dot(b2,z) + V3(0)*dot(b3,z);
-
-    IONS->g(ii) = 1.0/sqrt( 1.0 - dot(IONS->V.row(ii),IONS->V.row(ii))/(F_C*F_C) );
-    IONS->mu(ii) = 0.5*IONS->g(ii)*IONS->g(ii)*IONS->M*( V2(0)*V2(0) + V3(0)*V3(0) )/params->em_IC.BX;
-    IONS->Ppar(ii) = IONS->g(ii)*IONS->M*V1(0);
-    IONS->avg_mu = mean(IONS->mu);
-    */
 }

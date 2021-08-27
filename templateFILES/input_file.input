@@ -10,57 +10,59 @@ advanceParticleMethod       1
 // Characteristic values:
 // =============================================================================
 CV_ne                       5.0E19
-CV_Te                       250
-CV_B                        10
-CV_Tpar                     250
-CV_Tper                     250
+CV_Te                       25
+CV_B                        1
+CV_Tpar                     25
+CV_Tper                     25
 
 // Simulation time:
 // =============================================================================
-DTc                         5
-simulationTime              1000000.0
+DTc                         1
+simulationTime              3000.0
 
 // Switches:
 // =============================================================================
-SW_EfieldSolve               1
+SW_EfieldSolve               0
 SW_HallTermSolve             0
 SW_BfieldSolve               0
-SW_Collisions                1
-SW_RFheating                 1
+SW_Collisions                0
+SW_RFheating                 0
 SW_advancePos                1
 SW_linearSolve               0
 
 // Magnetic field initial conditions:
 // =============================================================================
 IC_uniformBfield            0
-IC_BX                       0.5
+IC_BX                       0.2
 IC_BY                       0.0
 IC_BZ                       0.0
 IC_BX_NX                    200
-IC_BX_fileName              Bx_norm_profile.txt
+IC_BX_fileName              MPEX_Bfield_norm_scenario_14.txt
 
 // Geometry:
 // =============================================================================
-NX                          500
+NX                          1708
 NY                          1
 NZ                          1
 DrL                         -1
 dp                          0.2
-r1                          0.02
+r1                          0.0
 r2                          0.05
+LX_min                      0.3
+LX_max                      5
 
 // Electron initial conditions:
 // =============================================================================
 IC_ne                       1.0E19
-IC_Te                       250
+IC_Te                       25
 
 // RF operator:
 // =============================================================================
-RF_Prf                      10E3
+RF_Prf                      50E3
 RF_n_harmonic               1
-RF_freq                     15E6
-RF_x1                       1.2
-RF_x2                       1.5
+RF_freq                     16.77E6
+RF_x1                       6.0
+RF_x2                       8.0
 RF_kpar                     20
 RF_kper                     100
 RF_handedness               -1
@@ -69,7 +71,7 @@ RF_Prf_NS                   200
 
 // Output variables:
 // =============================================================================
-outputCadence               10000
+outputCadence               1
 outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
 
 // Data smoothing:

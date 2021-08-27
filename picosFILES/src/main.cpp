@@ -28,10 +28,6 @@
 using namespace std;
 using namespace arma;
 
-// #############################################################################
-// MAIN function:
-// #############################################################################
-
 int main(int argc, char* argv[])
 {
     // Initialize MPI process:
@@ -123,20 +119,11 @@ int main(int argc, char* argv[])
 
     // Create EM solver:
     // =========================================================================
-    fields_solver_TYP fields_solver(&params, &CS); // Initializing the EMF_SOLVER class object.
+    fields_solver_TYP fields_solver(&params, &CS);
 
     // Create PIC solver:
     // =========================================================================
     PIC_TYP PIC(&params, &CS, &fields, &IONS);
-    /*
-    // Run 3 dummy cycles to load "n" and "nv" at previous time steps:
-    // =========================================================================
-    for(int tt=0; tt<3; tt++)
-    {
-        PIC.extrapolateIonsMoments(&params, &fields, &IONS);
-        PIC.extrapolateMoments_AllSpecies(&params, &fields, &IONS);
-    }
-    */
 
     // Create RF operator object:
     // =========================================================================

@@ -25,21 +25,10 @@ initDist_TYP::initDist_TYP(const params_TYP * params)
 //This function creates a Maxwellian velocity distribution for IONS with a homogeneous spatial distribution.
 void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS)
 {
-    /*
-	IONS->Ppar = zeros(IONS->NSP);
-	IONS->g = zeros(IONS->NSP);
-	IONS->mu = zeros(IONS->NSP);
-    */
-
-	// We scale the positions
-    /*
-	IONS->X.col(0) *= params->mesh.LX;
-	IONS->X.col(1) *= params->mesh.LY;
-    */
-
     // Uniformely distribute positions along domain:
     arma_rng::set_seed_random();
-    IONS->X_p = randu<vec>(IONS->NSP)*params->mesh.LX;
+    //IONS->X_p = randu<vec>(IONS->NSP)*params->mesh.LX;
+    IONS->X_p = params->geometry.LX_min + randu<vec>(IONS->NSP)*(params->geometry.LX_max - params->geometry.LX_min);
 
     // Allocate memory to velocity:
     // V(0): V parallel
@@ -66,23 +55,6 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
     // Assign velocities:
     IONS->V_p.col(0) = V1;
     IONS->V_p.col(1) = V4;
-
-    /*
-	for(int pp=0;pp<IONS->NSP;pp++)
-    {
-		IONS->V_p(pp,0) = V1(pp)*dot(b1,x) + V2(pp)*dot(b2,x) + V3(pp)*dot(b3,x);
-		IONS->V_p(pp,1) = V1(pp)*dot(b1,y) + V2(pp)*dot(b2,y) + V3(pp)*dot(b3,y);
-		IONS->V_p(pp,2) = V1(pp)*dot(b1,z) + V2(pp)*dot(b2,z) + V3(pp)*dot(b3,z);
-
-
-		//IONS->g(pp) = 1.0/sqrt( 1.0 - dot(IONS->V.row(pp),IONS->V.row(pp))/(F_C*F_C) );
-		//IONS->mu(pp) = 0.5*IONS->g(pp)*IONS->g(pp)*IONS->M*( V2(pp)*V2(pp) + V3(pp)*V3(pp) )/params->em_IC.BX;
-		//IONS->Ppar(pp) = IONS->g(pp)*IONS->M*V1(pp);
-
-	}
-    */
-
-	//IONS->avg_mu = mean(IONS->mu);
 }
 
 double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, double X, double V3, double V2, double V1)
@@ -92,7 +64,8 @@ double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, d
     int Tpar_NX = IONS->p_IC.Tper_NX;
     int ne_nx   = IONS->p_IC.densityFraction_NX;
 
-    arma::vec S = linspace(0,params->mesh.LX,Tper_NX);
+    // arma::vec S = linspace(0,params->mesh.LX,Tper_NX);
+    arma::vec S = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
     arma::vec xx(1,1);
     xx(0,0)= X;
 
@@ -172,7 +145,8 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     // ====================
     unsigned int iterator = 1;
     double ratio = 0.0;
-    X(0)  = 0.5*params->mesh.LX;
+    //X(0)  = 0.5*params->mesh.LX;
+    X(0)  = params->geometry.LX_min + 0.5*(params->geometry.LX_max - params->geometry.LX_min);
     V3(0) = 0.25*IONS->VTpar;
     V2(0) = 0.1*IONS->VTpar;
     V1(0) = 0.5*IONS->VTpar;
@@ -181,7 +155,8 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     while(iterator < IONS->NSP)
     {
         // Select search point in phase space:
-        X_test  = uniform_distribution(generator)*params->mesh.LX;
+        //X_test  = uniform_distribution(generator)*params->mesh.LX;
+        X_test  = params->geometry.LX_min + uniform_distribution(generator)*(params->geometry.LX_max - params->geometry.LX_min);
         V3_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);
         V2_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);
         V1_test = 10*(IONS->VTpar)*((uniform_distribution(generator))-0.5);

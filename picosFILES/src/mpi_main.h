@@ -22,7 +22,6 @@ private:
 
 public:
 
-	//! Constructor of MPI_MAIN
 	MPI_MAIN_TYP(){};
 
 	void createMPITopology(params_TYP * params);
