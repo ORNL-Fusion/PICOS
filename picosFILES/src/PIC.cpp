@@ -426,11 +426,38 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ1 = F*DT;
 
+				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
+				{
+					cout << "Z0(0), 1 = " << Z0(0) << endl;
+					cout << "ZN(0), 1 = " << ZN(0) << endl;
+					cout << "ZN(1), 1 = " << ZN(1) << endl;
+					cout << "ZN(2), 1 = " << ZN(2) << endl;
+
+					cout << "E  = " << E  << endl;
+					cout << "B  = " << B  << endl;
+					cout << "dB = " << dB << endl;
+					cout << "EM(0) = " << EM(0) << endl;
+					cout << "EM(1) = " << EM(1) << endl;
+					cout << "EM(2) = " << EM(2) << endl;
+				}
+
                 // Step 2:
                 ZN = Z0 + dZ1/2;
                 interpEM(params, &IONS->at(ss), fields, &ZN, &EM);
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ2 = F*DT;
+
+				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
+				{
+					cout << "Z0(0), 2 = " << Z0(0) << endl;
+					cout << "ZN(0), 2 = " << ZN(0) << endl;
+					cout << "ZN(1), 2 = " << ZN(1) << endl;
+					cout << "ZN(2), 2 = " << ZN(2) << endl;
+
+					cout << "EM(0), 2 = " << EM(0) << endl;
+					cout << "EM(1), 2 = " << EM(1) << endl;
+					cout << "EM(2), 2 = " << EM(2) << endl;
+				}
 
                 // Step 3:
                 ZN = Z0 + dZ2/2;
@@ -438,14 +465,38 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ3 = F*DT;
 
+				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
+				{
+					cout << "Z0(0), 3 = " << Z0(0) << endl;
+					cout << "ZN(0), 3 = " << ZN(0) << endl;
+					cout << "ZN(1), 3 = " << ZN(1) << endl;
+					cout << "ZN(2), 3 = " << ZN(2) << endl;
+				}
+
                 // Step 4:
                 ZN = Z0 + dZ3;
                 interpEM(params, &IONS->at(ss), fields, &ZN, &EM);
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ4 = F*DT;
 
+				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
+				{
+					cout << "Z0(0), 4 = " << Z0(0) << endl;
+					cout << "ZN(0), 4 = " << ZN(0) << endl;
+					cout << "ZN(1), 4 = " << ZN(1) << endl;
+					cout << "ZN(2), 4 = " << ZN(2) << endl;
+				}
+
                 // Assemble RK4 solution:
                 Z1 = Z0 + (dZ1 + 2*dZ2 + 2*dZ3 + dZ4)/6;
+
+				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
+				{
+					cout << "Z0(0) = " << Z0(0) << endl;
+					cout << "Z1(0) = " << Z1(0) << endl;
+					cout << "Z1(1) = " << Z1(1) << endl;
+					cout << "Z1(2) = " << Z1(2) << endl;
+				}
 
 				// Interpolate fields at new particle position:
 				interpEM(params, &IONS->at(ss), fields, &Z1, &EM);
@@ -501,12 +552,16 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
 		if ( m >= params->mesh.NX_IN_SIM)
 		{
 			m = params->mesh.NX_IN_SIM - 1;
-			cout << "m exceeds boundary" << endl;
+			//cout << "m exceeds boundary" << endl;
+			//cout << "X_p = " << X_p << endl;
+			//cout << "LX = " << params->mesh.LX << endl;
 		}
 		if ( m < 0)
 		{
+			//cout << "m = " << m << endl;
 			m = 0;
-			cout << "m exceeds boundary" << endl;
+			//cout << "m exceeds boundary" << endl;
+			//cout << "X_p = " << X_p << endl;
 		}
 
 		// Assign nearest grid point:

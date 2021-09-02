@@ -228,11 +228,15 @@ public:
 	arma::ivec f1;             	// Flag for left boundary
 	arma::ivec f2;              // Flag for Right boundary
 	arma::ivec f3;              // Flag for RF operator
+	arma::ivec f4;              // Flag for Collisiona operator
+	arma::ivec f5; 							// Flag for injected particle
 
 	// Particle kinetic energy at boundaries:
 	arma::vec dE1;              // left boundary
 	arma::vec dE2;              // Right boundary
 	arma::vec dE3;              // RF operator
+	arma::vec dE4;							// Collisional energy loss
+	arma::vec dE5;							// Kinetic energy if injected particle
 
 	// Resonance numnber:
 	arma::vec resNum;

@@ -4,7 +4,15 @@
 using namespace std;
 
 particleBC_TYP::particleBC_TYP()
-{}
+{
+    N1_dot = 0;
+    N2_dot = 0;
+    N5_dot = 0;
+    E1_dot = 0;
+    E2_dot = 0;
+    E5_dot = 0;
+    DT     = 0;
+}
 
 // =============================================================================
 void particleBC_TYP::MPI_AllreduceDouble(const params_TYP * params, double * v)
@@ -105,7 +113,7 @@ void particleBC_TYP::MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V
 void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     // Simulation time step:
-    double DT = params->DT;
+    DT = params->DT;
 
     // Iterate over all ion species:
     // =============================
@@ -180,6 +188,79 @@ void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS
     } //  Species
 }
 
+void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+    {
+        N1_dot = 0;
+        N2_dot = 0;
+        E1_dot = 0;
+        E2_dot = 0;
+        DT     = params->DT;
+
+        for (int ss=0; ss<IONS->size();ss++)
+        {
+            double NCP = IONS->at(ss).NCP;
+            int NSP    = IONS->at(ss).NSP;
+
+            #pragma omp parallel default(none) shared(N1_dot, E1_dot, N2_dot, E2_dot, params, IONS, ss, CS, std::cout) firstprivate(NSP,NCP,DT)
+            {
+                // Private variables:
+                double N1_dot_private = 0;
+                double N2_dot_private = 0;
+                double E1_dot_private = 0;
+                double E2_dot_private = 0;
+
+                #pragma omp for
+                for(int ii=0; ii<NSP; ii++)
+                {
+                    // Boundary 1:
+                    if ( IONS->at(ss).f1(ii) == 1 )
+                    {
+                        double dE1 = IONS->at(ss).dE1(ii);
+                        double a_p = IONS->at(ss).a_p(ii);
+
+                        // Accumulate fluxes:
+                        N1_dot_private += (NCP/DT)*a_p;
+                        E1_dot_private += (NCP/DT)*a_p*dE1;
+
+                    }
+
+                    // Boundary 2:
+                    if ( IONS->at(ss).f2(ii) == 1 )
+                    {
+                        double dE2 = IONS->at(ss).dE2(ii);
+                        double a_p = IONS->at(ss).a_p(ii);
+
+                        // Accumulate fluxes:
+                        N2_dot_private += (NCP/DT)*a_p;
+                        E2_dot_private += (NCP/DT)*a_p*dE2;
+
+                    } // if
+
+                } // omp for
+
+                #pragma omp critical
+                {
+                    N1_dot += N1_dot_private;
+                    N2_dot += N2_dot_private;
+                    E1_dot += E1_dot_private;
+                    E2_dot += E2_dot_private;
+                }
+
+            } // omp parallel
+
+        } // Species
+
+        // Reduce over all MPI process
+        MPI_AllreduceDouble(params,&N1_dot);
+        MPI_AllreduceDouble(params,&N2_dot);
+        MPI_AllreduceDouble(params,&E1_dot);
+        MPI_AllreduceDouble(params,&E2_dot);
+
+    } // Particle MPI
+}
+
 // =============================================================================
 void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
@@ -189,7 +270,7 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
 
     // Calculate particle and energy flux accross boundaries:
     // ======================================================
-    // getFluxesAtBoundaries(params,CS,fields,IONS);
+    getFluxesAcrossBoundaries(params,CS,fields,IONS);
 
     // Calculate new particle weight:
     // =============================
@@ -204,7 +285,10 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
             // Number of computational particles per process:
             int NSP(IONS->at(ss).NSP);
 
-			#pragma omp parallel for default(none) shared(params, CS, fields, IONS, std::cout) firstprivate(NSP, ss)
+            // Ion mass:
+            double Ma = IONS->at(ss).M;
+
+			#pragma omp parallel for default(none) shared(params, CS, fields, IONS, std::cout) firstprivate(NSP, ss, Ma)
                 for(int ii=0; ii<NSP; ii++)
 				{
 					if ( IONS->at(ss).f1(ii) == 1 || IONS->at(ss).f2(ii) == 1 )
@@ -214,10 +298,20 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
                         // ===================
 						particleReinjection(ii, params, CS, fields,&IONS->at(ss));
 
+                        // Newly injected flag:
+                        // ====================
+                        IONS->at(ss).f5(ii)  = 1;
+                        IONS->at(ss).dE5(ii) = 0.5*Ma*dot(IONS->at(ss).V_p.row(ii), IONS->at(ss).V_p.row(ii));
+
                         // Reset injection flag:
                         // =====================
 						IONS->at(ss).f1(ii) = 0;
 						IONS->at(ss).f2(ii) = 0;
+
+                        // Reset Exit energy:
+                        // =====================
+                        IONS->at(ss).dE1(ii) = 0;
+                        IONS->at(ss).dE2(ii) = 0;
 
 					} // flag guard
 
@@ -227,10 +321,66 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
 
 	} //  Species
 
-    // Calculate actual volume-averaged fueling rate and power:
+    // Calculate actual fueling rate and power:
     // =======================================================
-    // getVolumeAveragedRates(params,CS,fields,IONS);
+    getParticleInjectionRates(params,CS,fields,IONS);
 
+}
+
+void particleBC_TYP::getParticleInjectionRates(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+    {
+        N5_dot = 0;
+        E5_dot = 0;
+        DT     = params->DT;
+
+        for (int ss=0; ss<IONS->size();ss++)
+        {
+            double NCP = IONS->at(ss).NCP;
+            int NSP    = IONS->at(ss).NSP;
+
+            #pragma omp parallel default(none) shared(N5_dot, E5_dot, params, IONS, ss, CS, std::cout) firstprivate(NSP,NCP,DT)
+            {
+                // Private variables:
+                double N5_dot_private = 0;
+                double E5_dot_private = 0;
+
+                #pragma omp for
+                for(int ii=0; ii<NSP; ii++)
+                {
+                    // Boundary 1:
+                    if ( IONS->at(ss).f5(ii) == 1 )
+                    {
+                        double dE5 = IONS->at(ss).dE5(ii);
+                        double a_p = IONS->at(ss).a_p(ii);
+
+                        // Accumulate fluxes:
+                        N5_dot_private += (NCP/DT)*a_p;
+                        E5_dot_private += (NCP/DT)*a_p*dE5;
+
+                        // Clear flags:
+                        IONS->at(ss).f5(ii)  = 0;
+                        IONS->at(ss).dE5(ii) = 0;
+                    }
+
+                } // omp for
+
+                #pragma omp critical
+                {
+                    N5_dot += N5_dot_private;
+                    E5_dot += E5_dot_private;
+                }
+
+            } // omp parallel
+
+        } // Species
+
+        // Reduce over all MPI process
+        MPI_AllreduceDouble(params,&N5_dot);
+        MPI_AllreduceDouble(params,&E5_dot);
+
+    } // Particle MPI
 }
 
 // =============================================================================
@@ -245,7 +395,7 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 		double T;
 		double E;
 
-		if (IONS->p_BC.BC_type == 1) // Warm plasma source
+		if (IONS->p_BC.BC_type == 1 || IONS->p_BC.BC_type == 4) // Warm plasma source
 		{
 			T = IONS->p_BC.T;
 			E = 0;

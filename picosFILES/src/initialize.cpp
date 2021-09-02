@@ -936,12 +936,16 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     IONS->f1.zeros(IONS->NSP);
     IONS->f2.zeros(IONS->NSP);
     IONS->f3.zeros(IONS->NSP);
+    //IONS->f4.zeros(IONS->NSP);
+    IONS->f5.zeros(IONS->NSP);
 
     // Initialize particle kinetic energy at boundaries:
     // ================================================
     IONS->dE1.zeros(IONS->NSP);
     IONS->dE2.zeros(IONS->NSP);
     IONS->dE3.zeros(IONS->NSP);
+    //IONS->dE4.zeros(IONS->NSP);
+    IONS->dE5.zeros(IONS->NSP);
 
     // Initialize resonance number:
     // ============================

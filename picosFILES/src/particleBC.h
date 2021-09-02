@@ -16,9 +16,8 @@ using namespace arma;
 
 class particleBC_TYP
 {
-private:
 
-    //void particleReinjection(int ii, const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
+private:
 
     void particleReinjection(int ii, const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
 
@@ -28,9 +27,22 @@ private:
 
     void checkBoundaryAndFlag(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
+    void getFluxesAcrossBoundaries(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
     void calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
+    void getParticleInjectionRates(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
 public:
+
+    double N1_dot;
+    double N2_dot;
+    double N5_dot;
+    double E1_dot;
+    double E2_dot;
+    double E5_dot;
+    double DT;
+
     particleBC_TYP();
 
     void applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);

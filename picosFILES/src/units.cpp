@@ -278,7 +278,7 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                         CFL_I = true;
                 }
                 */
-
+                
 				//Assign final DT for the simulation
 				//==================================
 				params->DT = DT;
