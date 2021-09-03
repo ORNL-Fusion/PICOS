@@ -31,29 +31,31 @@ class init_TYP
 {
 	vector<string> split(const string& str, const string& delim);
 
-	map<string, string> ReadAndloadInputFile(string *  inputFile);
+	map<string, string> readTextFile(string *  inputFile);
 
-	void initializeParticlesArrays(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS);
+	void allocateParticleDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS);
 
-	void initializeBulkVariablesArrays(const params_TYP * params, ionSpecies_TYP * IONS);
+	void allocateMeshDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS);
 
 public:
 
 	init_TYP(params_TYP * params, int argc, char* argv[]);
 
-	void loadInputParameters(params_TYP * params, int argc, char* argv[]);
+	void calculateMeshParams(params_TYP * params);
 
-	void loadMeshGeometry(params_TYP * params, FS_TYP * FS);
+	void readInputFile(params_TYP * params);
 
-  void loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * IONS);
+  	void readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
-  void loadPlasmaProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS);
+	void calculateDerivedQuantities(params_TYP * params, vector<ionSpecies_TYP> * IONS);
+
+  	void readInitialConditionProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
 	void setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
-	void initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fields);
-
 	void initializeFields(params_TYP * params, fields_TYP * fields);
+
+	void allocateMemoryIons(params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
 };
 

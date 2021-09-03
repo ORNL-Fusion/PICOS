@@ -58,50 +58,64 @@ int main(int argc, char* argv[])
     // Particle boundary condition operator:
     particleBC_TYP particleBC;
 
-    // Initialize "params" based on input file:
-    init_TYP init(&params, argc, argv);
-
-    // UNITS object of type "FT" and "FT":
+    // UNITS object:
     units_TYP units;
+
+    // Initialize object:
+    init_TYP init(&params, argc, argv);
 
     // Initialize simulation objects:
     // =========================================================================
+    // Load data from input file:
+    init.readInputFile(&params);
+
+    // Read "ions_properties.ion" and populate "IONS" vector
+    init.readIonPropertiesFile(&params, &IONS);
+
+    // Read IC profiles from external files:
+    init.readInitialConditionProfiles(&params, &IONS);
+
+    // Calculate derived quantities from input data:
+    init.calculateDerivedQuantities(&params, &IONS);
+
+    // Define mesh geometry and populate "params":
+    init.calculateMeshParams(&params);
+
     // Create MPI topology:
     mpi_main.createMPITopology(&params);
 
-    // Read "ions_properties.ion" and populate "IONS" vector
-    init.loadIonParameters(&params, &IONS);
+    // Allocate memory to particle and mesh-defined quantities in IONS:
+    init.allocateMemoryIons(&params, &IONS);
+
+    // Initialize IONS: scalar, bulk and particle arrays
+    init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
+
+    // Initialize electromagnetic field variable:
+    init.initializeFields(&params, &fields);
 
     // Define characteristic scales and broadcast them to all processes in COMM_WORLD:
     units.defineCharacteristicScalesAndBcast(&params, &IONS, &CS);
 
+
+    // =========================================================================
+    //  CONSIDER REMOVING FS
+    // This will require that FS be removed from outputHDF5 source codes
+    // =========================================================================
     // Create object and allocate memory according to "params":
     FS_TYP FS(&params);
 
     // Define fundamental scales and broadcast them to all processes in COMM_WORLD:
     units.calculateFundamentalScalesAndBcast(&params, &IONS, &FS);
 
-    // Define mesh geometry and populate "params" (FS is not used):
-    init.loadMeshGeometry(&params, &FS);
-
-    // Read IC external profile and load them to "params.p_IC":
-    init.loadPlasmaProfiles(&params, &IONS);
-
     // Check that mesh size is consistent with hybrid approximation:
     units.spatialScalesSanityCheck(&params, &FS);
-
-    // Initialize electromagnetic field variable:
-    init.initializeFields(&params, &fields);
-
-    // Initialize IONS: scalar, bulk and particle arrays
-    init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
+    // =========================================================================
 
     // HDF object constructor and create "main.h5"
     HDF_TYP HDF(&params, &FS, &IONS);
 
     // Define time step based on ion CFL condition:
     units.defineTimeStep(&params, &IONS);
-    //cout << "checkpoint 3" << endl;
 
     // Normalize "params", "IONS", "fields" using "CS"
     units.normalizeVariables(&params, &IONS, &fields, &CS);

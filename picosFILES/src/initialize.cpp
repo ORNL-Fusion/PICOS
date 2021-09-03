@@ -32,7 +32,7 @@ vector<string> init_TYP::split(const string& str, const string& delim)
 
 // Function to read and load data from inputfile.input:
 // =============================================================================
-map<string,string> init_TYP::ReadAndloadInputFile(string * inputFile)
+map<string,string> init_TYP::readTextFile(string * inputFile)
 {
     // Create stream object:
     // =====================
@@ -92,7 +92,7 @@ map<string,string> init_TYP::ReadAndloadInputFile(string * inputFile)
     return readMap;
 }
 
-// Constructor: Populates "params" based in inputfile.input
+// Constructor:
 // =============================================================================
 init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
 {
@@ -114,18 +114,18 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->errorCodes[-108] = "Non-finite value in meshNode";
     params->errorCodes[-109] = "Number of nodes in either direction of simulation domain need to be a multiple of 2";
     params->errorCodes[-110] = "Non finite values in Ex";
-    params->errorCodes[-111] = "Non finite values in Ey";
-    params->errorCodes[-112] = "Non finite values in Ez";
-    params->errorCodes[-113] = "Non finite values in Bx";
-    params->errorCodes[-114] = "Non finite values in By";
-    params->errorCodes[-115] = "Non finite values in Bz";
+    //params->errorCodes[-111] = "Non finite values in Ey";
+    //params->errorCodes[-112] = "Non finite values in Ez";
+    //params->errorCodes[-113] = "Non finite values in Bx";
+    //params->errorCodes[-114] = "Non finite values in By";
+    //params->errorCodes[-115] = "Non finite values in Bz";
 
     // Copyright and Licence Info:
     // ===========================
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
-        cout << "* PICOS++, a 1D-2V GC hybrid PIC code for open plasma systems           *" << endl;
+        cout << "* PICOS++, a 1D-2V GC hybrid PIC code for Open plasma Systems           *" << endl;
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
         cout << endl;
     }
@@ -162,6 +162,22 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * " << endl;
     }
 
+}
+
+// Populate params with data from input file:
+// =============================================================================
+void init_TYP::readInputFile(params_TYP * params)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n";
+        cout << "READING INPUT FILE ..." << endl;
+    }
+
     // Get name of path to input file:
     // ===============================
 	string name;
@@ -180,7 +196,7 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     // Read input file and assemble map:
     // ================================
 	std::map<string,string> parametersStringMap;
-	parametersStringMap = ReadAndloadInputFile(&name);
+	parametersStringMap = readTextFile(&name);
 
     // Create HDF5 folders if they don't exist:
     // ========================================
@@ -232,7 +248,6 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     // Switches:
     // -------------------------------------------------------------------------
     params->SW.EfieldSolve   = stoi( parametersStringMap["SW_EfieldSolve"] );
-    params->SW.HallTermSolve = stoi( parametersStringMap["SW_HallTermSolve"] );
     params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
     params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
     params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
@@ -250,10 +265,7 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
 
     // Geometry:
     // -------------------------------------------------------------------------
-    unsigned int NX      = (unsigned int)stoi( parametersStringMap["NX"] );
-    unsigned int NY      = (unsigned int)stoi( parametersStringMap["NY"] );
-    unsigned int NZ      = (unsigned int)stoi( parametersStringMap["NZ"] );
-    params->DrL          = stod( parametersStringMap["DrL"] );
+    //unsigned int NX      = (unsigned int)stoi( parametersStringMap["NX"] );
     params->dp           = stod( parametersStringMap["dp"] );
     params->geometry.r1  = stod( parametersStringMap["r1"] );
     params->geometry.r2  = stod( parametersStringMap["r2"] );
@@ -290,35 +302,18 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->filtersPerIterationFields = stoi( parametersStringMap["filtersPerIterationFields"] );
     params->filtersPerIterationIons   = stoi( parametersStringMap["filtersPerIterationIons"] );
 
-    // Derived parameters:
-    // ===================
-    params->mpi.MPIS_PARTICLES = params->mpi.NUMBER_MPI_DOMAINS - params->mpi.MPIS_FIELDS;
-    params->geometry.A_0 = M_PI*(pow(params->geometry.r2,2) -pow(params->geometry.r1,2));
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    // Sanity check: if NX and/or NY is not a multiple of 2, the simulation aborts:
-    // ============================================================================
-    if (fmod(NX, 2.0) > 0.0)
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-        MPI_Barrier(params->mpi.MPI_TOPO);
-        MPI_Abort(params->mpi.MPI_TOPO,-109);
+        cout << "READING INPUT FILE COMPLETED" << endl;
+        cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n";
     }
-
-    params->mesh.NX_IN_SIM = NX;
-    params->mesh.NX_PER_MPI = (int)( (double)NX/(double)params->mpi.MPIS_FIELDS );
-    params->mesh.SPLIT_DIRECTION = 0;
-
-    params->mesh.NY_IN_SIM = 1;
-    params->mesh.NY_PER_MPI = 1;
-
-    params->mesh.NZ_IN_SIM = 1;
-    params->mesh.NZ_PER_MPI = 1;
-
-    params->mesh.NUM_CELLS_PER_MPI = params->mesh.NX_PER_MPI;
-    params->mesh.NUM_CELLS_IN_SIM = params->mesh.NX_IN_SIM;
-
 }
 
-void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * IONS)
+// Read and populate ion parameters input file:
+// =============================================================================
+void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -347,7 +342,7 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
     // Read data from "ion_properties.ion" into "parametersMap":
     // =========================================================
     std::map<string,string> parametersMap;
-    parametersMap = ReadAndloadInputFile(&name);
+    parametersMap = readTextFile(&name);
 
     // Determine the total number of ION species:
     // =========================================
@@ -355,16 +350,16 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
 
     // Loop over all ION species and extract data from "parametersMap":
     // ================================================================
-    for(int ii=0;ii<totalNumSpecies;ii++)
+    for(int ss=0;ss<totalNumSpecies;ss++)
     {
         string name;
         ionSpecies_TYP ions;
         int SPECIES;
-        stringstream ss;
+        stringstream kk;
 
-        ss << ii + 1;
+        kk << ss + 1;
 
-        name = "SPECIES" + ss.str();
+        name = "SPECIES" + kk.str();
         SPECIES = stoi(parametersMap[name]);
         name.clear();
 
@@ -372,157 +367,113 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
         {
             // General:
             // =================================================================
-            // Species type, -1: Guiding center, 0: Tracer, 1: Full orbit
+            // Species type, 1: Guiding center, 0: Tracer
             ions.SPECIES = SPECIES;
 
             // Number of particles per cell:
-            name = "NPC" + ss.str();
+            name = "NPC" + kk.str();
             ions.NPC = stoi(parametersMap[name]);
             name.clear();
 
-            name = "pctSupPartOutput" + ss.str();
+            name = "pctSupPartOutput" + kk.str();
             ions.pctSupPartOutput = stod(parametersMap[name]);
             name.clear();
 
             // Charge state:
-            name = "Z" + ss.str();
+            name = "Z" + kk.str();
             ions.Z = stod(parametersMap[name]);
             name.clear();
 
             // AMU mass number:
-            name = "M" + ss.str();
+            name = "M" + kk.str();
             ions.M = F_U*stod(parametersMap[name]);
             name.clear();
 
             // Initial condition:
             // =================================================================
-            name = "IC_type_" + ss.str();
+            name = "IC_type_" + kk.str();
             ions.p_IC.IC_type = stoi(parametersMap[name]);
             name.clear();
 
             // Perpendicular temperature:
-            name = "IC_Tper_" + ss.str();
+            name = "IC_Tper_" + kk.str();
             ions.p_IC.Tper = stod(parametersMap[name])*F_E/F_KB;
             name.clear();
 
-            name = "IC_Tper_fileName_" + ss.str();
+            name = "IC_Tper_fileName_" + kk.str();
             ions.p_IC.Tper_fileName = parametersMap[name];
             name.clear();
 
-            name = "IC_Tper_NX_" + ss.str();
+            name = "IC_Tper_NX_" + kk.str();
             ions.p_IC.Tper_NX = stoi(parametersMap[name]);
             name.clear();
 
             // Parallel temperature:
-            name = "IC_Tpar_" + ss.str();
+            name = "IC_Tpar_" + kk.str();
             ions.p_IC.Tpar = stod(parametersMap[name])*F_E/F_KB; // Tpar in eV in input file
             name.clear();
 
-            name = "IC_Tpar_fileName_" + ss.str();
+            name = "IC_Tpar_fileName_" + kk.str();
             ions.p_IC.Tpar_fileName = parametersMap[name];
             name.clear();
 
-            name = "IC_Tpar_NX_" + ss.str();
+            name = "IC_Tpar_NX_" + kk.str();
             ions.p_IC.Tpar_NX = stoi(parametersMap[name]);
             name.clear();
 
             // Density fraction relative to 1:
-            name = "IC_densityFraction_" + ss.str();
+            name = "IC_densityFraction_" + kk.str();
             ions.p_IC.densityFraction = stod(parametersMap[name]);
             name.clear();
 
-            name = "IC_densityFraction_fileName_" + ss.str();
+            name = "IC_densityFraction_fileName_" + kk.str();
             ions.p_IC.densityFraction_fileName = parametersMap[name];
             name.clear();
 
-            name = "IC_densityFraction_NX_" + ss.str();
+            name = "IC_densityFraction_NX_" + kk.str();
             ions.p_IC.densityFraction_NX = stoi(parametersMap[name]);
             name.clear();
 
             // Boundary conditions:
             // =================================================================
-            name = "BC_type_" + ss.str();
+            name = "BC_type_" + kk.str();
             ions.p_BC.BC_type = stoi(parametersMap[name]);
             name.clear();
 
-            name = "BC_T_" + ss.str();
+            name = "BC_T_" + kk.str();
             ions.p_BC.T = stod(parametersMap[name])*F_E/F_KB;
             name.clear();
 
-            name = "BC_E_" + ss.str();
+            name = "BC_E_" + kk.str();
             ions.p_BC.E = stod(parametersMap[name])*F_E/F_KB;
             name.clear();
 
-            name = "BC_eta_" + ss.str();
+            name = "BC_eta_" + kk.str();
             ions.p_BC.eta = stod(parametersMap[name]);
             name.clear();
 
-            name = "BC_G_" + ss.str();
+            name = "BC_G_" + kk.str();
             ions.p_BC.G = stod(parametersMap[name]);
             name.clear();
 
-            name = "BC_mean_x_" + ss.str();
+            name = "BC_mean_x_" + kk.str();
             ions.p_BC.mean_x = stod(parametersMap[name]);
             name.clear();
 
-            name = "BC_sigma_x_" + ss.str();
+            name = "BC_sigma_x_" + kk.str();
             ions.p_BC.sigma_x = stod(parametersMap[name]);
             name.clear();
 
-            name = "BC_G_fileName_" + ss.str();
+            name = "BC_G_fileName_" + kk.str();
             ions.p_BC.G_fileName = parametersMap[name];
             name.clear();
 
-            name = "BC_G_NS_" + ss.str();
+            name = "BC_G_NS_" + kk.str();
             ions.p_BC.G_NS = stoi(parametersMap[name]);
             name.clear();
 
-            // Derived quantities:
-            // =================================================================
-            ions.Q     = F_E*ions.Z;
-            ions.Wc    = ions.Q*params->CV.B/ions.M;
-            ions.Wp    = sqrt( ions.p_IC.densityFraction*params->CV.ne*ions.Q*ions.Q/(F_EPSILON*ions.M) );//Check the definition of the plasma freq for each species!
-            ions.VTper = sqrt(2.0*F_KB*params->CV.Tper/ions.M);
-            ions.VTpar = sqrt(2.0*F_KB*params->CV.Tpar/ions.M);
-            ions.LarmorRadius = ions.VTper/ions.Wc;
-
-            // Number of computational particles for species "ss" per MPI process:
-            ions.NSP = ceil( ions.NPC*(double)params->mesh.NUM_CELLS_IN_SIM/(double)params->mpi.MPIS_PARTICLES );
-
-            // Number of super-particles for species "ss" per MPI process:
-            // Need to reduce "a_p" but only for each process
-
-            ions.nSupPartOutput = floor( (ions.pctSupPartOutput/100.0)*ions.NSP );
-
             // Create new element on IONS vector:
             IONS->push_back(ions);
-
-            // Print ion parameters to terminal:
-            // =================================
-            if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-            {
-                if (ions.SPECIES == 0)
-                {
-                    cout << endl << "Species No "  << ii + 1 << " are tracers with the following parameters:" << endl;
-                }
-                else
-                {
-                    cout << endl << "Species No "  << ii + 1 << " are full-orbit particles with the following parameters:" << endl;
-                }
-
-                // Stream to terminal:
-                // ===================
-                cout << "+ User-defined number of particles per MPI: " << ions.NSP << endl;
-                cout << "+ Atomic number: " << ions.Z << endl;
-                cout << "+ Mass: " << ions.M << " kg" << endl;
-                cout << "+ Parallel temperature: " << params->CV.Tpar*F_KB/F_E << " eV" << endl;
-                cout << "+ Perpendicular temperature: " << params->CV.Tper*F_KB/F_E << " eV" << endl;
-                cout << "+ Cyclotron frequency: " << ions.Wc << " Hz" << endl;
-                cout << "+ Plasma frequency: " << ions.Wp << " Hz" << endl;
-                cout << "+ Parallel thermal velocity: " << ions.VTpar << " m/s" << endl;
-                cout << "+ Perpendicular thermal velocity: " << ions.VTper << " m/s" << endl;
-                cout << "+ Larmor radius: " << ions.LarmorRadius << " m" << endl;
-            }
         }
         else
         {
@@ -530,7 +481,7 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
 
             if(params->mpi.MPI_DOMAIN_NUMBER == 0)
             {
-                cerr << "PRO++ ERROR: Enter a valid type of species -- options are 0 = tracers, 1 = full orbit, -1 = guiding center" << endl;
+                cerr << "PRO++ ERROR: Enter a valid type of species -- options are 0 = tracers, 1 = guiding center" << endl;
             }
             MPI_Abort(MPI_COMM_WORLD,-106);
         }
@@ -540,16 +491,220 @@ void init_TYP::loadIonParameters(params_TYP * params, vector<ionSpecies_TYP> * I
     // Print to terminal:
     // ==================
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "* * * * * * * * * * * * ION PARAMETERS LOADED * * * * * * * * * * * * * * * * * *\n";
-        }
+    {
+        cout << "* * * * * * * * * * * * ION PARAMETERS LOADED * * * * * * * * * * * * * * * * * *\n";
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
+// Read initial condition profiles from external files:
+// =============================================================================
+void init_TYP::readInitialConditionProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
+    MPI_Barrier(MPI_COMM_WORLD);
 
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * *  LOADING INITIAL CONDITION PROFILES  * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Define number of elements in external profiles:
+    // ===============================================
+    int nn = params->PATH.length();
+    std::string inputFilePath = params->PATH.substr(0,nn-13);
+
+    for(int ss=0;ss<IONS->size();ss++)
+    {
+
+        // Assemble  external filenames
+        std::string fileName  = params->PATH.substr(0,nn-13);
+        std::string fileName2 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tper_fileName;
+        std::string fileName3 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tpar_fileName;
+        std::string fileName4 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.densityFraction_fileName;
+        std::string fileName5 = fileName + "/inputFiles/" + params->em_IC.BX_fileName;
+
+        // Load data from external file:
+        // ============================
+        IONS->at(ss).p_IC.Tper_profile.load(fileName2);
+        IONS->at(ss).p_IC.Tpar_profile.load(fileName3);
+        IONS->at(ss).p_IC.densityFraction_profile.load(fileName4);
+        params->em_IC.Bx_profile.load(fileName5);
+
+        // Rescale the plasma Profiles:
+        // ================================
+        IONS->at(ss).p_IC.Tper_profile *= IONS->at(ss).p_IC.Tper;
+        IONS->at(ss).p_IC.Tpar_profile *= IONS->at(ss).p_IC.Tpar;
+        IONS->at(ss).p_IC.densityFraction_profile *= params->f_IC.ne;
+
+        // Scale the normalized profile to Tesla:
+        // ====================================
+        params->em_IC.Bx_profile *= params->em_IC.BX;
+
+        // Print to terminal:
+        // ==================
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
+            cout << "+ Succesfully read IC external files                        " << endl;
+            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
+        }
+
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * *  PLASMA INITIAL CONDITION PROFILES LOADED  * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+}
+
+// Calculate IONS and params derived quantities:
+// =============================================================================
+void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies_TYP> * IONS)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * CALCULATING DERIVED QUANTITIES * * * * * * * * * * * * * * * * *\n";
+    }
+
+    // Derived quantities for params:
+    // ==============================
+    params->mpi.MPIS_PARTICLES = params->mpi.NUMBER_MPI_DOMAINS - params->mpi.MPIS_FIELDS;
+    params->geometry.A_0 = M_PI*(pow(params->geometry.r2,2) -pow(params->geometry.r1,2));
+    params->geometry.LX = params->geometry.LX_max - params->geometry.LX_min;
+
+    // Derived quantities for IONS:
+    // ============================
+    // NR total number of real particles at t = 0:
+    double ds   = params->geometry.LX/params->em_IC.BX_NX;
+    arma::vec A = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
+
+    for(int ss=0; ss<IONS->size(); ss++)
+    {
+        // Ion species density:
+        arma::vec n_ion = ones<vec>(params->em_IC.BX_NX);
+
+        if (params->quietStart)
+        {
+            n_ion *= params->f_IC.ne*IONS->at(ss).p_IC.densityFraction;
+        }
+        else
+        {
+            n_ion = IONS->at(ss).p_IC.densityFraction_profile;
+        }
+
+        // Number of real particles represented by particles of "ss" species:
+        IONS->at(ss).NR = sum(n_ion%A)*ds;
+    }
+
+    for(int ss=0; ss<IONS->size(); ss++)
+    {
+        IONS->at(ss).Q     = F_E*IONS->at(ss).Z;
+        IONS->at(ss).Wc    = IONS->at(ss).Q*params->CV.B/IONS->at(ss).M;
+        IONS->at(ss).Wp    = sqrt( IONS->at(ss).p_IC.densityFraction*params->CV.ne*IONS->at(ss).Q*IONS->at(ss).Q/(F_EPSILON*IONS->at(ss).M) );//Check the definition of the plasma freq for each species!
+        IONS->at(ss).VTper = sqrt(2.0*F_KB*params->CV.Tper/IONS->at(ss).M);
+        IONS->at(ss).VTpar = sqrt(2.0*F_KB*params->CV.Tpar/IONS->at(ss).M);
+        IONS->at(ss).LarmorRadius  = IONS->at(ss).VTper/IONS->at(ss).Wc;
+        IONS->at(ss).GyroPeriod = 2.0*M_PI/IONS->at(ss).Wc;
+        IONS->at(ss).SkinDepth  = F_C/IONS->at(ss).Wp;
+    }
+
+    // Characteristic length and time scales of simulation:
+    // ===================================================
+    // Assume that species 0 is the majority species
+    params->ionLarmorRadius = IONS->at(0).LarmorRadius;
+    params->ionSkinDepth    = IONS->at(0).SkinDepth;
+    params->ionGyroPeriod   = IONS->at(0).GyroPeriod;
+
+    // Calculate grid size:
+    // ===================
+    params->geometry.DX = params->dp*params->ionSkinDepth;
+
+    // Define the number of grid cells:
+    // ================================
+    params->geometry.NX = round(params->geometry.LX/params->geometry.DX);
+
+    // Make NX a multiple of 2:
+    if (fmod(params->geometry.NX, 2.0) > 0.0)
+    {
+        params->geometry.NX -= 1;
+    }
+
+    // Correct value of "dp":
+    // ==============================
+    params->dp = params->geometry.LX/(params->geometry.NX*params->ionSkinDepth);
+
+    // Define number of particles per MPI process:
+    // ==========================================
+    for(int ss=0; ss<IONS->size(); ss++)
+    {
+        // Number of computational particles for species "ss" per MPI process:
+        IONS->at(ss).NSP = ceil( IONS->at(ss).NPC*(double)params->geometry.NX/(double)params->mpi.MPIS_PARTICLES );
+
+        // Fraction of super particles to save in output:
+        IONS->at(ss).nSupPartOutput = floor( (IONS->at(ss).pctSupPartOutput/100.0)*IONS->at(ss).NSP );
+
+        // NCP conversion factor from super-particle to real particle:
+        IONS->at(ss).NCP = IONS->at(ss).NR/(IONS->at(ss).NSP*params->mpi.MPIS_PARTICLES);
+    }
+
+    // Print main ion properties:
+    // ===========================
+    for(int ss=0; ss<IONS->size(); ss++)
+    {
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            if (IONS->at(ss).SPECIES == 0)
+            {
+                cout << endl << "Species No "  << ss + 1 << " are tracers with the following parameters:" << endl;
+            }
+            else
+            {
+                cout << endl << "Species No "  << ss + 1 << " are guiding-center with the following parameters:" << endl;
+            }
+
+            // Stream to terminal:
+            // ===================
+            cout << "+ Number of real particles simulated at t = 0 s : " << IONS->at(ss).NR << endl;
+            cout << "+ Number of real particles for every super-particle at t = 0 s : " << IONS->at(ss).NCP << endl;
+            cout << "+ User-defined number of particles per MPI: " << IONS->at(ss).NSP << endl;
+            cout << "+ Atomic number: " << IONS->at(ss).Z << endl;
+            cout << "+ Mass: " << IONS->at(ss).M << " kg" << endl;
+            cout << "+ Parallel temperature: " << params->CV.Tpar*F_KB/F_E << " eV" << endl;
+            cout << "+ Perpendicular temperature: " << params->CV.Tper*F_KB/F_E << " eV" << endl;
+            cout << "+ Cyclotron frequency: " << IONS->at(ss).Wc << " Hz" << endl;
+            cout << "+ Plasma frequency: " << IONS->at(ss).Wp << " Hz" << endl;
+            cout << "+ Parallel thermal velocity: " << IONS->at(ss).VTpar << " m/s" << endl;
+            cout << "+ Perpendicular thermal velocity: " << IONS->at(ss).VTper << " m/s" << endl;
+            cout << "+ Larmor radius: " << IONS->at(ss).LarmorRadius << " m" << endl;
+        }
+    }
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * DERIVED QUANTITIES CALCULATION COMPLETE * * * * * * * * * * * * * * * * *\n";
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+// Calculate mesh geometry:
+// =============================================================================
+void init_TYP::calculateMeshParams(params_TYP * params)
+{
     MPI_Barrier(MPI_COMM_WORLD);
 
     // Print to terminal:
@@ -559,129 +714,42 @@ void init_TYP::loadMeshGeometry(params_TYP * params, FS_TYP * FS)
         cout << endl << "* * * * * * * * * * * * LOADING/COMPUTING SIMULATION GRID * * * * * * * * * * * * * * * * * *\n";
     }
 
-    // Select grid size: based on Larmour radius or ion skin depth:
-    // ============================================================
-    if( (params->DrL > 0.0) && (params->dp < 0.0) )
-    {
-    	params->mesh.DX = params->DrL*params->ionLarmorRadius;
-    	params->mesh.DY = params->mesh.DX;
-    	params->mesh.DZ = params->mesh.DX;
+    params->mesh.LX         = params->geometry.LX;
+    params->mesh.DX         = params->geometry.DX;
+    params->mesh.NX_IN_SIM  = params->geometry.NX;
+    params->mesh.NX_PER_MPI = (int)( (double)params->geometry.NX/(double)params->mpi.MPIS_FIELDS );
+    params->mesh.SPLIT_DIRECTION = 0;
 
-    	if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-            {
-                cout << "Using LARMOR RADIUS to set up simulation grid." << endl;
-            }
-    }
-    else if( (params->DrL < 0.0) && (params->dp > 0.0) )
-    {
-        params->mesh.DX = params->dp*params->ionSkinDepth;
-        params->mesh.DY = params->mesh.DX;
-        params->mesh.DZ = params->mesh.DX;
-
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "Using ION SKIN DEPTH to set up simulation grid." << endl;
-        }
-    }
+    params->mesh.NUM_CELLS_PER_MPI = params->mesh.NX_PER_MPI;
+    params->mesh.NUM_CELLS_IN_SIM = params->mesh.NX_IN_SIM;
 
     // Set size of mesh and allocate memory:
     // =====================================
     params->mesh.nodesX.set_size(params->mesh.NX_IN_SIM);
-    params->mesh.nodesY.set_size(params->mesh.NY_IN_SIM);
-    params->mesh.nodesZ.set_size(params->mesh.NZ_IN_SIM);
 
     // Create mesh nodes: X domain
     // ============================
     for(int ii=0; ii<params->mesh.NX_IN_SIM; ii++)
     {
-        //params->mesh.nodesX(ii) = (double)ii*params->mesh.DX;
-        // ****** does the above expresion reequire + 0.5*DX as in the fortran code?
-        // ****** Notice that the above rnage goes from ii = 0 - (NX_IN_SIM - 1)
-
         // Mesh points at the center of each cell:
-        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX + 0.5*params->mesh.DX;
+        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX + (0.5*params->mesh.DX);
     }
 
-    // Create mesh nodes: Y domain
-    // ===========================
-    for(int ii=0; ii<params->mesh.NY_IN_SIM; ii++)
-    {
-        params->mesh.nodesY(ii) = (double)ii*params->mesh.DY;
-    }
-
-    // Create mesh nodes: Z domain
-    // ===========================
-    for(int ii=0; ii<params->mesh.NZ_IN_SIM; ii++)
-    {
-        params->mesh.nodesZ(ii) = (double)ii*params->mesh.DZ;
-    }
-
-    // Define total length of each mesh:
-    // =================================
-    params->mesh.LX = params->mesh.DX*params->mesh.NX_IN_SIM;
-    params->mesh.LY = params->mesh.DY*params->mesh.NY_IN_SIM;
-    params->mesh.LZ = params->mesh.DZ*params->mesh.NZ_IN_SIM;
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // Print to terminal:
     // ==================
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
+        cout << "+ Fraction of cell resolved: " << params->dp << endl;
         cout << "+ Number of mesh nodes along x-axis: " << params->mesh.NX_IN_SIM << endl;
-        cout << "+ Number of mesh nodes along y-axis: " << params->mesh.NY_IN_SIM << endl;
-        cout << "+ Number of mesh nodes along z-axis: " << params->mesh.NZ_IN_SIM << endl;
-
     	cout << "+ Size of simulation domain along the x-axis: " << params->mesh.LX << " m" << endl;
-    	cout << "+ Size of simulation domain along the y-axis: " << params->mesh.LY << " m" << endl;
-    	cout << "+ Size of simulation domain along the z-axis: " << params->mesh.LZ << " m" << endl;
     	cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
     }
 }
 
-void init_TYP::loadPlasmaProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS)
-{
-    // Define number of mesh points with Ghost cells included:
-    // ======================================================
-    int NX(params->mesh.NX_IN_SIM + 2);
-
-    // Define number of elements in external profiles:
-    // ===============================================
-    int nn = params->PATH.length();
-    std::string inputFilePath = params->PATH.substr(0,nn-13);
-
-    for(int ii=0;ii<IONS->size();ii++)
-    {
-
-        // Assemble  external filenames
-        std::string fileName  = params->PATH.substr(0,nn-13);
-        std::string fileName2 = fileName + "/inputFiles/" + IONS->at(ii).p_IC.Tper_fileName;
-        std::string fileName3 = fileName + "/inputFiles/" + IONS->at(ii).p_IC.Tpar_fileName;
-        std::string fileName4 = fileName + "/inputFiles/" + IONS->at(ii).p_IC.densityFraction_fileName;
-
-        // Load data from external file:
-        // ============================
-        IONS->at(ii).p_IC.Tper_profile.load(fileName2);
-        IONS->at(ii).p_IC.Tpar_profile.load(fileName3);
-        IONS->at(ii).p_IC.densityFraction_profile.load(fileName4);
-
-        // Rescale the plasma Profiles:
-        // ================================
-        IONS->at(ii).p_IC.Tper_profile *= IONS->at(ii).p_IC.Tper;
-        IONS->at(ii).p_IC.Tpar_profile *= IONS->at(ii).p_IC.Tpar;
-        IONS->at(ii).p_IC.densityFraction_profile *= params->f_IC.ne;
-
-        // Print to terminal:
-        // ==================
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
-            cout << "+ Succesfully read external files for particle IC           " << endl;
-            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
-        }
-
-    }
-
-}
-
+// Initialize fields with profile data:
+// =============================================================================
 void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -693,60 +761,19 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         cout << endl << "* * * * * * * * * * * * INITIALIZING ELECTROMAGNETIC FIELDS * * * * * * * * * * * * * * * * * *" << endl;
     }
 
-    // Initialize fields:
-    // ================================
-    initializeFieldsSizeAndValue(params,fields);
-
-    // Print to terminal:
-    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << "Initializing electromagnetic fields within simulation" << endl;
-        cout << "+ Magnetic field along x-axis: " << scientific << params->em_IC.BX << fixed << " T" << endl;
-        cout << "+ Magnetic field along y-axis: " << scientific << params->em_IC.BY << fixed << " T" << endl;
-        cout << "+ Magnetic field along z-axis: " << scientific << params->em_IC.BZ << fixed << " T" << endl;
-    }
-
-    // Print to terminal:
-    // ==================
-	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << "* * * * * * * * * * * * ELECTROMAGNETIC FIELDS INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
-    }
-}
-
-void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fields)
-{
-
     // Number of mesh points with ghost cells included:
-    // ================================================
     int NX(params->mesh.NX_IN_SIM + 2);
 
     // Allocate memory to fields:
-    // ==========================
     fields->zeros(NX);
 
     // Select how to initialize electromagnetic fields:
-    // ================================================
     if (params->em_IC.uniformBfield)
     {
         fields->BX_m.fill(params->em_IC.BX);
     }
     else
     {
-        // Read filename from input file:
-        // =============================
-        int nn = params->PATH.length();
-        std::string fileName = params->PATH.substr(0,nn-13);
-        fileName = fileName + "/inputFiles/" + params->em_IC.BX_fileName;
-
-        // Load data from external file:
-        // ============================
-        params->em_IC.Bx_profile.load(fileName);
-
-        // Scale the normalize profile to Tesla:
-        // ====================================
-        params->em_IC.Bx_profile *= params->em_IC.BX;
-
         //Interpolate at mesh points:
         // ==========================
         // Query points:
@@ -790,10 +817,30 @@ void init_TYP::initializeFieldsSizeAndValue(params_TYP * params, fields_TYP * fi
         interp1(xt,yt,xq,yq);
         fields->ddBX_m = yq;
     }
+
+    // Print to terminal:
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "Initializing electromagnetic fields within simulation" << endl;
+        cout << "+ Reference magnetic field along x-axis: " << scientific << params->em_IC.BX << fixed << " T" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * ELECTROMAGNETIC FIELDS INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
+    }
 }
 
-void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+// Allocate memory to ION arrays:
+// =============================================================================
+void init_TYP::allocateMemoryIons(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
+    MPI_Barrier(MPI_COMM_WORLD);
+
     // Define total number of ions species:
     // ====================================
     int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
@@ -802,95 +849,18 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
     // ==================
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-        cout << endl << "* * * * * * * * * * * * SETTING UP IONS INITIAL CONDITION * * * * * * * * * * * * * * * * * *" << endl;
+        cout << endl << "* * * * * * * * * * * * ALLOCATING MEMORY TO ION ARRAYS * * * * * * * * * * * * * * * * * *" << endl;
     }
 
     // Loop over all species:
     // ======================
-    for (int ii=0; ii<totalNumSpecies; ii++)
+    for (int ss=0; ss<totalNumSpecies; ss++)
     {
+        allocateMeshDefinedIonArrays(params, &IONS->at(ss));
+
         if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
-            // Create start object:
-            initDist_TYP initDist(params);
-
-            switch (IONS->at(ii).p_IC.IC_type)
-            {
-                case(1):
-                {
-                    if (params->quietStart)
-                    {
-                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ii));
-                    }
-                    else
-                    {
-                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ii));
-                    }
-                    break;
-                }
-                default:
-                {
-                }
-            } // switch
-
-            initializeParticlesArrays(params, fields, &IONS->at(ii));
-
-            initializeBulkVariablesArrays(params, &IONS->at(ii));
-        }
-        else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
-        {
-            initializeBulkVariablesArrays(params, &IONS->at(ii));
-        }
-
-        // Broadcast NSP (Number of super particles per process) and nSupPartPutput from ROOTS to COMM_WORLD:
-        MPI_Bcast(&IONS->at(ii).NSP, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
-        MPI_Bcast(&IONS->at(ii).nSupPartOutput, 1, MPI_DOUBLE, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
-
-        // NR total number of real particles:
-        double ds    = params->mesh.LX/params->em_IC.BX_NX;
-        arma::vec ni = ones<vec>(params->em_IC.BX_NX);
-        arma::vec A  = ones<vec>(params->em_IC.BX_NX);
-        if (params->quietStart)
-        {
-            ni *= params->f_IC.ne*IONS->at(ii).p_IC.densityFraction;
-            A  = A*params->geometry.A_0;
-        }
-        else
-        {
-            ni = IONS->at(ii).p_IC.densityFraction_profile;
-            A  = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
-        }
-        double NR = sum(ni%A)*ds;
-        //IONS->at(ii).NR  = NR;
-
-        // Total number of computational particles:
-        //double NC =
-
-        // NCP conversion factor from super-particle to real particle:
-        double NSP  = IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES;
-        IONS->at(ii).NCP = NR/NSP;
-
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "NR = " << NR << endl;
-            cout << "NCP = " << IONS->at(ii).NCP << endl;
-        }
-
-        // Print to the terminal:
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "iON SPECIES: " << (ii + 1) << endl;
-
-            if (params->quietStart)
-            {
-                cout << "+ Using quiet start: YES" << endl;
-            }
-            else
-            {
-                cout << "+ Using quiet start: NO" << endl;
-            }
-
-            cout << "+ Super-particles used in simulation: " << IONS->at(ii).NSP*params->mpi.MPIS_PARTICLES << endl;
+            allocateParticleDefinedIonArrays(params, &IONS->at(ss));
         }
 
     }//Iteration over ion species
@@ -899,16 +869,20 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
     // ==================
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-        cout << "* * * * * * * * * * * * * IONS INITIAL CONDITION SET UP * * * * * * * * * * * * * * * * * * *" << endl;
+        cout << "* * * * * * * * * * * * * MEMORY ALLOCATION COMPLETE P * * * * * * * * * * * * * * * * * * *" << endl;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP * fields, ionSpecies_TYP * IONS)
+// Allocate memory to Particle-defined ION arrays:
+// =============================================================================
+void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
 {
     // Set size and value to zero of arrays for ions' variables:
     // ========================================================
+    IONS->X_p.zeros(IONS->NSP);
+    IONS->V_p.zeros(IONS->NSP,2);
     IONS->mn.zeros(IONS->NSP);
 
     IONS->EX_p.zeros(IONS->NSP);
@@ -973,7 +947,9 @@ void init_TYP::initializeParticlesArrays(const params_TYP * params, fields_TYP *
     //PIC.assignCell(params, fields, IONS);
 }
 
-void init_TYP::initializeBulkVariablesArrays(const params_TYP * params, ionSpecies_TYP * IONS)
+// Allocate memory to mesh-defined ION arrays:
+// =============================================================================
+void init_TYP::allocateMeshDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
 {
     // Initialize mesh-defined quantities:
     // ==================================
@@ -995,4 +971,90 @@ void init_TYP::initializeBulkVariablesArrays(const params_TYP * params, ionSpeci
     // Derived quantities:
     IONS->Tpar_m.zeros(params->mesh.NX_IN_SIM + 2);
     IONS->Tper_m.zeros(params->mesh.NX_IN_SIM + 2);
+}
+
+// Initialize ION particle position and velocity vector:
+// =============================================================================
+void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Define total number of ions species:
+    // ====================================
+    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * SETTING UP IONS INITIAL CONDITION * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Loop over all species:
+    // ======================
+    for (int ss=0; ss<totalNumSpecies; ss++)
+    {
+        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        {
+            // Create start object:
+            initDist_TYP initDist(params);
+
+            switch (IONS->at(ss).p_IC.IC_type)
+            {
+                case(1):
+                {
+                    if (params->quietStart)
+                    {
+                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ss));
+                    }
+                    else
+                    {
+                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ss));
+                    }
+                    break;
+                }
+                default:
+                {
+                }
+            } // switch
+
+            //allocateParticleDefinedIonArrays(params, fields, &IONS->at(ss));
+
+            //allocateMeshDefinedIonArrays(params, &IONS->at(ss));
+        }
+
+        /*
+        else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
+        {
+            allocateMeshDefinedIonArrays(params, &IONS->at(ss));
+        }
+        */
+
+        // Print to the terminal:
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cout << "ION SPECIES: " << (ss + 1) << endl;
+
+            if (params->quietStart)
+            {
+                cout << "+ Using quiet start: YES" << endl;
+            }
+            else
+            {
+                cout << "+ Using quiet start: NO" << endl;
+            }
+
+            cout << "+ Super-particles used in simulation: " << IONS->at(ss).NSP*params->mpi.MPIS_PARTICLES << endl;
+        }
+
+    }//Iteration over ion species
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * * IONS INITIAL CONDITION SET UP * * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
 }

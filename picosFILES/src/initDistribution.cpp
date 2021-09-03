@@ -27,13 +27,12 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
 {
     // Uniformely distribute positions along domain:
     arma_rng::set_seed_random();
-    //IONS->X_p = randu<vec>(IONS->NSP)*params->mesh.LX;
     IONS->X_p = params->geometry.LX_min + randu<vec>(IONS->NSP)*(params->geometry.LX_max - params->geometry.LX_min);
 
     // Allocate memory to velocity:
     // V(0): V parallel
     // V(1): V perp where V(1) = sqrt( VY^2 + VZ^2);
-	IONS->V_p = zeros(IONS->NSP,2);
+	// IONS->V_p = zeros(IONS->NSP,2);
 
     // Maxwellian distribution for the velocity using Box-Muller:
     arma_rng::set_seed_random();
@@ -107,8 +106,8 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
 {
     // Initialize ion variables:
     // =========================
-    IONS->X_p = zeros(IONS->NSP);
-    IONS->V_p = zeros(IONS->NSP,2);
+    //IONS->X_p = zeros(IONS->NSP);
+    //IONS->V_p = zeros(IONS->NSP,2);
 
     // Apply MH algorith for sampling the 4-D target PDF:
     // ==================================================

@@ -12,7 +12,6 @@ void units_TYP::defineCharacteristicScalesAndBcast(params_TYP * params, vector<i
     broadcastCharacteristicScales(params, CS);
 }
 
-
 void units_TYP::defineCharacteristicScales(params_TYP * params, vector<ionSpecies_TYP> * IONS, CS_TYP * CS)
 {
 	// The definition of the characteristic quantities is based on:
@@ -42,8 +41,6 @@ void units_TYP::defineCharacteristicScales(params_TYP * params, vector<ionSpecie
 	CS->eField = ( CS->mass*CS->velocity )/( CS->charge*CS->time );
 	CS->bField = CS->eField/CS->velocity; // CS->mass/( CS->charge*CS->time );
 	CS->temperature = CS->mass*CS->velocity*CS->velocity/F_KB;
-	CS->pressure = CS->bField*CS->velocity*CS->velocity*CS->charge*CS->density*CS->time;
-	CS->resistivity = CS->bField/(CS->charge*CS->density);
 	CS->magneticMoment = CS->mass*CS->velocity*CS->velocity/CS->bField;
 	CS->vacuumPermittivity = (pow(CS->length*CS->charge,2)*CS->density)/(CS->mass*pow(CS->velocity,2));
 	CS->vacuumPermeability = CS->mass/( CS->density*pow(CS->charge*CS->velocity*CS->time,2) );
@@ -60,17 +57,13 @@ void units_TYP::defineCharacteristicScales(params_TYP * params, vector<ionSpecie
 		cout << "+ Length: " << scientific << CS->length << fixed << " m" << endl;
 		cout << "+ Electric field intensity: " << scientific << CS->eField << fixed << " V/m" << endl;
 		cout << "+ Magnetic field intensity: " << scientific << CS->bField << fixed << " T" << endl;
-		cout << "+ Pressure: " << scientific << CS->pressure << fixed << " Pa" << endl;
 		cout << "+ Temperature: " << scientific << CS->temperature << fixed << " K" << endl;
 		cout << "+ Magnetic moment: " << scientific << CS->magneticMoment << fixed << " A*m^2" << endl;
-		cout << "+ Resistivity: " << scientific << CS->magneticMoment << fixed << " Ohms*m" << endl;
 		cout << "+ Vacuum permittivity: " << scientific << CS->vacuumPermittivity << fixed << "" << endl;
 		cout << "+ Vacuum permeability: " << scientific << CS->vacuumPermeability << fixed << "" << endl;
 		cout << endl << "* * * * * * * * * * * * CHARACTERISTIC SCALES IN SIMULATION DEFINED  * * * * * * * * * * * * * * * * * *" << endl;
 	}
 }
-
-
 
 void units_TYP::broadcastCharacteristicScales(params_TYP * params, CS_TYP * CS)
 {
@@ -96,13 +89,9 @@ void units_TYP::broadcastCharacteristicScales(params_TYP * params, CS_TYP * CS)
 
     MPI_Bcast(&CS->bField, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    MPI_Bcast(&CS->pressure, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
     MPI_Bcast(&CS->temperature, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     MPI_Bcast(&CS->magneticMoment, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-    MPI_Bcast(&CS->resistivity, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     MPI_Bcast(&CS->vacuumPermeability, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -111,8 +100,6 @@ void units_TYP::broadcastCharacteristicScales(params_TYP * params, CS_TYP * CS)
     MPI_Bcast(&CS->energy, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 }
-
-
 
 void units_TYP::calculateFundamentalScalesAndBcast(params_TYP * params, vector<ionSpecies_TYP> * IONS, FS_TYP * FS)
 {
@@ -125,13 +112,13 @@ void units_TYP::calculateFundamentalScalesAndBcast(params_TYP * params, vector<i
 
     broadcastFundamentalScales(params, FS);
 
+    /*
     // It is assumed that species 0 is the majority species
     params->ionLarmorRadius = FS->ionGyroRadius[0];
     params->ionSkinDepth = FS->ionSkinDepth[0];
     params->ionGyroPeriod = FS->ionGyroPeriod[0];
+    */
 }
-
-
 
 void units_TYP::calculateFundamentalScales(params_TYP * params, vector<ionSpecies_TYP> * IONS, FS_TYP * FS)
 {
@@ -147,7 +134,8 @@ void units_TYP::calculateFundamentalScales(params_TYP * params, vector<ionSpecie
 	cout << " + Electron gyro-radius: " << scientific << FS->electronGyroRadius << fixed << " m" << endl;
 	cout << endl;
 
-	for(int ss=0; ss<params->numberOfParticleSpecies; ss++){
+	for(int ss=0; ss<params->numberOfParticleSpecies; ss++)
+    {
 		FS->ionGyroPeriod[ss] = 2.0*M_PI/IONS->at(ss).Wc;
 		FS->ionSkinDepth[ss]  = F_C/IONS->at(ss).Wp;
 		FS->ionGyroRadius[ss] = IONS->at(ss).LarmorRadius;
@@ -161,8 +149,6 @@ void units_TYP::calculateFundamentalScales(params_TYP * params, vector<ionSpecie
 
 	cout << "* * * * * * * * * * * * FUNDAMENTAL SCALES IN SIMULATION CALCULATED  * * * * * * * * * * * * * * * * * *" << endl;
 }
-
-
 
 void units_TYP::broadcastFundamentalScales(params_TYP * params, FS_TYP * FS)
 {
@@ -186,7 +172,6 @@ void units_TYP::broadcastFundamentalScales(params_TYP * params, FS_TYP * FS)
     // Ion gyro-radius
     MPI_Bcast(FS->ionGyroRadius, params->numberOfParticleSpecies, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
-
 
 void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
 {
@@ -216,11 +201,6 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
 
 void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
-	/*
-    CFL condition for Whistler waves has not been included as we are currently
-    not solving the magnetic field via Ampere's law.
-    */
-
     // Print to terminal:
     // ==================
 	if (params->mpi.IS_PARTICLES_ROOT)
@@ -243,12 +223,21 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
     // =======================
 	if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
+            cout << "check 5" << endl;
+
+            cout << "V_p = " << IONS->at(0).V_p(1,1) << endl;
+
+            cout << "Failed" << endl;
+
+
             for (int ss=0; ss<params->numberOfParticleSpecies; ss++)
             {
                     vec V = sqrt( pow(IONS->at(ss).V_p.col(0), 2.0) + pow(IONS->at(ss).V_p.col(1), 2.0) );
 
                     ionsMaxVel = (ionsMaxVel < V.max()) ? V.max() : ionsMaxVel;
             }
+
+            cout << "check 6" << endl;
 
             // Minimum time step required by CFL condition for ions:
             DT_CFL_I = params->mesh.DX/ionsMaxVel;
@@ -278,7 +267,7 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                         CFL_I = true;
                 }
                 */
-                
+
 				//Assign final DT for the simulation
 				//==================================
 				params->DT = DT;
@@ -342,15 +331,6 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	// ---------------
 	params->DT /= CS->time;
 
-    /*
-    We need to understand how ne is normalized and how A_0 needs
-    to be normalized too. Ideally we would like ne to be in m^-3
-    and A_0 in m^2
-
-    Consider that if we normalize A_0, we will need to add its contribution once
-    Save the output data, in other words, multiply length*area
-    */
-
 	// Characteristic values:
 	// ----------------------
 	params->CV.ne /= CS->density;
@@ -393,14 +373,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	// Mesh quantities:
 	// ----------------
 	params->mesh.nodesX = params->mesh.nodesX/CS->length;
-	params->mesh.nodesY = params->mesh.nodesY/CS->length;
-	params->mesh.nodesZ = params->mesh.nodesZ/CS->length;
 	params->mesh.DX /= CS->length;
-	params->mesh.DY /= CS->length;
-	params->mesh.DZ /= CS->length;
 	params->mesh.LX /= CS->length;
-	params->mesh.LY /= CS->length;
-	params->mesh.LZ /= CS->length;
 
     // RF parameters:
     // -------------
@@ -445,8 +419,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 
 		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     	{
-                    IONS->at(ii).X_p = IONS->at(ii).X_p/CS->length;
-                    IONS->at(ii).V_p = IONS->at(ii).V_p/CS->velocity;
+            IONS->at(ii).X_p = IONS->at(ii).X_p/CS->length;
+            IONS->at(ii).V_p = IONS->at(ii).V_p/CS->velocity;
 		}
 	}
 

@@ -146,7 +146,7 @@ class ionSpecies_TYP //: public vfield_vec_TYP
 public:
 
 	int SPECIES;
-	//double NR;          // Total number of real particles represented in simulation
+	double NR;          // Initial number of real particles represented in simulation
 	double NSP; 				// Initial number of superparticles for the given ion species.
 	//double NC;          // Total number of computational particles used over entire simulation
 	double NCP; 				// Number of charged particles per superparticle.
@@ -161,6 +161,8 @@ public:
 
 	double go;					// Initial relativistic gamma
 	double LarmorRadius;		// Larmor radius.
+	double GyroPeriod;
+	double SkinDepth;
 	double VTper;				// Thermal velocity.
 	double VTpar;				// Thermal velocity.
 	double Wc;					// Average cyclotron frequency.
@@ -289,6 +291,9 @@ struct geometry_TYP
 	double r1;
 	double r2;
 	double A_0;
+	double LX;
+	double DX;
+	int NX;
 	double LX_min;
 	double LX_max;
 
@@ -297,6 +302,9 @@ struct geometry_TYP
 		r1  = 0;
 		r2  = 0;
 		A_0 = 0;
+		LX  = 0;
+		DX  = 0;
+		NX  = 0;
 		LX_min = 0;
 		LX_max = 0;
 	}
@@ -309,27 +317,13 @@ struct mesh_params_TYP
 	//vfield_vec_TYP nodes;
 
 	arma::vec nodesX;
-	arma::vec nodesY;
-	arma::vec nodesZ;
 
 	int NX_PER_MPI; // Number of mesh nodes along x-axis in subdomain (no ghost nodes considered)
-	int NY_PER_MPI; // Number of mesh nodes along y-axis in subdomain (no ghost nodes considered)
-	int NZ_PER_MPI; // Number of mesh nodes along z-axis in subdomain (no ghost nodes considered)
-
 	int NX_IN_SIM; // Number of mesh nodes along x-axis in entire simulation domain (no ghost nodes considered)
-	int NY_IN_SIM; // Number of mesh nodes along x-axis in entire simulation domain (no ghost nodes considered)
-	int NZ_IN_SIM; // Number of mesh nodes along x-axis in entire simulation domain (no ghost nodes considered)
-
 	int NUM_CELLS_IN_SIM; // Number of mesh nodes in the entire simulation domain (no ghost nodes considered)
 	int NUM_CELLS_PER_MPI; // Number of mesh nodes in each MPI process (no ghost nodes considered)
-
 	double DX;
-	double DY;
-	double DZ;
-
 	double LX;		// Size of simulation domain along x-axis
-	double LY;		// Size of simulation domain along y-axis
-	double LZ;		// Size of simulation domain along z-axis
 
 	// Cartesian unit vectors:
 	arma::vec e_x;
@@ -436,7 +430,6 @@ struct CV_TYP
 struct SW_TYP
 {
 	int EfieldSolve;
-	int HallTermSolve;
 	int BfieldSolve;
 	int Collisions;
 	int RFheating;
@@ -446,7 +439,6 @@ struct SW_TYP
 	SW_TYP()
 	{
 		EfieldSolve   = 0;
-		HallTermSolve = 0;
 		BfieldSolve   = 0;
 		Collisions    = 0;
 		RFheating     = 0;
@@ -469,8 +461,6 @@ struct mpi_params_TYP
 	int MPIS_PARTICLES;
 
 	int MPI_DOMAINS_ALONG_X_AXIS;
-	int MPI_DOMAINS_ALONG_Y_AXIS;
-	int MPI_DOMAINS_ALONG_Z_AXIS;
 
 	MPI_Comm MPI_TOPO; // Cartesian topology
 
@@ -498,8 +488,8 @@ struct mpi_params_TYP
 	int MPI_DOMAIN_NUMBER_CART;
 	int LEFT_MPI_DOMAIN_NUMBER_CART;
 	int RIGHT_MPI_DOMAIN_NUMBER_CART;
-	int UP_MPI_DOMAIN_NUMBER_CART;
-	int DOWN_MPI_DOMAIN_NUMBER_CART;
+	//int UP_MPI_DOMAIN_NUMBER_CART;
+	//int DOWN_MPI_DOMAIN_NUMBER_CART;
 };
 
 // Define structure to hold characteristic scales:
@@ -517,10 +507,8 @@ struct CS_TYP
 	double density;
 	double eField;
 	double bField;
-	double pressure;
 	double temperature;
 	double magneticMoment;
-	double resistivity;
 	double vacuumPermeability;
 	double vacuumPermittivity;
 
@@ -538,7 +526,6 @@ struct CS_TYP
 		density = 0.0;
 		eField = 0.0;
 		bField = 0.0;
-		pressure = 0.0;
 		magneticMoment = 0.0;
 		vacuumPermeability = 0.0;
 		vacuumPermittivity = 0.0;
@@ -669,7 +656,7 @@ struct params_TYP
 	double ionSkinDepth;
 	double ionGyroPeriod;
 
-	double DrL;
+	//double DrL;
 	double dp;
 
 	int checkStability;

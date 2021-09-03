@@ -85,8 +85,6 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 
         ndims = 1;
         params->mpi.MPI_DOMAINS_ALONG_X_AXIS = params->mpi.MPIS_FIELDS;
-        params->mpi.MPI_DOMAINS_ALONG_Y_AXIS = 1;
-        params->mpi.MPI_DOMAINS_ALONG_Z_AXIS = 1;
 
         MPI_Cart_create(params->mpi.COMM, ndims, dims_1D, periods_1D, reorder, &params->mpi.MPI_TOPO);
 

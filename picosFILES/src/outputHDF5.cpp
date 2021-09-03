@@ -324,12 +324,6 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         // Create a new file using the default property lists.
         H5File * outputFile = new H5File( FILE_NAME, H5F_ACC_TRUNC );
 
-        /*
-        name = "dimensionality";
-        saveToHDF5(outputFile, name, &params->dimensionality);
-        name.clear();
-        */
-
         name = "smoothingParameter";
         cpp_type_value = params->smoothingParameter;
         saveToHDF5(outputFile, name, &cpp_type_value);
@@ -421,23 +415,8 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         //Geometry of the mesh
         Group * group_geo = new Group( outputFile->createGroup( "/geometry" ) );
 
-        name = "SPLIT_DIRECTION";
-        int_value = params->mesh.SPLIT_DIRECTION;
-        saveToHDF5(group_geo, name, &int_value);
-        name.clear();
-
         name = "DX";
         cpp_type_value = params->mesh.DX;
-        saveToHDF5(group_geo, name, &cpp_type_value);
-        name.clear();
-
-        name = "DY";
-        cpp_type_value = params->mesh.DY;
-        saveToHDF5(group_geo, name, &cpp_type_value);
-        name.clear();
-
-        name = "DZ";
-        cpp_type_value = params->mesh.DZ;
         saveToHDF5(group_geo, name, &cpp_type_value);
         name.clear();
 
@@ -446,28 +425,8 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(group_geo, name, &cpp_type_value);
         name.clear();
 
-        name = "LY";
-        cpp_type_value = params->mesh.LY;
-        saveToHDF5(group_geo, name, &cpp_type_value);
-        name.clear();
-
-        name = "LZ";
-        cpp_type_value = params->mesh.LZ;
-        saveToHDF5(group_geo, name, &cpp_type_value);
-        name.clear();
-
         name = "NX";
         int_value = params->mesh.NX_PER_MPI;
-        saveToHDF5(group_geo, name, &int_value);
-        name.clear();
-
-        name = "NY";
-        int_value = params->mesh.NY_PER_MPI;
-        saveToHDF5(group_geo, name, &int_value);
-        name.clear();
-
-        name = "NZ";
-        int_value = params->mesh.NZ_PER_MPI;
         saveToHDF5(group_geo, name, &int_value);
         name.clear();
 
@@ -476,45 +435,13 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(group_geo, name, &int_value);
         name.clear();
 
-        name = "NY_IN_SIM";
-        int_value = params->mesh.NY_IN_SIM;
-        saveToHDF5(group_geo, name, &int_value);
-        name.clear();
-
-        name = "NZ_IN_SIM";
-        int_value = params->mesh.NZ_IN_SIM;
-        saveToHDF5(group_geo, name, &int_value);
-        name.clear();
-
         name = "X_MPI_CART_COORD";
         int_value = params->mpi.MPI_CART_COORDS_1D[0];
         saveToHDF5(group_geo, name, &int_value);
         name.clear();
 
-        /*
-        if (params->dimensionality == 1)
-        {
-          name = "X_MPI_CART_COORD";
-          int_value = params->mpi.MPI_CART_COORDS_1D[0];
-          saveToHDF5(group_geo, name, &int_value);
-          name.clear();
-        }
-        else
-        {
-          name = "X_MPI_CART_COORD";
-          int_value = params->mpi.MPI_CART_COORDS_2D[0];
-          saveToHDF5(group_geo, name, &int_value);
-          name.clear();
-
-          name = "Y_MPI_CART_COORD";
-          int_value = params->mpi.MPI_CART_COORDS_2D[1];
-          saveToHDF5(group_geo, name, &int_value);
-          name.clear();
-        }
-        */
-
         //Saving the x-axis coordinates
-        name = "xAxis";
+        name = "x_m";
 
         #ifdef HDF5_DOUBLE
         vec_values = params->mesh.nodesX;
@@ -525,23 +452,6 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         #endif
 
         name.clear();
-
-        /*
-        if (params->dimensionality == 2)
-        {
-          name = "yAxis";
-
-          #ifdef HDF5_DOUBLE
-          vec_values = params->mesh.nodesY;
-          saveToHDF5(group_geo, name, &vec_values);
-          #elif defined HDF5_FLOAT
-          fvec_values = conv_to<fvec>::from(params->mesh.nodesY);
-          saveToHDF5(group_geo, name, &fvec_values);
-          #endif
-
-          name.clear();
-        }
-        */
 
         delete group_geo;
         //Geometry of the mesh
