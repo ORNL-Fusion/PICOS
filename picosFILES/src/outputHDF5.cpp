@@ -1,51 +1,5 @@
 #include "outputHDF5.h"
 
-/*
-void HDF_TYP::MPI_Allgathervec(const params_TYP * params, arma::vec * field)
-{
-	unsigned int iIndex = params->mpi.iIndex;
-	unsigned int fIndex = params->mpi.fIndex;
-
-	arma::vec recvbuf(params->mesh.NX_IN_SIM);
-	arma::vec sendbuf(params->mesh.NX_PER_MPI);
-
-	//Allgather for x-component
-	sendbuf = field->subvec(iIndex, fIndex);
-	MPI_Allgather(sendbuf.memptr(), params->mesh.NX_PER_MPI, MPI_DOUBLE, recvbuf.memptr(), params->mesh.NX_PER_MPI, MPI_DOUBLE, params->mpi.MPI_TOPO);
-	field->subvec(1, params->mesh.NX_IN_SIM) = recvbuf;
-}
-
-void HDF_TYP::MPI_Allgathermat(const params_TYP * params, arma::mat * field)
-{
-	unsigned int irow = params->mpi.irow;
-	unsigned int frow = params->mpi.frow;
-
-	unsigned int icol = params->mpi.icol;
-	unsigned int fcol = params->mpi.fcol;
-
-	arma::vec recvbuf = zeros(params->mesh.NX_IN_SIM*params->mesh.NY_IN_SIM);
-	arma::vec sendbuf = zeros(params->mesh.NX_PER_MPI*params->mesh.NY_PER_MPI);
-
-	//Allgather for x-component
-	sendbuf = vectorise(field->submat(irow,icol,frow,fcol));
-	MPI_Allgather(sendbuf.memptr(), params->mesh.NUM_CELLS_PER_MPI, MPI_DOUBLE, recvbuf.memptr(), params->mesh.NUM_CELLS_PER_MPI, MPI_DOUBLE, params->mpi.MPI_TOPO);
-
-	for (int mpis=0; mpis<params->mpi.NUMBER_MPI_DOMAINS; mpis++)
-  {
-		unsigned int ie = params->mesh.NX_PER_MPI*params->mesh.NY_PER_MPI*mpis;
-		unsigned int fe = params->mesh.NX_PER_MPI*params->mesh.NY_PER_MPI*(mpis+1) - 1;
-
-		unsigned int ir = *(params->mpi.MPI_CART_COORDS.at(mpis))*params->mesh.NX_PER_MPI + 1;
-		unsigned int fr = ( *(params->mpi.MPI_CART_COORDS.at(mpis)) + 1)*params->mesh.NX_PER_MPI;
-
-		unsigned int ic = *(params->mpi.MPI_CART_COORDS.at(mpis)+1)*params->mesh.NY_PER_MPI + 1;
-		unsigned int fc = ( *(params->mpi.MPI_CART_COORDS.at(mpis)+1) + 1)*params->mesh.NY_PER_MPI;
-
-		field->submat(ir,ic,fr,fc) = reshape(recvbuf.subvec(ie,fe), params->mesh.NX_PER_MPI, params->mesh.NY_PER_MPI);
-	}
-}
-*/
-
 // Function to save a single integer value
 void HDF_TYP::saveToHDF5(H5File * file, string name, int * value)
 {
@@ -327,10 +281,6 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         name = "smoothingParameter";
         cpp_type_value = params->smoothingParameter;
         saveToHDF5(outputFile, name, &cpp_type_value);
-        name.clear();
-
-        name = "numberOfRKIterations";
-        saveToHDF5(outputFile, name, &params->numberOfRKIterations);
         name.clear();
 
         name = "filtersPerIterationFields";

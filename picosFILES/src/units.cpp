@@ -39,7 +39,7 @@ void units_TYP::defineCharacteristicScales(params_TYP * params, vector<ionSpecie
 	CS->length = CS->velocity*CS->time;
 	CS->volume = CS->length*CS->length*CS->length;
 	CS->eField = ( CS->mass*CS->velocity )/( CS->charge*CS->time );
-	CS->bField = CS->eField/CS->velocity; // CS->mass/( CS->charge*CS->time );
+	CS->bField = CS->eField/CS->velocity;
 	CS->temperature = CS->mass*CS->velocity*CS->velocity/F_KB;
 	CS->magneticMoment = CS->mass*CS->velocity*CS->velocity/CS->bField;
 	CS->vacuumPermittivity = (pow(CS->length*CS->charge,2)*CS->density)/(CS->mass*pow(CS->velocity,2));
@@ -201,6 +201,8 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
 
 void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * IONS)
 {
+    MPI_Barrier(MPI_COMM_WORLD);
+
     // Print to terminal:
     // ==================
 	if (params->mpi.IS_PARTICLES_ROOT)
@@ -223,21 +225,12 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
     // =======================
 	if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
-            cout << "check 5" << endl;
-
-            cout << "V_p = " << IONS->at(0).V_p(1,1) << endl;
-
-            cout << "Failed" << endl;
-
-
             for (int ss=0; ss<params->numberOfParticleSpecies; ss++)
             {
                     vec V = sqrt( pow(IONS->at(ss).V_p.col(0), 2.0) + pow(IONS->at(ss).V_p.col(1), 2.0) );
 
                     ionsMaxVel = (ionsMaxVel < V.max()) ? V.max() : ionsMaxVel;
             }
-
-            cout << "check 6" << endl;
 
             // Minimum time step required by CFL condition for ions:
             DT_CFL_I = params->mesh.DX/ionsMaxVel;
@@ -317,6 +310,8 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 
 void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> * IONS, fields_TYP * fields, const CS_TYP * CS)
 {
+    MPI_Barrier(MPI_COMM_WORLD);
+
 	// Normalizing physical constants:
     // =========================================================================
 	F_E_DS /= CS->charge; 					// Dimensionless electron charge
@@ -363,6 +358,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     params->geometry.A_0 /= pow(CS->length,2);
     params->geometry.LX_min /= CS->length;
     params->geometry.LX_max /= CS->length;
+    params->geometry.LX /= CS->length;
+    params->geometry.DX /= CS->length;
 
 	// Fundamental scales:
 	// -------------------

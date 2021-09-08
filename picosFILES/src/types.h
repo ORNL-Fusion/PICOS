@@ -314,30 +314,28 @@ struct geometry_TYP
 // =============================================================================
 struct mesh_params_TYP
 {
-	//vfield_vec_TYP nodes;
-
 	arma::vec nodesX;
 
 	int NX_PER_MPI; // Number of mesh nodes along x-axis in subdomain (no ghost nodes considered)
 	int NX_IN_SIM; // Number of mesh nodes along x-axis in entire simulation domain (no ghost nodes considered)
-	int NUM_CELLS_IN_SIM; // Number of mesh nodes in the entire simulation domain (no ghost nodes considered)
-	int NUM_CELLS_PER_MPI; // Number of mesh nodes in each MPI process (no ghost nodes considered)
 	double DX;
 	double LX;		// Size of simulation domain along x-axis
 
+	/*
 	// Cartesian unit vectors:
-	arma::vec e_x;
-	arma::vec e_y;
-	arma::vec e_z;
+	//arma::vec e_x;
+	//arma::vec e_y;
+	//arma::vec e_z;
 
-	int SPLIT_DIRECTION;
+	//int SPLIT_DIRECTION;
 
-	mesh_params_TYP()
-	{
-		e_x = {1.0, 0.0, 0.0};
-		e_y = {0.0, 1.0, 0.0};
-		e_z = {0.0, 0.0, 1.0};
-	}
+	//mesh_params_TYP()
+	//{
+		//e_x = {1.0, 0.0, 0.0};
+		//e_y = {0.0, 1.0, 0.0};
+		//e_z = {0.0, 0.0, 1.0};
+	//}
+	*/
 
 };
 
@@ -369,6 +367,7 @@ struct f_IC_TYP
 		Te      = 0;
 		Te_NX   = 0;
 	}
+
 };
 
 //  Define structure to store EM field initial condition parameters:
@@ -604,7 +603,6 @@ struct params_TYP
 	// Flag for using a quiet start
 	bool quietStart;
 
-	int numberOfRKIterations;
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation
 	double currentTime = 0;

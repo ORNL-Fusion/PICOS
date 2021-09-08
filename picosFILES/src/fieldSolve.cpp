@@ -185,5 +185,5 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 
 	// Send to PARTICLE ranks:
 	// ======================
-	//MPI_SendVec(params,&fields->EX_m);
+	MPI_SendVec(params,&fields->EX_m);
 }

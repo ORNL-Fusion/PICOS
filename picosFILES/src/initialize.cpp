@@ -114,11 +114,6 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->errorCodes[-108] = "Non-finite value in meshNode";
     params->errorCodes[-109] = "Number of nodes in either direction of simulation domain need to be a multiple of 2";
     params->errorCodes[-110] = "Non finite values in Ex";
-    //params->errorCodes[-111] = "Non finite values in Ey";
-    //params->errorCodes[-112] = "Non finite values in Ez";
-    //params->errorCodes[-113] = "Non finite values in Bx";
-    //params->errorCodes[-114] = "Non finite values in By";
-    //params->errorCodes[-115] = "Non finite values in Bz";
 
     // Copyright and Licence Info:
     // ===========================
@@ -213,9 +208,6 @@ void init_TYP::readInputFile(params_TYP * params)
 
     // Populate "params" with data from input file:
     // ============================================
-
-    // Assign input data from map to "params":
-    // -------------------------------------------------------------------------
     params->mpi.MPIS_FIELDS  = stoi( parametersStringMap["mpisForFields"] );
 
     if(stoi( parametersStringMap["quietStart"] ) == 1)
@@ -227,7 +219,6 @@ void init_TYP::readInputFile(params_TYP * params)
         params->quietStart = false;
     }
 
-    params->numberOfRKIterations    = stoi( parametersStringMap["numberOfRKIterations"] );
     params->numberOfParticleSpecies = stoi( parametersStringMap["numberOfParticleSpecies"] );
     params->numberOfTracerSpecies   = stoi( parametersStringMap["numberOfTracerSpecies"] );
     params->advanceParticleMethod   = stoi( parametersStringMap["advanceParticleMethod"] );
@@ -615,9 +606,10 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
         IONS->at(ss).Wp    = sqrt( IONS->at(ss).p_IC.densityFraction*params->CV.ne*IONS->at(ss).Q*IONS->at(ss).Q/(F_EPSILON*IONS->at(ss).M) );//Check the definition of the plasma freq for each species!
         IONS->at(ss).VTper = sqrt(2.0*F_KB*params->CV.Tper/IONS->at(ss).M);
         IONS->at(ss).VTpar = sqrt(2.0*F_KB*params->CV.Tpar/IONS->at(ss).M);
-        IONS->at(ss).LarmorRadius  = IONS->at(ss).VTper/IONS->at(ss).Wc;
-        IONS->at(ss).GyroPeriod = 2.0*M_PI/IONS->at(ss).Wc;
-        IONS->at(ss).SkinDepth  = F_C/IONS->at(ss).Wp;
+
+        IONS->at(ss).LarmorRadius = IONS->at(ss).VTper/IONS->at(ss).Wc;
+        IONS->at(ss).GyroPeriod   = 2.0*M_PI/IONS->at(ss).Wc;
+        IONS->at(ss).SkinDepth    = F_C/IONS->at(ss).Wp;
     }
 
     // Characteristic length and time scales of simulation:
@@ -718,10 +710,12 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     params->mesh.DX         = params->geometry.DX;
     params->mesh.NX_IN_SIM  = params->geometry.NX;
     params->mesh.NX_PER_MPI = (int)( (double)params->geometry.NX/(double)params->mpi.MPIS_FIELDS );
-    params->mesh.SPLIT_DIRECTION = 0;
 
-    params->mesh.NUM_CELLS_PER_MPI = params->mesh.NX_PER_MPI;
-    params->mesh.NUM_CELLS_IN_SIM = params->mesh.NX_IN_SIM;
+    /*
+    //params->mesh.SPLIT_DIRECTION = 0;
+    //params->mesh.NUM_CELLS_PER_MPI = params->mesh.NX_PER_MPI;
+    //params->mesh.NUM_CELLS_IN_SIM  = params->mesh.NX_IN_SIM;
+    */
 
     // Set size of mesh and allocate memory:
     // =====================================
@@ -746,6 +740,216 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     	cout << "+ Size of simulation domain along the x-axis: " << params->mesh.LX << " m" << endl;
     	cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
     }
+}
+
+// Allocate memory to ION arrays:
+// =============================================================================
+void init_TYP::allocateMemoryIons(params_TYP * params, vector<ionSpecies_TYP> * IONS)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Define total number of ions species:
+    // ====================================
+    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * ALLOCATING MEMORY TO ION ARRAYS * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Loop over all species:
+    // ======================
+    for (int ss=0; ss<totalNumSpecies; ss++)
+    {
+        allocateMeshDefinedIonArrays(params, &IONS->at(ss));
+
+        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        {
+            allocateParticleDefinedIonArrays(params, &IONS->at(ss));
+        }
+
+    }//Iteration over ion species
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * * MEMORY ALLOCATION COMPLETE P * * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+// Allocate memory to mesh-defined ION arrays:
+// =============================================================================
+void init_TYP::allocateMeshDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
+{
+    // Initialize mesh-defined quantities:
+    // ==================================
+    // Ion density:
+    IONS->n_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m_.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m__.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->n_m___.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Ion flux density:
+    IONS->nv_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->nv_m_.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->nv_m__.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Pressure tensors:
+    IONS->P11_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->P22_m.zeros(params->mesh.NX_IN_SIM + 2);
+
+    // Derived quantities:
+    IONS->Tpar_m.zeros(params->mesh.NX_IN_SIM + 2);
+    IONS->Tper_m.zeros(params->mesh.NX_IN_SIM + 2);
+}
+
+// Allocate memory to Particle-defined ION arrays:
+// =============================================================================
+void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
+{
+    // Initialize particle-defined quantities:
+    // ==================================
+    IONS->X_p.zeros(IONS->NSP);
+    IONS->V_p.zeros(IONS->NSP,2);
+    IONS->mn.zeros(IONS->NSP);
+
+    IONS->EX_p.zeros(IONS->NSP);
+    IONS->BX_p.zeros(IONS->NSP);
+    IONS->dBX_p.zeros(IONS->NSP);
+    IONS->ddBX_p.zeros(IONS->NSP);
+
+    IONS->wxc.zeros(IONS->NSP);
+    IONS->wxl.zeros(IONS->NSP);
+    IONS->wxr.zeros(IONS->NSP);
+
+    IONS->wxc_.zeros(IONS->NSP);
+    IONS->wxl_.zeros(IONS->NSP);
+    IONS->wxr_.zeros(IONS->NSP);
+
+    IONS->n_p.zeros(IONS->NSP);
+    IONS->nv_p.zeros(IONS->NSP);
+    IONS->Tpar_p.zeros(IONS->NSP);
+    IONS->Tper_p.zeros(IONS->NSP);
+
+    // Initialize particle defined flags:
+    // ==================================
+    IONS->f1.zeros(IONS->NSP);
+    IONS->f2.zeros(IONS->NSP);
+    IONS->f3.zeros(IONS->NSP);
+    //IONS->f4.zeros(IONS->NSP);
+    IONS->f5.zeros(IONS->NSP);
+
+    // Initialize particle kinetic energy at boundaries:
+    // ================================================
+    IONS->dE1.zeros(IONS->NSP);
+    IONS->dE2.zeros(IONS->NSP);
+    IONS->dE3.zeros(IONS->NSP);
+    //IONS->dE4.zeros(IONS->NSP);
+    IONS->dE5.zeros(IONS->NSP);
+
+    // Initialize resonance number:
+    // ============================
+    IONS->resNum.zeros(IONS->NSP);
+    IONS->resNum_.zeros(IONS->NSP);
+
+    // Rf terms:
+    // ========
+    IONS->udErf.zeros(IONS->NSP);
+    IONS->doppler.zeros(IONS->NSP);
+    IONS->udE3.zeros(IONS->NSP);
+
+    // Initialize particle weight:
+    // ===========================
+    IONS->a_p.ones(IONS->NSP);
+
+    // Initialize magnetic moment:
+    // ===========================
+    IONS->mu_p.zeros(IONS->NSP);
+
+    // Assign cell:
+    // ===========
+    // Populates wxc,wxl and wxr only
+    //PIC_TYP PIC;
+    //PIC.assignCell(params, fields, IONS);
+}
+
+// Initialize ION particle position and velocity vector:
+// =============================================================================
+void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Define total number of ions species:
+    // ====================================
+    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
+
+    // Print to terminal:
+    // ==================
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * SETTING UP IONS INITIAL CONDITION * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Loop over all species:
+    // ======================
+    for (int ss=0; ss<totalNumSpecies; ss++)
+    {
+        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        {
+            initDist_TYP initDist(params);
+
+            switch (IONS->at(ss).p_IC.IC_type)
+            {
+                case(1):
+                {
+                    if (params->quietStart)
+                    {
+                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ss));
+                    }
+                    else
+                    {
+                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ss));
+                    }
+                    break;
+                }
+                default:
+                {
+                }
+            } // switch
+        }
+
+        // Print to the terminal:
+        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cout << "ION SPECIES: " << (ss + 1) << endl;
+
+            if (params->quietStart)
+            {
+                cout << "+ Using quiet start: YES" << endl;
+            }
+            else
+            {
+                cout << "+ Using quiet start: NO" << endl;
+            }
+
+            cout << "+ Super-particles used in simulation: " << IONS->at(ss).NSP*params->mpi.MPIS_PARTICLES << endl;
+        }
+
+    }//Iteration over ion species
+
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * * IONS INITIAL CONDITION SET UP * * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 // Initialize fields with profile data:
@@ -833,228 +1037,4 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
     {
         cout << "* * * * * * * * * * * * ELECTROMAGNETIC FIELDS INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
     }
-}
-
-// Allocate memory to ION arrays:
-// =============================================================================
-void init_TYP::allocateMemoryIons(params_TYP * params, vector<ionSpecies_TYP> * IONS)
-{
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // Define total number of ions species:
-    // ====================================
-    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
-
-    // Print to terminal:
-    // ==================
-    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << endl << "* * * * * * * * * * * * ALLOCATING MEMORY TO ION ARRAYS * * * * * * * * * * * * * * * * * *" << endl;
-    }
-
-    // Loop over all species:
-    // ======================
-    for (int ss=0; ss<totalNumSpecies; ss++)
-    {
-        allocateMeshDefinedIonArrays(params, &IONS->at(ss));
-
-        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-        {
-            allocateParticleDefinedIonArrays(params, &IONS->at(ss));
-        }
-
-    }//Iteration over ion species
-
-    // Print to terminal:
-    // ==================
-    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << "* * * * * * * * * * * * * MEMORY ALLOCATION COMPLETE P * * * * * * * * * * * * * * * * * * *" << endl;
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-}
-
-// Allocate memory to Particle-defined ION arrays:
-// =============================================================================
-void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
-{
-    // Set size and value to zero of arrays for ions' variables:
-    // ========================================================
-    IONS->X_p.zeros(IONS->NSP);
-    IONS->V_p.zeros(IONS->NSP,2);
-    IONS->mn.zeros(IONS->NSP);
-
-    IONS->EX_p.zeros(IONS->NSP);
-    IONS->BX_p.zeros(IONS->NSP);
-    IONS->dBX_p.zeros(IONS->NSP);
-    IONS->ddBX_p.zeros(IONS->NSP);
-
-    IONS->wxc.zeros(IONS->NSP);
-    IONS->wxl.zeros(IONS->NSP);
-    IONS->wxr.zeros(IONS->NSP);
-
-    IONS->wxc_.zeros(IONS->NSP);
-    IONS->wxl_.zeros(IONS->NSP);
-    IONS->wxr_.zeros(IONS->NSP);
-
-    // Initialize particle-defined quantities:
-    // ==================================
-    IONS->n_p.zeros(IONS->NSP);
-    IONS->nv_p.zeros(IONS->NSP);
-    IONS->Tpar_p.zeros(IONS->NSP);
-    IONS->Tper_p.zeros(IONS->NSP);
-
-    // Initialize particle defined flags:
-    // ==================================
-    IONS->f1.zeros(IONS->NSP);
-    IONS->f2.zeros(IONS->NSP);
-    IONS->f3.zeros(IONS->NSP);
-    //IONS->f4.zeros(IONS->NSP);
-    IONS->f5.zeros(IONS->NSP);
-
-    // Initialize particle kinetic energy at boundaries:
-    // ================================================
-    IONS->dE1.zeros(IONS->NSP);
-    IONS->dE2.zeros(IONS->NSP);
-    IONS->dE3.zeros(IONS->NSP);
-    //IONS->dE4.zeros(IONS->NSP);
-    IONS->dE5.zeros(IONS->NSP);
-
-    // Initialize resonance number:
-    // ============================
-    IONS->resNum.zeros(IONS->NSP);
-    IONS->resNum_.zeros(IONS->NSP);
-
-    // Rf terms:
-    // ========
-    IONS->udErf.zeros(IONS->NSP);
-    IONS->doppler.zeros(IONS->NSP);
-    IONS->udE3.zeros(IONS->NSP);
-
-    // Initialize particle weight:
-    // ===========================
-    IONS->a_p.ones(IONS->NSP);
-
-    // Initialize magnetic moment:
-    // ===========================
-    IONS->mu_p.zeros(IONS->NSP);
-
-    // Assign cell:
-    // ===========
-    // Populates wxc,wxl and wxr only
-    //PIC_TYP PIC;
-    //PIC.assignCell(params, fields, IONS);
-}
-
-// Allocate memory to mesh-defined ION arrays:
-// =============================================================================
-void init_TYP::allocateMeshDefinedIonArrays(const params_TYP * params, ionSpecies_TYP * IONS)
-{
-    // Initialize mesh-defined quantities:
-    // ==================================
-    // Ion density:
-    IONS->n_m.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->n_m_.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->n_m__.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->n_m___.zeros(params->mesh.NX_IN_SIM + 2);
-
-    // Ion flux density:
-    IONS->nv_m.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->nv_m_.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->nv_m__.zeros(params->mesh.NX_IN_SIM + 2);
-
-    // Pressure tensors:
-    IONS->P11_m.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->P22_m.zeros(params->mesh.NX_IN_SIM + 2);
-
-    // Derived quantities:
-    IONS->Tpar_m.zeros(params->mesh.NX_IN_SIM + 2);
-    IONS->Tper_m.zeros(params->mesh.NX_IN_SIM + 2);
-}
-
-// Initialize ION particle position and velocity vector:
-// =============================================================================
-void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
-{
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // Define total number of ions species:
-    // ====================================
-    int totalNumSpecies(params->numberOfParticleSpecies + params->numberOfTracerSpecies);
-
-    // Print to terminal:
-    // ==================
-    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << endl << "* * * * * * * * * * * * SETTING UP IONS INITIAL CONDITION * * * * * * * * * * * * * * * * * *" << endl;
-    }
-
-    // Loop over all species:
-    // ======================
-    for (int ss=0; ss<totalNumSpecies; ss++)
-    {
-        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-        {
-            // Create start object:
-            initDist_TYP initDist(params);
-
-            switch (IONS->at(ss).p_IC.IC_type)
-            {
-                case(1):
-                {
-                    if (params->quietStart)
-                    {
-                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ss));
-                    }
-                    else
-                    {
-                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ss));
-                    }
-                    break;
-                }
-                default:
-                {
-                }
-            } // switch
-
-            //allocateParticleDefinedIonArrays(params, fields, &IONS->at(ss));
-
-            //allocateMeshDefinedIonArrays(params, &IONS->at(ss));
-        }
-
-        /*
-        else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
-        {
-            allocateMeshDefinedIonArrays(params, &IONS->at(ss));
-        }
-        */
-
-        // Print to the terminal:
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "ION SPECIES: " << (ss + 1) << endl;
-
-            if (params->quietStart)
-            {
-                cout << "+ Using quiet start: YES" << endl;
-            }
-            else
-            {
-                cout << "+ Using quiet start: NO" << endl;
-            }
-
-            cout << "+ Super-particles used in simulation: " << IONS->at(ss).NSP*params->mpi.MPIS_PARTICLES << endl;
-        }
-
-    }//Iteration over ion species
-
-    // Print to terminal:
-    // ==================
-    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-    {
-        cout << "* * * * * * * * * * * * * IONS INITIAL CONDITION SET UP * * * * * * * * * * * * * * * * * * *" << endl;
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
 }

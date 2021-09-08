@@ -4,7 +4,7 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 {
     // Generation of communicators for fields and particles:
     // =====================================================
-    // params->mpi.MPI_DOMAIN_NUMBER is defined in constructor in INITIALIZE
+    // MPI_DOMAIN_NUMBER is defined in the constructor of init_TYP
 
 	// Define the color of each MPI sub-communicator:
 	if (params->mpi.MPI_DOMAIN_NUMBER < params->mpi.MPIS_FIELDS)
@@ -40,7 +40,9 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 
 	// Broadcast PARTICLES_ROOT_WORLD_RANK fom PARTICLE root to all processes in PARTICLE COMM:
 	if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-	MPI_Bcast(&params->mpi.PARTICLES_ROOT_WORLD_RANK, 1, MPI_INT, 0, params->mpi.COMM);
+	{
+		MPI_Bcast(&params->mpi.PARTICLES_ROOT_WORLD_RANK, 1, MPI_INT, 0, params->mpi.COMM);
+	}
 
 	// Broadcast from a PARTICLE node to ALL nodes in COMM_WORLD:
 	MPI_Bcast(&params->mpi.PARTICLES_ROOT_WORLD_RANK, 1, MPI_INT, (params->mpi.NUMBER_MPI_DOMAINS - 1), MPI_COMM_WORLD);
@@ -62,7 +64,7 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 	// Broadcast FIELDS_ROOT_WORLD_RANK fom FIELDS root to all processes in FIELDS COMM:
 	if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
     {
-	       MPI_Bcast(&params->mpi.FIELDS_ROOT_WORLD_RANK, 1, MPI_INT, 0, params->mpi.COMM);
+		MPI_Bcast(&params->mpi.FIELDS_ROOT_WORLD_RANK, 1, MPI_INT, 0, params->mpi.COMM);
     }
 
 	// Broadcast from a FIELDS node to ALL nodes in COMM_WORLD:
