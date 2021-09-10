@@ -70,6 +70,7 @@ struct p_IC_TYP
 	arma::vec Tper_profile;
 	arma::vec Tpar_profile;
 	arma::vec densityFraction_profile;
+	arma::vec x_profile;
 };
 
 //  Structure to store each ion species particle boundary condition parameters:
@@ -148,7 +149,6 @@ public:
 	int SPECIES;
 	double NR;          // Initial number of real particles represented in simulation
 	double NSP; 				// Initial number of superparticles for the given ion species.
-	//double NC;          // Total number of computational particles used over entire simulation
 	double NCP; 				// Number of charged particles per superparticle.
 	double NPC; 				// Number of superparticles per cell. When its value is zero, the particles are loaded from external files.
 	double Q; 					// Charge.
@@ -159,7 +159,6 @@ public:
 	double pctSupPartOutput; 	//
 	unsigned int nSupPartOutput;//
 
-	double go;					// Initial relativistic gamma
 	double LarmorRadius;		// Larmor radius.
 	double GyroPeriod;
 	double SkinDepth;
@@ -173,7 +172,7 @@ public:
 	arma::vec a_p;  // Computational particle weight
 	arma::vec mu_p; // Magnetic moment
 
-	arma::ivec mn; 			// Ions' position in terms of the index of mesh node
+	arma::ivec mn; // Ions' position in terms of the index of mesh node
 
 	arma::vec EX_p;
 	arma::vec BX_p;

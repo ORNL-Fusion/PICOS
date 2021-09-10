@@ -301,11 +301,6 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 					// Pitch angle operator:
 					xi_CollisionOperator(&xi0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT);
 
-                    /*
-					// Gyro-phase operator:
-					phi_CollisionOperator(&phi0,xi0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT);
-                    */
-
 					// Final Velocity:
 					// =============================================================================
 					w = w0;
@@ -322,21 +317,6 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 					{
 						xi = -1 - fmod(xi,-1);
 					}
-
-                    /*
-					// Final gyro-phase angle:
-					// =============================================================================
-					phi = phi0;
-					// Periodic boundary condition:
-					if (phi > M_PI)
-					{
-						phi = phi - 2*M_PI;
-					}
-					else if (phi < -M_PI)
-					{
-						phi = phi + 2*M_PI;
-					}
-                    */
 
 					// Convert velocity from spherical to cartesian coordinate sytem:
 					// =====================================================================

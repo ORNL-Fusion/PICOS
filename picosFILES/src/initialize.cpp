@@ -534,6 +534,11 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, vector<ionSpeci
         // ====================================
         params->em_IC.Bx_profile *= params->em_IC.BX;
 
+        // Axial coordinate:
+        // =================
+        int Tper_NX = IONS->at(ss).p_IC.Tper_NX;
+        IONS->at(ss).p_IC.x_profile = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
+
         // Print to terminal:
         // ==================
         if(params->mpi.MPI_DOMAIN_NUMBER == 0)
@@ -580,15 +585,28 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
     // NR total number of real particles at t = 0:
     double ds   = params->geometry.LX/params->em_IC.BX_NX;
     arma::vec A = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
+    double ne   = params->CV.ne;
+    double ne0  = params->f_IC.ne;
+    double B    = params->CV.B;
+
 
     for(int ss=0; ss<IONS->size(); ss++)
     {
         // Ion species density:
         arma::vec n_ion = ones<vec>(params->em_IC.BX_NX);
 
+        // Density fraction:
+        double f = IONS->at(ss).p_IC.densityFraction;
+
+        // Ion parameters:
+        double M       = IONS->at(ss).M;
+        double Z       = IONS->at(ss).Z;
+        double Q       = F_E*Z;
+
+        // Select ion density profile:
         if (params->quietStart)
         {
-            n_ion *= params->f_IC.ne*IONS->at(ss).p_IC.densityFraction;
+            n_ion *= ne0*f;
         }
         else
         {
@@ -597,19 +615,20 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
 
         // Number of real particles represented by particles of "ss" species:
         IONS->at(ss).NR = sum(n_ion%A)*ds;
-    }
 
-    for(int ss=0; ss<IONS->size(); ss++)
-    {
-        IONS->at(ss).Q     = F_E*IONS->at(ss).Z;
-        IONS->at(ss).Wc    = IONS->at(ss).Q*params->CV.B/IONS->at(ss).M;
-        IONS->at(ss).Wp    = sqrt( IONS->at(ss).p_IC.densityFraction*params->CV.ne*IONS->at(ss).Q*IONS->at(ss).Q/(F_EPSILON*IONS->at(ss).M) );//Check the definition of the plasma freq for each species!
-        IONS->at(ss).VTper = sqrt(2.0*F_KB*params->CV.Tper/IONS->at(ss).M);
-        IONS->at(ss).VTpar = sqrt(2.0*F_KB*params->CV.Tpar/IONS->at(ss).M);
+        // Characteristic frequencies:
+        IONS->at(ss).Q     = Q;
+        IONS->at(ss).Wc    = Q*B/M;
+        IONS->at(ss).Wp    = sqrt(f*ne*Q*Q/(F_EPSILON*M));
 
+        // Characteristic thermal velocities:
+        IONS->at(ss).VTper = sqrt(2.0*F_KB*params->CV.Tper/M);
+        IONS->at(ss).VTpar = sqrt(2.0*F_KB*params->CV.Tpar/M);
+
+        // Characteristic lengths and time scales:
         IONS->at(ss).LarmorRadius = IONS->at(ss).VTper/IONS->at(ss).Wc;
-        IONS->at(ss).GyroPeriod   = 2.0*M_PI/IONS->at(ss).Wc;
         IONS->at(ss).SkinDepth    = F_C/IONS->at(ss).Wp;
+        IONS->at(ss).GyroPeriod   = 2.0*M_PI/IONS->at(ss).Wc;
     }
 
     // Characteristic length and time scales of simulation:
@@ -619,23 +638,22 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
     params->ionSkinDepth    = IONS->at(0).SkinDepth;
     params->ionGyroPeriod   = IONS->at(0).GyroPeriod;
 
-    // Calculate grid size:
+    // Estimate DX and NX:
     // ===================
     params->geometry.DX = params->dp*params->ionSkinDepth;
-
-    // Define the number of grid cells:
-    // ================================
     params->geometry.NX = round(params->geometry.LX/params->geometry.DX);
 
-    // Make NX a multiple of 2:
+    // Define final NX by making it a multiple of 2:
+    // =============================================
     if (fmod(params->geometry.NX, 2.0) > 0.0)
     {
         params->geometry.NX -= 1;
     }
 
-    // Correct value of "dp":
-    // ==============================
+    // Define final value of "dp" and "DX":
+    // ======================================
     params->dp = params->geometry.LX/(params->geometry.NX*params->ionSkinDepth);
+    params->geometry.DX = params->dp*params->ionSkinDepth;
 
     // Define number of particles per MPI process:
     // ==========================================
@@ -726,7 +744,7 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     for(int ii=0; ii<params->mesh.NX_IN_SIM; ii++)
     {
         // Mesh points at the center of each cell:
-        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX + (0.5*params->mesh.DX);
+        params->mesh.nodesX(ii) = (double)ii*params->mesh.DX + (0.5*params->mesh.DX) + params->geometry.LX_min;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -981,7 +999,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         //Interpolate at mesh points:
         // ==========================
         // Query points:
-        arma::vec xq = linspace(0,params->mesh.LX,NX);
+        arma::vec xq = params->geometry.LX_min + linspace(0,params->mesh.LX,NX);
         arma::vec yq(xq.size());
 
         // Sample points:
@@ -990,7 +1008,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         // Spatial increment for external data:
         double dX = params->mesh.LX/((double)BX_NX);
 
-        arma::vec xt = linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
+        arma::vec xt = params->geometry.LX_min + linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
         arma::vec yt(xt.size());
 
         // BX profile:

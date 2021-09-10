@@ -112,18 +112,17 @@ void particleBC_TYP::MPI_OMP_AllreduceVec(const params_TYP * params, vec_TYP * V
 // =============================================================================
 void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-    // Simulation time step:
-    DT = params->DT;
 
-    // Iterate over all ion species:
-    // =============================
-    for(int ss=0;ss<IONS->size();ss++)
+    if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
-        if (IONS->at(ss).p_BC.BC_type == 1 || IONS->at(ss).p_BC.BC_type == 2)
+        // Simulation time step:
+        DT = params->DT;
+
+        // Iterate over all ion species:
+        // =============================
+        for(int ss=0;ss<IONS->size();ss++)
         {
-            // Select only PARTICLE MPIs:
-            // ==========================
-            if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+            if (IONS->at(ss).p_BC.BC_type == 1 || IONS->at(ss).p_BC.BC_type == 2)
             {
                 // Super particle conversion factor:
                 double alpha = IONS->at(ss).NCP;
@@ -183,9 +182,12 @@ void particleBC_TYP::calculateParticleWeight(const params_TYP * params, const CS
                     IONS->at(ss).p_BC.GSUM = 0;
                 }
 
-            } // Particle MPIs
-        } // BC
-    } //  Species
+            } // BC
+
+        } //  Species
+
+    } // Particle MPIs
+
 }
 
 void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
@@ -278,48 +280,49 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP * params, const C
 
     // Apply re-injection:
     // ===================
-    for(int ss=0;ss<IONS->size();ss++)
+    if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
-		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        for(int ss=0;ss<IONS->size();ss++)
         {
-            // Number of computational particles per process:
-            int NSP(IONS->at(ss).NSP);
 
-            // Ion mass:
-            double Ma = IONS->at(ss).M;
+                // Number of computational particles per process:
+                int NSP(IONS->at(ss).NSP);
 
-			#pragma omp parallel for default(none) shared(params, CS, fields, IONS, std::cout) firstprivate(NSP, ss, Ma)
-                for(int ii=0; ii<NSP; ii++)
-				{
-					if ( IONS->at(ss).f1(ii) == 1 || IONS->at(ss).f2(ii) == 1 )
-					{
+                // Ion mass:
+                double Ma = IONS->at(ss).M;
 
-						// Re-inject particle:
-                        // ===================
-						particleReinjection(ii, params, CS, fields,&IONS->at(ss));
+    			#pragma omp parallel for default(none) shared(params, CS, fields, IONS, std::cout) firstprivate(NSP, ss, Ma)
+                    for(int ii=0; ii<NSP; ii++)
+    				{
+    					if ( IONS->at(ss).f1(ii) == 1 || IONS->at(ss).f2(ii) == 1 )
+    					{
 
-                        // Newly injected flag:
-                        // ====================
-                        IONS->at(ss).f5(ii)  = 1;
-                        IONS->at(ss).dE5(ii) = 0.5*Ma*dot(IONS->at(ss).V_p.row(ii), IONS->at(ss).V_p.row(ii));
+    						// Re-inject particle:
+                            // ===================
+    						particleReinjection(ii, params, CS, fields,&IONS->at(ss));
 
-                        // Reset injection flag:
-                        // =====================
-						IONS->at(ss).f1(ii) = 0;
-						IONS->at(ss).f2(ii) = 0;
+                            // Newly injected flag:
+                            // ====================
+                            IONS->at(ss).f5(ii)  = 1;
+                            IONS->at(ss).dE5(ii) = 0.5*Ma*dot(IONS->at(ss).V_p.row(ii), IONS->at(ss).V_p.row(ii));
 
-                        // Reset Exit energy:
-                        // =====================
-                        IONS->at(ss).dE1(ii) = 0;
-                        IONS->at(ss).dE2(ii) = 0;
+                            // Reset injection flag:
+                            // =====================
+    						IONS->at(ss).f1(ii) = 0;
+    						IONS->at(ss).f2(ii) = 0;
 
-					} // flag guard
+                            // Reset Exit energy:
+                            // =====================
+                            IONS->at(ss).dE1(ii) = 0;
+                            IONS->at(ss).dE2(ii) = 0;
 
-				} // pragma omp parallel for
+    					} // flag guard
 
-		} // Particle MPIs
+    				} // pragma omp parallel for
 
-	} //  Species
+    	} //  Species
+
+	} // Particle MPIs
 
     // Calculate actual fueling rate and power:
     // =======================================================
@@ -425,7 +428,7 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 		double sigma_v = vT/sqrt(2);
 
 		// Random number generator:
-		std::default_random_engine gen(params->mpi.MPI_DOMAIN_NUMBER+1);
+		std::default_random_engine gen( (params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000 );
 		std::uniform_real_distribution<double> Rm(0.0, 1.0);
 
 		// Box muller:
@@ -468,9 +471,9 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 
 		// Gaussian distribution in space:
 		double mean_x  = IONS->p_BC.mean_x;
-		double sigma_x =  IONS->p_BC.sigma_x;
-		double new_x   = mean_x  + (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
-		//double inc_x   = abs(new_x - mean_x);
+		double sigma_x = IONS->p_BC.sigma_x;
+		double new_x   = mean_x;
+        new_x += (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
 
         // Domain boundaries:
         double LX_min = params->geometry.LX_min;
@@ -482,17 +485,15 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 			 cout<<"Out of bound, Xp(ii) = "<< new_x << endl;
 
              // Random number:
-			 arma_rng::set_seed_random();
 			 R = randu(1);
 			 phi = 2.0*M_PI*randu<vec>(1);
 
              // Assign new postion:
 			 new_x = mean_x  + (sigma_x)*sqrt( -2*log(R(0)) )*cos(phi(0));
-			 //inc_x  = abs(new_x - mean_x);
 
-             if ( (new_x > LX_min) && (new_x < LX_max) )
+             if ( (new_x > LX_min) || (new_x < LX_max) )
              {
-                 cout<< "Out of bound corrected X = " << new_x <<  endl;
+                 cout<< "Corrected X = " << new_x <<  endl;
              }
 		}
 

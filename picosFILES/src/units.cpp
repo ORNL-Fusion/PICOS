@@ -406,6 +406,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 		IONS->at(ii).p_IC.Tper_profile /= CS->temperature;
 		IONS->at(ii).p_IC.Tpar_profile /= CS->temperature;
 		IONS->at(ii).p_IC.densityFraction_profile /= CS->density;
+        IONS->at(ii).p_IC.x_profile /= CS->length;
 
         // Scales:
 		IONS->at(ii).LarmorRadius /= CS->length;
@@ -413,6 +414,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 		IONS->at(ii).VTper /= CS->velocity;
 		IONS->at(ii).Wc *= CS->time;
 		IONS->at(ii).Wp *= CS->time;
+        IONS->at(ii).GyroPeriod *= CS->time;
+        IONS->at(ii).SkinDepth /= CS->length;
 
 		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     	{

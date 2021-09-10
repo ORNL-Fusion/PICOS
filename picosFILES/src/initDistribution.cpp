@@ -2,23 +2,7 @@
 
 initDist_TYP::initDist_TYP(const params_TYP * params)
 {
-    // Create unitary vector along B field:
-    // ===================================
-    b1 = {params->em_IC.BX, params->em_IC.BY, params->em_IC.BZ};
-    b1 = arma::normalise(b1);
 
-    if (arma::dot(b1,y) < PRO_ZERO)
-    {
-        b2 = arma::cross(b1,y);
-    }
-    else
-    {
-        b2 = arma::cross(b1,z);
-    }
-
-    // Unitary vector perpendicular to b1 and b2:
-    // ==========================================
-    b3 = arma::cross(b1,b2);
 }
 
 
@@ -29,24 +13,19 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
     arma_rng::set_seed_random();
     IONS->X_p = params->geometry.LX_min + randu<vec>(IONS->NSP)*(params->geometry.LX_max - params->geometry.LX_min);
 
-    // Allocate memory to velocity:
-    // V(0): V parallel
-    // V(1): V perp where V(1) = sqrt( VY^2 + VZ^2);
-	// IONS->V_p = zeros(IONS->NSP,2);
-
     // Maxwellian distribution for the velocity using Box-Muller:
-    arma_rng::set_seed_random();
+    //arma_rng::set_seed_random();
 	arma::vec R = randu(IONS->NSP);
-	arma_rng::set_seed_random();
+	//arma_rng::set_seed_random();
 	arma::vec phi = 2.0*M_PI*randu<vec>(IONS->NSP);
 
 	arma::vec V2 = IONS->VTper*sqrt( -log(1.0 - R) ) % cos(phi);
 	arma::vec V3 = IONS->VTper*sqrt( -log(1.0 - R) ) % sin(phi);
     arma::vec V4 = sqrt( pow(V2,2) + pow(V3,2) );
 
-	arma_rng::set_seed_random();
+	//arma_rng::set_seed_random();
 	R = randu<vec>(IONS->NSP);
-	arma_rng::set_seed_random();
+	//arma_rng::set_seed_random();
 	phi = 2.0*M_PI*randu<vec>(IONS->NSP);
 
 	arma::vec V1 = IONS->VTpar*sqrt( -log(1.0 - R) ) % sin(phi);
@@ -58,30 +37,43 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
 
 double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, double X, double V3, double V2, double V1)
 {
-    // Sample points
-    int Tper_NX = IONS->p_IC.Tper_NX;
-    int Tpar_NX = IONS->p_IC.Tper_NX;
-    int ne_nx   = IONS->p_IC.densityFraction_NX;
+    // Profile for interpolation:
+    arma::vec x_profile    = IONS->p_IC.x_profile;
+    arma::vec Tpar_profile = IONS->p_IC.Tpar_profile;
+    arma::vec Tper_profile = IONS->p_IC.Tper_profile;
+    arma::vec densityFraction_profile = IONS->p_IC.densityFraction_profile;
 
-    // arma::vec S = linspace(0,params->mesh.LX,Tper_NX);
-    arma::vec S = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
+    // Uncompress the density:
+    arma::vec Bx_profile = params->em_IC.Bx_profile;
+    double Bx0 = params->em_IC.BX;
+    densityFraction_profile = densityFraction_profile%pow(Bx0/Bx_profile,1.5);
+
+    /*
+    if (params->mpi.IS_PARTICLES_ROOT)
+    {
+        cout << "################" <<  endl;
+        cout << "################" <<  endl;
+        cout << densityFraction_profile <<  endl;
+        cout << "################" <<  endl;
+        cout << "################" <<  endl;
+    }
+    */
+
+    // Axial position query point:
     arma::vec xx(1,1);
     xx(0,0)= X;
 
-    double T3=0.0;
     arma::vec TT3(1,1);
-    interp1(S,IONS->p_IC.Tpar_profile,xx,TT3);
-    T3 = TT3(0,0);   //Temperature profile in x
+    interp1(x_profile,Tpar_profile,xx,TT3);
+    double T3 = TT3(0,0);   //Temperature profile in x
 
-    double T2=0.0;
     arma::vec TT2(1,1);
-    interp1(S,IONS->p_IC.Tper_profile,xx,TT2);
-    T2 = TT2(0,0);   //Temperature profile in y
+    interp1(x_profile,Tper_profile,xx,TT2);
+    double T2 = TT2(0,0);   //Temperature profile in y
 
-    double T1=0.0;
     arma::vec TT1(1,1);
-    interp1(S,IONS->p_IC.Tper_profile,xx,TT1);
-    T1 = TT1(0,0);   //Temperature profile in z
+    interp1(x_profile,Tper_profile,xx,TT1);
+    double T1 = TT1(0,0);   //Temperature profile in z
 
     double k3=sqrt((IONS->M)/(2.0*M_PI*F_KB*T3));
     double k2=sqrt((IONS->M)/(2.0*M_PI*F_KB*T2));
@@ -92,11 +84,9 @@ double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, d
 
     double h= (k1*k2*k3)*exp(-sqrt(2)*(((V1*V1)*(s1*s1))+((V2*V2)*(s2*s2))+((V3*V3)*(s3*s3)))); // Pdf for 3-Velocities with temperature profile
 
-    double g=0.0;
     arma::vec gg(1,1);
-    //interp1(S, (params->em_IC.BX/params->em_IC.Bx_profile)%IONS->p_IC.densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
-    interp1(S,IONS->p_IC.densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
-    g = gg(0,0); //density profile
+    interp1(x_profile,densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
+    double g = gg(0,0); //density profile
 
     return(g*h); //target 4-D Pdf
 }
@@ -125,7 +115,7 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
 
     // Seed the random number generator:
     // ================================
-    std::default_random_engine generator(params->mpi.MPI_DOMAIN_NUMBER+1);
+    std::default_random_engine generator( (params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000 );
 
     // Create uniform random number generator in [0,1]:
     // ================================================
@@ -144,7 +134,6 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     // ====================
     unsigned int iterator = 1;
     double ratio = 0.0;
-    //X(0)  = 0.5*params->mesh.LX;
     X(0)  = params->geometry.LX_min + 0.5*(params->geometry.LX_max - params->geometry.LX_min);
     V3(0) = 0.25*IONS->VTpar;
     V2(0) = 0.1*IONS->VTpar;
@@ -154,7 +143,6 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     while(iterator < IONS->NSP)
     {
         // Select search point in phase space:
-        //X_test  = uniform_distribution(generator)*params->mesh.LX;
         X_test  = params->geometry.LX_min + uniform_distribution(generator)*(params->geometry.LX_max - params->geometry.LX_min);
         V3_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);
         V2_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);

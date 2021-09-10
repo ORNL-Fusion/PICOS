@@ -254,7 +254,7 @@ void PIC_TYP::interpEM(const params_TYP * params, const ionSpecies_TYP * IONS, c
 {
     // Assign cell:
     double xp   = (*ZN)(0);
-    double xMin = 0;
+    double xMin = params->geometry.LX_min;
     double DX   = params->mesh.DX;
     int m       = round( 0.5 + (xp - xMin)/DX ) - 1;
 
@@ -544,24 +544,24 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
     {
 		// Calculate nearest grid point:
 		double X_p     = IONS->X_p(ii);
-		double X_p_min = 0;
+		double X_p_min = params->geometry.LX_min;
 		double DX      = params->mesh.DX;
-		int m = round( 0.5 + (X_p - X_p_min)/DX ) - 1;
+		signed int m = round( 0.5 + (X_p - X_p_min)/DX ) - 1;
 
 		// Correct "m" near boundaries if out of bound:
 		if ( m >= params->mesh.NX_IN_SIM)
 		{
+			cout << "Main AssignCell out of bound, m = " << m << endl;
 			m = params->mesh.NX_IN_SIM - 1;
-			//cout << "m exceeds boundary" << endl;
-			//cout << "X_p = " << X_p << endl;
-			//cout << "LX = " << params->mesh.LX << endl;
 		}
 		if ( m < 0)
 		{
-			//cout << "m = " << m << endl;
+			cout << "Main AssignCell out of bound, m = " << m << endl;
+			cout << "X_p = " << X_p << endl;
+			cout << "X_p_min = " << X_p_min << endl;
+			cout << "DX = " << DX << endl;
+
 			m = 0;
-			//cout << "m exceeds boundary" << endl;
-			//cout << "X_p = " << X_p << endl;
 		}
 
 		// Assign nearest grid point:
@@ -718,10 +718,13 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 			double c = B/B0;
 
 			// Particle weight:
+			/*
 			if (params->currentTime == 0)
 			{
 				IONS->a_p(ii) = 1/c;
 			}
+			*/
+
 			double a = IONS->a_p(ii);
 
 			// Density:
