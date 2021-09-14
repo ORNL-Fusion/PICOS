@@ -402,6 +402,8 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 		{
 			T = IONS->p_BC.T;
 			E = 0;
+
+            // cout << "T = " << T*CS->temperature << endl;
 		}
 		if (IONS->p_BC.BC_type == 2) // NBI
 		{
@@ -451,6 +453,10 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
         // Assign to IONS:
         IONS->V_p(ii,0) = v_par;
         IONS->V_p(ii,1) = v_per;
+
+        // cout << "vpar = " << v_par*CS->velocity << endl;
+        // cout << "vper = " << v_per*CS->velocity << endl;
+
 	}
 
     // Periodic:
@@ -482,7 +488,7 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
         // Correction to prevent injecting out of bounds:
         while( (new_x < LX_min) || (new_x > LX_max) )
 		{
-			 cout<<"Out of bound, Xp(ii) = "<< new_x << endl;
+			 //cout<<"Out of bound, Xp(ii) = "<< new_x << endl;
 
              // Random number:
 			 R = randu(1);
@@ -493,7 +499,7 @@ void particleBC_TYP::particleReinjection(int ii, const params_TYP * params, cons
 
              if ( (new_x > LX_min) || (new_x < LX_max) )
              {
-                 cout<< "Corrected X = " << new_x <<  endl;
+                 //cout<< "Corrected X = " << new_x <<  endl;
              }
 		}
 

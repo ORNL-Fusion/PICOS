@@ -888,12 +888,6 @@ void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSp
     // Initialize magnetic moment:
     // ===========================
     IONS->mu_p.zeros(IONS->NSP);
-
-    // Assign cell:
-    // ===========
-    // Populates wxc,wxl and wxr only
-    //PIC_TYP PIC;
-    //PIC.assignCell(params, fields, IONS);
 }
 
 // Initialize ION particle position and velocity vector:
@@ -999,8 +993,14 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         //Interpolate at mesh points:
         // ==========================
         // Query points:
-        arma::vec xq = params->geometry.LX_min + linspace(0,params->mesh.LX,NX);
-        arma::vec yq(xq.size());
+        //arma::vec xq = params->geometry.LX_min + linspace(0,params->mesh.LX,NX);
+        //arma::vec yq(xq.size());
+        arma::vec xq = zeros(NX);
+        arma::vec yq = zeros(NX);
+        for(int ii=0; ii<NX; ii++)
+        {
+            xq(ii) = (double)ii*params->mesh.DX - (0.5*params->mesh.DX) + params->geometry.LX_min;
+        }
 
         // Sample points:
         int BX_NX  = params->em_IC.BX_NX;

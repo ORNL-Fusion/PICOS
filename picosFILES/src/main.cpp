@@ -161,19 +161,21 @@ int main(int argc, char* argv[])
 
         if (params.mpi.IS_PARTICLES_ROOT)
         {
+            /*
             if (fmod((double)(tt + 1), 100) == 0)
             {
                 cout << "time = " << tt*params.DT*CS.time*1E3 << " [ms] "<< endl;
 
-                /*
-                cout << "N1_dot = " << particleBC.N1_dot/CS.time << " [1/s]" << endl;
-                cout << "N2_dot = " << particleBC.N2_dot/CS.time << " [1/s]" << endl;
-                cout << "E1_dot = " << (particleBC.E1_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
-                cout << "E2_dot = " << (particleBC.E2_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
-                cout << "E5_dot = " << (particleBC.E5_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
-                cout << "N5_dot = " << particleBC.N5_dot/CS.time << " [1/s]" << endl;
-                */
+
+                //cout << "N1_dot = " << particleBC.N1_dot/CS.time << " [1/s]" << endl;
+                //cout << "N2_dot = " << particleBC.N2_dot/CS.time << " [1/s]" << endl;
+                //cout << "E1_dot = " << (particleBC.E1_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
+                //cout << "E2_dot = " << (particleBC.E2_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
+                //cout << "E5_dot = " << (particleBC.E5_dot*CS.energy/CS.time)/1000 << " [kW]" << endl;
+                //cout << "N5_dot = " << particleBC.N5_dot/CS.time << " [1/s]" << endl;
+
             }
+            */
         }
 
         // Advance particles and re-inject:

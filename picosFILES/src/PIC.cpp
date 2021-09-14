@@ -181,6 +181,11 @@ PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ve
 		extrapolateMoments_AllSpecies(params,CS,fields,IONS);
 	}
 
+	if (params->mpi.IS_PARTICLES_ROOT)
+	{
+		//	cout << IONS->at(0).n_m/CS->volume<< endl;
+	}
+
 }
 
 void PIC_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p)
@@ -631,6 +636,10 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * 
 			  smooth(&IONS->at(ss).P22_m, params->smoothingParameter);
 			}
 
+			// Add finite number to density to avoid zero:
+			// ============================================
+			//IONS->at(ss).n_m += 1E16*CS->volume;
+
 			// Calculate derived ion moments: Tpar_m, Tper_m:
 			// ==============================================
 			calculateDerivedIonMoments(params, CS, &IONS->at(ss));
@@ -701,7 +710,7 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 		for(int ii=0; ii<NSP; ii++)
 		{
 			// Nearest grid point:
-			int ix = IONS->mn(ii) + 1;
+			int ix = IONS->mn(ii) + 2;
 
 			// Particle velocity:
 			double vpar = IONS->V_p(ii,0);
@@ -718,12 +727,12 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 			double c = B/B0;
 
 			// Particle weight:
-			/*
+
 			if (params->currentTime == 0)
 			{
-				IONS->a_p(ii) = 1/c;
+				//IONS->a_p(ii) = 1/c;
 			}
-			*/
+
 
 			double a = IONS->a_p(ii);
 
@@ -764,10 +773,10 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 
 	// Ghost contributions:
 	// ====================
-	fillGhosts(&IONS->n_m);
-	fillGhosts(&IONS->nv_m);
-	fillGhosts(&IONS->P11_m);
-	fillGhosts(&IONS->P22_m);
+	fill4Ghosts(&IONS->n_m);
+	fill4Ghosts(&IONS->nv_m);
+	fill4Ghosts(&IONS->P11_m);
+	fill4Ghosts(&IONS->P22_m);
 
 	// Scale:
 	// =====
@@ -777,8 +786,6 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 	IONS->P11_m *= (1/A)*IONS->NCP/params->mesh.DX;
 	IONS->P22_m *= (1/A)*IONS->NCP/params->mesh.DX;
 
-	// Add finite number for density to avoid zero:
-	IONS->n_m += 1E14*CS->volume;
 }
 
 void PIC_TYP::calculateDerivedIonMoments(const params_TYP * params, CS_TYP * CS, ionSpecies_TYP * IONS)

@@ -129,7 +129,9 @@ void MPI_MAIN_TYP::createMPITopology(params_TYP * params)
 			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , Cart Rank: "<< params->mpi.MPI_DOMAIN_NUMBER_CART << endl;
 			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , iIndex: "<< params->mpi.iIndex << endl;
 			cout << "World Rank: " << params->mpi.MPI_DOMAIN_NUMBER <<" , fIndex: "<< params->mpi.fIndex << endl;
-
+			*/
+			
+			/*
 			World Rank: 0 , Cart Rank: 0
 			World Rank: 0 , iIndex: 1
 			World Rank: 0 , fIndex: 250

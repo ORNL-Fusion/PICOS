@@ -1,1 +1,1 @@
-b528234 Added #define arma... in main.cpp
+62bf61f Added time(NULL) to PRNGs and tested results in fusiont6. Profiles look at lot more symmetric
