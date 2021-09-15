@@ -729,12 +729,6 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     params->mesh.NX_IN_SIM  = params->geometry.NX;
     params->mesh.NX_PER_MPI = (int)( (double)params->geometry.NX/(double)params->mpi.MPIS_FIELDS );
 
-    /*
-    //params->mesh.SPLIT_DIRECTION = 0;
-    //params->mesh.NUM_CELLS_PER_MPI = params->mesh.NX_PER_MPI;
-    //params->mesh.NUM_CELLS_IN_SIM  = params->mesh.NX_IN_SIM;
-    */
-
     // Set size of mesh and allocate memory:
     // =====================================
     params->mesh.nodesX.set_size(params->mesh.NX_IN_SIM);
@@ -995,6 +989,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         // Query points:
         //arma::vec xq = params->geometry.LX_min + linspace(0,params->mesh.LX,NX);
         //arma::vec yq(xq.size());
+
         arma::vec xq = zeros(NX);
         arma::vec yq = zeros(NX);
         for(int ii=0; ii<NX; ii++)
@@ -1006,10 +1001,15 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         int BX_NX  = params->em_IC.BX_NX;
 
         // Spatial increment for external data:
-        double dX = params->mesh.LX/((double)BX_NX);
-
-        arma::vec xt = params->geometry.LX_min + linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
-        arma::vec yt(xt.size());
+        //arma::vec xt = params->geometry.LX_min + linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
+        //arma::vec yt(xt.size());
+        double dX = params->mesh.LX/((double)(BX_NX - 2));
+        arma::vec xt = zeros(BX_NX);
+        arma::vec yt = zeros(BX_NX);
+        for(int ii=0; ii<BX_NX; ii++)
+        {
+            xt(ii) = (double)ii*dX - (0.5*dX) + params->geometry.LX_min;
+        }
 
         // BX profile:
         // ===========
