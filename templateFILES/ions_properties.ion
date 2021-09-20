@@ -5,20 +5,20 @@
 // General:
 // =============================================================================
 SPECIES1                      1
-NPC1                          1
+NPC1                          2500
 pctSupPartOutput1             100
 Z1                            1
-M1                            1.007
+M1                            2.0
 
 // Initial conditions:
 // =============================================================================
 IC_type_1                      1
 
-IC_Tper_1                      25
+IC_Tper_1                      15
 IC_Tper_fileName_1             MPEX_Tper_norm_scenario_14.txt
 IC_Tper_NX_1                   200
 
-IC_Tpar_1                      25
+IC_Tpar_1                      15
 IC_Tpar_fileName_1             MPEX_Tpar_norm_scenario_14.txt
 IC_Tpar_NX_1                   200
 
@@ -29,12 +29,12 @@ IC_densityFraction_NX_1        200
 // Boundary conditions:
 // =============================================================================
 // 1: Warm plasma source, 2: NBI, 3: Periodic, 4: simple-reinjection
-BC_type_1                      3
+BC_type_1                      1
 
-BC_T_1                         25
-BC_E_1                         5000
+BC_T_1                         15
+BC_E_1                         0
 BC_eta_1                       45
-BC_mean_x_1                    2.0
+BC_mean_x_1                    0
 BC_sigma_x_1                   0.4
 
 BC_G_1                         1E22

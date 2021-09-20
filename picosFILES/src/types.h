@@ -541,6 +541,8 @@ struct RF_TYP
 	double freq;
 	double x1;
 	double x2;
+	double t_ON;
+	double t_OFF;
 	double kpar;
 	double kper;
 	int handedness;

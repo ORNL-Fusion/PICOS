@@ -724,7 +724,8 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 			double B = IONS->BX_p(ii);
 
 			// Compression factor:
-			double c = B/B0;
+			//double c = B/B0;
+			double c = 1;
 
 			// Particle weight:
 
@@ -777,6 +778,22 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 	fill4Ghosts(&IONS->nv_m);
 	fill4Ghosts(&IONS->P11_m);
 	fill4Ghosts(&IONS->P22_m);
+
+	// Apply compression factor:
+	// ========================
+	arma::vec c = fields->BX_m/B0;
+	IONS->n_m   = IONS->n_m%c;
+	IONS->nv_m  = IONS->nv_m%c;
+	IONS->P11_m = IONS->P11_m%c;
+	IONS->P22_m = IONS->P22_m%c;
+
+	// if (params->mpi.IS_PARTICLES_ROOT)
+	// {
+	// 	cout << "B0 = " << B0 << endl;
+	//
+	// 	cout << "c = " << c << endl;
+	//
+	// }
 
 	// Scale:
 	// =====

@@ -12,5 +12,6 @@ picosFILES/bin/
 picosFILES/inputFiles/
 picosFILES/outputFiles/
 picosFILES/nohup*
+picosFiles/MPEX_*
 *.fig
 picosFILES/*.csv

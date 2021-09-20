@@ -10,7 +10,8 @@ coll_operator_TYP::coll_operator_TYP()
 // =============================================================================
 void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT)
 {
-    double BoozerFactor = (double)0.5;
+    // double BoozerFactor = (double)0.5;
+    double BoozerFactor = (double)1.0;
     double nu_E_dt(0.0);
     int energyOperatorModel = 2;
 

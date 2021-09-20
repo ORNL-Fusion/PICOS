@@ -275,6 +275,8 @@ void init_TYP::readInputFile(params_TYP * params)
     params->RF.freq       = stod( parametersStringMap["RF_freq"]);
     params->RF.x1         = stod( parametersStringMap["RF_x1"]  );
     params->RF.x2         = stod( parametersStringMap["RF_x2"]  );
+    params->RF.t_ON       = stod( parametersStringMap["RF_t_ON"]  );
+    params->RF.t_OFF      = stod( parametersStringMap["RF_t_OFF"]  );
     params->RF.kpar       = stod( parametersStringMap["RF_kpar"]);
     params->RF.kper       = stod( parametersStringMap["RF_kper"]);
     params->RF.handedness = stoi( parametersStringMap["RF_handedness"]);
@@ -637,6 +639,11 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
     params->ionLarmorRadius = IONS->at(0).LarmorRadius;
     params->ionSkinDepth    = IONS->at(0).SkinDepth;
     params->ionGyroPeriod   = IONS->at(0).GyroPeriod;
+
+    // RF start and end time:
+    // ======================
+    params->RF.t_ON  *= params->ionGyroPeriod;
+    params->RF.t_OFF *= params->ionGyroPeriod;
 
     // Estimate DX and NX:
     // ===================

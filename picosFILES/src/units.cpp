@@ -252,7 +252,6 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                     DT_CFL_I = (DT_CFL_I > *(DT_CFL_I_MPI + ii)) ? *(DT_CFL_I_MPI + ii) : DT_CFL_I;
                 }
 
-
                 // Check against user defined time step:
                 if (DT > DT_CFL_I)
                 {
@@ -378,6 +377,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     params->RF.freq *= CS->time;
     params->RF.x1   /= CS->length;
     params->RF.x2   /= CS->length;
+    params->RF.t_ON  /= CS->time;
+    params->RF.t_OFF /= CS->time;
     params->RF.kpar *= CS->length;
     params->RF.kper *= CS->length;
 

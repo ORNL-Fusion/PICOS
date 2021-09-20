@@ -210,8 +210,19 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.RFheating == 1)
         {
-            RF_operator.ApplyRfHeating_AllSpecies(&params,&CS,&fields,&IONS);
+            if (params.currentTime >= params.RF.t_ON*CS.time && params.currentTime <= params.RF.t_OFF*CS.time)
+            {
+                RF_operator.ApplyRfHeating_AllSpecies(&params,&CS,&fields,&IONS);
+            }
         }
+
+        // if (params.mpi.IS_PARTICLES_ROOT)
+        // {
+        //     if (params.currentTime >= params.RF.t_ON*CS.time & params.currentTime <= params.RF.t_OFF*CS.time)
+        //     {
+        //         cout << "t = " << params.currentTime*1e3 << " [ms] " << endl;
+        //     }
+        // }
 
         // Field solve:
         // =====================================================================
