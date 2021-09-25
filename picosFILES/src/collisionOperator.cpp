@@ -23,10 +23,10 @@ void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, d
     double dt_s = (double) DT/Nstep;
 
     // Limit substepping:
-    if (Nstep > 20)
+    if (Nstep > 70)
     {
         cout << "Nstep for 'w' operator = " << Nstep << endl;
-        Nstep = 20;
+        Nstep = 70;
     }
 
     // Apply operator:
@@ -80,10 +80,10 @@ void coll_operator_TYP:: xi_CollisionOperator(double * xi, double xab, double wT
 
     // Limit substepping:
     // ===========================
-    if (Nstep > 20)
+    if (Nstep > 70)
     {
         cout << "Nstep for 'xi' operator = " << Nstep << endl;
-        Nstep = 20;
+        Nstep = 70;
     }
 
     // Apply operator:
