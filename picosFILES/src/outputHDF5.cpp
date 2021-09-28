@@ -770,6 +770,19 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 				   #endif
 				   name.clear();
 				}
+				if(params->outputs_variables.at(ov) == "Te_p")
+				{
+				   //Saving the "X" drift velocity at the particle positions:
+				   name = "Te_p";
+				   #ifdef HDF5_DOUBLE
+				   vec_values = IONS->at(ii).Te_p*CS->temperature*F_KB/F_E;
+				   saveToHDF5(group_ionSpecies, name, &vec_values);
+				   #elif defined HDF5_FLOAT
+				   fvec_values = conv_to<fvec>::from(IONS->at(ii).Te_p)*CS->temperature*F_KB/F_E;
+				   saveToHDF5(group_ionSpecies, name, &fvec_values);
+				   #endif
+				   name.clear();
+				}
 				if(params->outputs_variables.at(ov) == "n_m")
 				{
 					if (params->mpi.IS_PARTICLES_ROOT)

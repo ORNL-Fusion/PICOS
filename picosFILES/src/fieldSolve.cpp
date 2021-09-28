@@ -14,11 +14,20 @@ fields_solver_TYP::fields_solver_TYP(const params_TYP * params, CS_TYP * CS)
 	ne__.zeros(NX_S);
 	ne___.zeros(NX_S);
 
+	// Electron temperature:
+	Te.zeros(NX_S);
+
+	// Electron pressure:
+	Pe.zeros(NX_S);
+
+	// Electron pressure gradient:
+	dPe.zeros(NX_S);
+
 	//nU.zeros(NX_S);
     //U.zeros(NX_S);
 
     // Electron density gradient:
-	dne.zeros(NX_S);
+	//dne.zeros(NX_S);
 	dx = params->mesh.DX;
 
     // Electric field:
@@ -108,7 +117,7 @@ void fields_solver_TYP::MPI_SendVec(const params_TYP * params, arma::vec * v)
 
 // Electric field solve:
 // ============================================================================================
-void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS)
+void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons)
 {
 	if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
 	{
@@ -122,15 +131,18 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 		ne__.zeros();
 		ne___.zeros();
 
-        // Initialize the gradient:
-        dne.zeros();
+		// Initialize the electron temperature:
+		//Te.zeros();
 
-		// Initialize the bulk plasma flux and flow:
-		//nU.zeros();
-		//U.zeros();
+		// Initialize the electron pressure:
+		//Pe.zeros();
+
+        // Initialize the gradient:
+		//dPe.zeros();
+        //dne.zeros();
 
 		// Electron temperature:
-		double Te = params->f_IC.Te;
+		//double Te = params->f_IC.Te;
 
 		// Accumulate the contribution from all species:
 		for(int ss=0; ss<IONS->size(); ss++)
@@ -143,20 +155,29 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 			ne__  += Z*IONS->at(ss).n_m__.subvec(iIndex - 1, fIndex + 1);
 			ne___ += Z*IONS->at(ss).n_m___.subvec(iIndex - 1, fIndex + 1);
 
-			// Bulk plasma flux:
-			//nU += Z*IONS->at(ss).nv_m.subvec(iIndex - 1, fIndex + 1);
 		}
 
 		// Time-averaged electron density;
 		ne = (ne + ne_ + ne__ + ne___)/4;
         fill4Ghosts(&ne);
 
+		// Electron temperature:
+		Te = electrons->Te_m.subvec(iIndex - 1, fIndex + 1);
+
+		// Electron pressure:
+		Pe = (Te%ne)/F_E_DS;
+
+		// Gradient in the electron pressure:
+		dPe.subvec(1,NX_S - 2) = 0.5*( Pe.subvec(2,NX_S-1) - Pe.subvec(0,NX_S-3) );
+        fill4Ghosts(&dPe);
+
 		// Gradient of electron density:
-		dne.subvec(1,NX_S - 2) = 0.5*( ne.subvec(2,NX_S-1) - ne.subvec(0,NX_S-3) );
-        fill4Ghosts(&dne);
+		//dne.subvec(1,NX_S - 2) = 0.5*( ne.subvec(2,NX_S-1) - ne.subvec(0,NX_S-3) );
+        //fill4Ghosts(&dne);
 
 		// Electric field based on Ohm's law:
-        EX_m = -(Te/F_E_DS)*(1/ne)%dne/dx;
+        // EX_m = -(Te/F_E_DS)*(1/ne)%dne/dx;
+		EX_m = -(1/ne)%dPe/dx;
 		fields->EX_m.subvec(iIndex,fIndex) = EX_m.subvec(1,NX_S - 2);
         fill4Ghosts(&fields->EX_m);
 

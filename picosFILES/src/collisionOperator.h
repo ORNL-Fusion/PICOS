@@ -23,13 +23,12 @@ private:
     void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, arma::vec * F_m, arma::vec * F_p);
     void fill4Ghosts(arma::vec * v);
 
+    // Electron temperature interpolation:
+    void interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons);
+
     // Scattering operators:
     void u_CollisionOperator(double * w, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
     void xi_CollisionOperator(double * xi, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
-
-    /*
-    void phi_CollisionOperator(double * phi, double xi, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
-    */
 
     // Coordinate transformation:
     void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
@@ -47,7 +46,7 @@ private:
 
 public:
     coll_operator_TYP();
-    void ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
+    void ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 };
 
 #endif

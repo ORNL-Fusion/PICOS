@@ -10,8 +10,8 @@ coll_operator_TYP::coll_operator_TYP()
 // =============================================================================
 void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT)
 {
-    // double BoozerFactor = (double)0.5;
-    double BoozerFactor = (double)1.0;
+    double BoozerFactor = (double)0.5;
+    // double BoozerFactor = (double)1.0;
     double nu_E_dt(0.0);
     int energyOperatorModel = 2;
 
@@ -23,10 +23,10 @@ void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, d
     double dt_s = (double) DT/Nstep;
 
     // Limit substepping:
-    if (Nstep > 70)
+    if (Nstep > 100)
     {
         cout << "Nstep for 'w' operator = " << Nstep << endl;
-        Nstep = 70;
+        Nstep = 100;
     }
 
     // Apply operator:
@@ -80,10 +80,10 @@ void coll_operator_TYP:: xi_CollisionOperator(double * xi, double xab, double wT
 
     // Limit substepping:
     // ===========================
-    if (Nstep > 70)
+    if (Nstep > 100)
     {
         cout << "Nstep for 'xi' operator = " << Nstep << endl;
-        Nstep = 70;
+        Nstep = 100;
     }
 
     // Apply operator:
@@ -151,6 +151,25 @@ void coll_operator_TYP::interpolateIonMoments(const params_TYP * params, vector<
     IONS->at(a).Tper_p = Tper_p;
 }
 
+// Interpolate electron temperature : test species "a" and electron fluid as species "b"
+void coll_operator_TYP::interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons)
+{
+    //  Number of computational particles:
+    int NSP(IONS->at(a).NSP);
+
+    // Create particle-defined quantities:
+    arma::vec Te_p = zeros(NSP,1);
+
+    // Create mesh defined quantities:
+    arma::vec Te_m   = electrons->Te_m;
+
+    // Interpolate:
+    interpolateScalarField(params, &IONS->at(a), &Te_m, &Te_p);
+
+    // Assign values:
+    IONS->at(a).Te_p = Te_p;
+}
+
 // Fill ghost cells:
 // =============================================================================
 void coll_operator_TYP::fill4Ghosts(arma::vec * v)
@@ -188,7 +207,7 @@ void coll_operator_TYP::interpolateScalarField(const params_TYP * params, ionSpe
 
 // Entire collision operator method:
 // =============================================================================
-void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS)
+void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons)
 {
     if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
@@ -256,15 +275,25 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 					Mb = F_ME;
 					Zb = -1;
 
+                    // Interpolate electron temperature:
+                    interpolateElectronTemperature(params,IONS,aa,electrons);
+					arma::vec Te_p  = IONS->at(aa).Te_p*CS->temperature*F_KB/F_E;
+
+                    // if (params->mpi.IS_PARTICLES_ROOT)
+                    // {
+                    //     cout << "Te_p = " << Te_p.subvec(1,100) <<  endl;
+                    // }
+
 					// Background conditions:
 					nb  = n_i;
-					Tb  = ones(NSP_a,1)*params->f_IC.Te*CS->temperature*F_KB/F_E;
+					// Tb  = ones(NSP_a,1)*params->f_IC.Te*CS->temperature*F_KB/F_E;
+                    Tb  = Te_p;
 					uxb = nUx_i/n_i;
 				}
 
                 // Apply collisions to all particles:
 				// ==================================
-                #pragma omp parallel for default(none) shared(params, IONS, aa, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT) firstprivate(NSP_a)
+                #pragma omp parallel for default(none) shared(params, IONS, aa, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout) firstprivate(NSP_a)
 				for(int ii=0; ii<NSP_a; ii++)
 				{
 					// Species "aa":
@@ -327,7 +356,11 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 					// =====================================================================
 					IONS->at(aa).V_p(ii,0) = (wxa + uxb(ii))/CS->velocity;
 					IONS->at(aa).V_p(ii,1) = wya/CS->velocity;
-					//IONS->at(aa).V(ii,2) = wza/CS->velocity;
+
+                    if ( isnan(IONS->at(aa).V_p(ii,0)) || isnan(IONS->at(aa).V_p(ii,1)) )
+                    {
+                        cout << "isnan(V) == 1" << endl;
+                    }
 
                 } // "ii" particle loop
 

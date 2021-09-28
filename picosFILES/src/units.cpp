@@ -306,7 +306,7 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	}
 }
 
-void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> * IONS, fields_TYP * fields, const CS_TYP * CS)
+void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS)
 {
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -334,8 +334,9 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 
 	// Fluid initial conditions:
 	// -------------------------
-	params->f_IC.ne /= CS->density;
-	params->f_IC.Te /= CS->temperature;
+	params->f_IC.ne         /= CS->density;
+	params->f_IC.Te         /= CS->temperature;
+    params->f_IC.Te_profile /= CS->temperature;
 
 	// Electromagnetic fields initial conditions:
 	// -----------------------------------------
@@ -423,6 +424,10 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
             IONS->at(ii).V_p = IONS->at(ii).V_p/CS->velocity;
 		}
 	}
+
+    // Normalizing "electrons":
+    // =========================================================================
+    electrons->Te_m /= CS->temperature;
 
     // Normalizing "fields":
     // =========================================================================

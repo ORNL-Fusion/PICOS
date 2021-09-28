@@ -46,6 +46,9 @@ int main(int argc, char* argv[])
     // Ion species vector:
     vector<ionSpecies_TYP> IONS;
 
+    // Electron species object:
+    electrons_TYP electrons;
+
     // Characteristic scales:
     CS_TYP CS;
 
@@ -73,7 +76,7 @@ int main(int argc, char* argv[])
     init.readIonPropertiesFile(&params, &IONS);
 
     // Read IC profiles from external files:
-    init.readInitialConditionProfiles(&params, &IONS);
+    init.readInitialConditionProfiles(&params, &electrons, &IONS);
 
     // Calculate derived quantities from input data:
     init.calculateDerivedQuantities(&params, &IONS);
@@ -88,14 +91,16 @@ int main(int argc, char* argv[])
     init.allocateMemoryIons(&params, &IONS);
 
     // Initialize IONS: scalar, bulk and particle arrays
-    init.setupIonsInitialCondition(&params, &CS, &fields, &IONS);
+    init.initializeIons(&params, &CS, &fields, &IONS);
+
+    // Initialize electrons fluid:
+    init.initializeElectrons(&params, &CS, &electrons);
 
     // Initialize electromagnetic field variable:
     init.initializeFields(&params, &fields);
 
     // Define characteristic scales and broadcast them to all processes in COMM_WORLD:
     units.defineCharacteristicScalesAndBcast(&params, &IONS, &CS);
-
 
     // =========================================================================
     //  CONSIDER REMOVING FS
@@ -111,15 +116,14 @@ int main(int argc, char* argv[])
     units.spatialScalesSanityCheck(&params, &FS);
     // =========================================================================
 
-
     // HDF object constructor and create "main.h5"
     HDF_TYP HDF(&params, &FS, &IONS);
 
     // Define time step based on ion CFL condition:
     units.defineTimeStep(&params, &IONS);
 
-    // Normalize "params", "IONS", "fields" using "CS"
-    units.normalizeVariables(&params, &IONS, &fields, &CS);
+    // Normalize "params", "IONS", "electrons", "fields" using "CS"
+    units.normalizeVariables(&params, &IONS, &electrons, &fields, &CS);
 
     // #########################################################################
     /**************** All the quantities below are dimensionless ****************/
@@ -139,7 +143,7 @@ int main(int argc, char* argv[])
 
     // Create PIC solver:
     // =========================================================================
-    PIC_TYP PIC(&params, &CS, &fields, &IONS);
+    PIC_TYP PIC(&params, &CS, &fields, &IONS, &electrons);
 
     // Create RF operator object:
     // =========================================================================
@@ -193,6 +197,9 @@ int main(int argc, char* argv[])
 
             // Interpolate all fields:
             PIC.interpolateFields_AllSpecies(&params,&IONS,&fields);
+
+            // Interpolate electron temperature:
+        	PIC.interpolateElectrons_AllSpecies(&params,&IONS,&electrons);
         }
 
         // Calculate ion moments:
@@ -203,7 +210,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.Collisions == 1)
         {
-            coll_operator.ApplyCollisions_AllSpecies(&params,&CS,&IONS);
+            coll_operator.ApplyCollisions_AllSpecies(&params,&CS,&IONS,&electrons);
         }
 
         // Apply RF operator:
@@ -236,7 +243,7 @@ int main(int argc, char* argv[])
         if (params.SW.EfieldSolve == 1)
         {
             // Use Ohm's law to advance the electric field:
-            fields_solver.advanceEfield(&params,&fields,&CS,&IONS);
+            fields_solver.advanceEfield(&params,&fields,&CS,&IONS,&electrons);
         }
 
         // Advance time:

@@ -141,54 +141,54 @@ struct p_BC_TYP
 
 //  Define ION VARIABLES AND PARAMETERS DERIVED TYPES:
 // =============================================================================
-class ionSpecies_TYP //: public vfield_vec_TYP
+class ionSpecies_TYP
 {
 
 public:
 
 	int SPECIES;
 	double NR;          // Initial number of real particles represented in simulation
-	double NSP; 				// Initial number of superparticles for the given ion species.
+	double NSP; 				// Initial number of computational for the given ion species.
 	double NCP; 				// Number of charged particles per superparticle.
-	double NPC; 				// Number of superparticles per cell. When its value is zero, the particles are loaded from external files.
+	double NPC; 				// Number of computational per cell.
 	double Q; 					// Charge.
 	double Z; 					// Atomic number.
 	double M; 					// Mass
 
-	// variables for controlling super-particles' outputs
-	double pctSupPartOutput; 	//
-	unsigned int nSupPartOutput;//
+	// Variables to control super-particles' outputs
+	double pctSupPartOutput;
+	unsigned int nSupPartOutput;
 
-	double LarmorRadius;		// Larmor radius.
+	// Characteristic scales:
+	double LarmorRadius;
 	double GyroPeriod;
 	double SkinDepth;
-	double VTper;				// Thermal velocity.
-	double VTpar;				// Thermal velocity.
-	double Wc;					// Average cyclotron frequency.
-	double Wp;					// Plasma frequency.
+	double VTper;
+	double VTpar;
+	double Wc;
+	double Wp;
 
-	arma::vec X_p;
+	// Particle attributes:
+	arma::vec X_p;	// Particle position
 	arma::mat V_p;  // Velocity vector, V(0): parallel, V(1): perpendicular
 	arma::vec a_p;  // Computational particle weight
 	arma::vec mu_p; // Magnetic moment
 
-	arma::ivec mn; // Ions' position in terms of the index of mesh node
+	// Nearest grid point:
+	arma::ivec mn;  // Ions' position in terms of the index of mesh node
 
+	// Particle-defined fields:
 	arma::vec EX_p;
 	arma::vec BX_p;
 	arma::vec dBX_p;
 	arma::vec ddBX_p;
 
-	//These weights are used in the charge extrapolation and the force interpolation
-	arma::vec wxl;				// Particles' weights w.r.t. the vertices of the grid cells
-	arma::vec wxc;				// Particles' weights w.r.t. the vertices of the grid cells
-	arma::vec wxr;				// Particles' weights w.r.t. the vertices of the grid cells
+	// Assignment function values for TSC shape function
+	arma::vec wxl;				// Left node
+	arma::vec wxc;				// Central node
+	arma::vec wxr;				// Right node
 
-	arma::vec wxl_;				// Particles' weights w.r.t. the vertices of the grid cells
-	arma::vec wxc_;				// Particles' weights w.r.t. the vertices of the grid cells
-	arma::vec wxr_;				// Particles' weights w.r.t. the vertices of the grid cells
-
-    // Mesh-defined ion moments:
+  // Mesh-defined ion moments:
 	arma::vec n_m;
 	arma::vec n_m_;
 	arma::vec n_m__;
@@ -200,30 +200,18 @@ public:
 	arma::vec nv_m___;
 
 	arma::vec P11_m;				// Ion pressure tensor, component 1,1
-	arma::vec P11_m_;
-	arma::vec P11_m__;
-	arma::vec P11_m___;
-
 	arma::vec P22_m;				// Ion pressure tensor, component 2,2
-	arma::vec P22_m_;
-	arma::vec P22_m__;
-	arma::vec P22_m___;
-
 	arma::vec Tpar_m;			// Ion parallel temperature
-	arma::vec Tpar_m_;
-	arma::vec Tpar_m__;
-	arma::vec Tpar_m___;
-
 	arma::vec Tper_m;			// Ion perpendicular temperature
-	arma::vec Tper_m_;
-	arma::vec Tper_m__;
-	arma::vec Tper_m___;
 
 	// Particle-defined ion moments:
 	arma::vec n_p;
 	arma::vec nv_p;
 	arma::vec Tpar_p;
 	arma::vec Tper_p;
+
+	// Particle-defined electron temperature:
+	arma::vec Te_p;
 
 	// Particle defined flags:
 	arma::ivec f1;             	// Flag for left boundary
@@ -261,11 +249,27 @@ public:
 	~ionSpecies_TYP(){};
 };
 
+//  Define ELECTRONS DERIVED TYPE:
+// =============================================================================
+class electrons_TYP
+{
+public:
+
+	// Mesh-defined temperature:
+	arma::vec Te_m;
+
+	// Constructor:
+	electrons_TYP(){};
+
+	// Destructor:
+	~electrons_TYP(){};
+};
+
+
 //  Define ELECTROMAGNETIC FIELDS DERIVED TYPES:
 // =============================================================================
-class fields_TYP //: public vfield_vec_TYP
+class fields_TYP
 {
-
 public:
 
 	arma::vec EX_m;
@@ -319,33 +323,26 @@ struct mesh_params_TYP
 	int NX_IN_SIM; // Number of mesh nodes along x-axis in entire simulation domain (no ghost nodes considered)
 	double DX;
 	double LX;		// Size of simulation domain along x-axis
-
-	/*
-	// Cartesian unit vectors:
-	//arma::vec e_x;
-	//arma::vec e_y;
-	//arma::vec e_z;
-
-	//int SPLIT_DIRECTION;
-
-	//mesh_params_TYP()
-	//{
-		//e_x = {1.0, 0.0, 0.0};
-		//e_y = {0.0, 1.0, 0.0};
-		//e_z = {0.0, 0.0, 1.0};
-	//}
-	*/
-
 };
 
 //  Define structure to store fluid species initial condition parameters:
 // =============================================================================
 struct f_IC_TYP
 {
-	double ne; 							// Intial reference density
+	// Reference initial density:
+	double ne;
+
+	// Reference initial temperature:
 	double Te;
+
+	// Name of file containing Te profile:
 	string Te_fileName;
+
+	// Number of elements in Te_profile
 	int Te_NX;
+
+	// Profile:
+	arma::vec Te_profile;
 
 	// To be used later:
 	// ---------------------------------------------------------------------------

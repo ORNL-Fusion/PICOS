@@ -49,9 +49,11 @@ public:
 
 	void calculateDerivedQuantities(params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
-  	void readInitialConditionProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS);
+  	void readInitialConditionProfiles(params_TYP * params, electrons_TYP * electrons, vector<ionSpecies_TYP> * IONS);
 
-	void setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+	void initializeIons(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
+	void initializeElectrons(const params_TYP * params, const CS_TYP * CS, electrons_TYP * electrons);
 
 	void initializeFields(params_TYP * params, fields_TYP * fields);
 

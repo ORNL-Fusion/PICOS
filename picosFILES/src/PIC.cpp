@@ -156,7 +156,7 @@ void PIC_TYP::smooth(arma::vec * v, double as)
 }
 
 // Constructor:
-PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons)
 {
 	// Get latest mesh-defined values from FIELDS ranks:
 	// =================================================
@@ -172,6 +172,10 @@ PIC_TYP::PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ve
 	// Interpolate all fields on all species:
 	// ======================================
 	interpolateFields_AllSpecies(params,IONS,fields);
+
+	// Interpolate electron temperature on all species:
+	// ===============================================
+	interpolateElectrons_AllSpecies(params,IONS,electrons);
 
 	// Calculate ion moments and populate mesh-defined ion moments:
 	// ============================================================
@@ -229,9 +233,9 @@ void PIC_TYP::interpolateFields(const params_TYP * params, ionSpecies_TYP * IONS
 	interpolateScalarField(params, IONS, &fields->dBX_m, &dBX_p);
 
 	// Assign values:
-	IONS->EX_p   = EX_p;
-	IONS->BX_p   = BX_p;
-	IONS->dBX_p  = dBX_p;
+	IONS->EX_p  = EX_p;
+	IONS->BX_p  = BX_p;
+	IONS->dBX_p = dBX_p;
 
 	if (params->SW.RFheating == 1)
 	{
@@ -251,6 +255,32 @@ void PIC_TYP::interpolateFields_AllSpecies(const params_TYP * params, vector<ion
 		{
 			// Interpolate mesh-defined fields into ALL particles locations:
 			interpolateFields(params, &IONS->at(ss), fields);
+		}
+	}
+}
+
+void PIC_TYP::interpolateElectrons(const params_TYP * params, ionSpecies_TYP * IONS, const electrons_TYP * electrons)
+{
+	// Allocate memory:
+	arma::vec Te_p   = zeros(IONS->NSP, 1);
+
+	// Interpolate mesh-defined fields into particles:
+	interpolateScalarField(params, IONS, &electrons->Te_m , &Te_p );
+
+	// Assign values:
+	IONS->Te_p = Te_p;
+}
+
+void PIC_TYP::interpolateElectrons_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const electrons_TYP * electrons)
+{
+	// Interpolate all fields on all species:
+	// =======================
+	for(int ss=0;ss<IONS->size();ss++)
+	{
+		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+		{
+			// Interpolate mesh-defined electron temperature into ALL particles locations:
+			interpolateElectrons(params, &IONS->at(ss), electrons);
 		}
 	}
 }
@@ -408,6 +438,13 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
 
 				// Initialize initial particle state Z0:
 				Z0 = {x, vpar, vper};
+
+				if ( isnan(Z0(0)) || isnan(Z0(1)) || isnan(Z0(2)) )
+				{
+					cout << "*Z0(0), 1 = " << Z0(0) << endl;
+					cout << "*Z0(1), 1 = " << Z0(1) << endl;
+					cout << "*Z0(2), 1 = " << Z0(2) << endl;
+				}
 
 				// Interpolate fields at current particle postion:
 				interpEM(params, &IONS->at(ss), fields, &Z0, &EM);

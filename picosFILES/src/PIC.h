@@ -59,6 +59,8 @@ protected:
 	// PIC related:
 	void interpolateFields(const params_TYP * params, ionSpecies_TYP * IONS, const fields_TYP * fields);
 
+	void interpolateElectrons(const params_TYP * params, ionSpecies_TYP * IONS, const electrons_TYP * electrons);
+
 	void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p);
 
 	void interpEM(const params_TYP * params, const ionSpecies_TYP * IONS, const fields_TYP * fields, arma::rowvec * ZN, arma::rowvec * EM);
@@ -73,7 +75,7 @@ protected:
 
   public:
 
-	PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+	PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 
 	void assignCell(const params_TYP * params, ionSpecies_TYP * IONS);
 
@@ -82,6 +84,8 @@ protected:
 	void assignCell_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
 	void interpolateFields_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const fields_TYP * fields);
+
+	void interpolateElectrons_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const electrons_TYP * electrons);
 
   	void extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 

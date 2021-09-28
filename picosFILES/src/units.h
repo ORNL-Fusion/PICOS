@@ -32,7 +32,7 @@ public:
 
 	void defineCharacteristicScales(params_TYP * params, vector<ionSpecies_TYP> * IONS, CS_TYP * CS);
 
-	void normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> * IONS, fields_TYP * fields, const CS_TYP * CS);
+	void normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS);
 
 	void defineCharacteristicScalesAndBcast(params_TYP * params, vector<ionSpecies_TYP> * IONS, CS_TYP * CS);
 

@@ -104,18 +104,11 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     // Error codes:
     // ============
     params->errorCodes[-100] = "Odd number of MPI processes";
-    params->errorCodes[-101] = "Input file could not be opened";
     params->errorCodes[-102] = "MPI's Cartesian topology could not be created";
     params->errorCodes[-103] = "Grid size violates assumptions of hybrid model for the plasma -- DX smaller than the electron skind depth can not be resolved";
-    params->errorCodes[-104] = "Loading external electromagnetic fields not implemented yet";
-    params->errorCodes[-105] = "Restart not implemented yet";
     params->errorCodes[-106] = "Inconsistency in iniital ion's velocity distribution function";
-    params->errorCodes[-107] = "Inconsistency in iniital ion's spatial distribution function";
-    params->errorCodes[-108] = "Non-finite value in meshNode";
-    params->errorCodes[-109] = "Number of nodes in either direction of simulation domain need to be a multiple of 2";
-    params->errorCodes[-110] = "Non finite values in Ex";
 
-    // Copyright and Licence Info:
+    // Program information:
     // ===========================
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
@@ -265,8 +258,10 @@ void init_TYP::readInputFile(params_TYP * params)
 
     // Electron initial conditions:
     // -------------------------------------------------------------------------
-    params->f_IC.ne      = stod( parametersStringMap["IC_ne"] );
-    params->f_IC.Te      = stod( parametersStringMap["IC_Te"] )*F_E/F_KB; // Te in eV in input file
+    params->f_IC.ne          = stod( parametersStringMap["IC_ne"] );
+    params->f_IC.Te          = stod( parametersStringMap["IC_Te"] )*F_E/F_KB; // Te in eV in input file
+    params->f_IC.Te_NX       = stoi( parametersStringMap["IC_Te_NX"] );
+    params->f_IC.Te_fileName = parametersStringMap["IC_Te_fileName"];
 
     // RF parameters
     // -------------------------------------------------------------------------
@@ -493,7 +488,7 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
 
 // Read initial condition profiles from external files:
 // =============================================================================
-void init_TYP::readInitialConditionProfiles(params_TYP * params, vector<ionSpecies_TYP> * IONS)
+void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP * electrons, vector<ionSpecies_TYP> * IONS)
 {
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -504,27 +499,45 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, vector<ionSpeci
         cout << "* * * * * * * * * * * *  LOADING INITIAL CONDITION PROFILES  * * * * * * * * * * * * * * * * * *" << endl;
     }
 
-    // Define number of elements in external profiles:
-    // ===============================================
+    // Assemble PATH:
+    // ==============
     int nn = params->PATH.length();
-    std::string inputFilePath = params->PATH.substr(0,nn-13);
+    std::string fileName  = params->PATH.substr(0,nn-13);
 
+    // Assemble file paths:
+    // ====================
+    std::string fileName5 = fileName + "/inputFiles/" + params->em_IC.BX_fileName;
+    std::string fileName6 = fileName + "/inputFiles/" + params->f_IC.Te_fileName;
+
+    // Get electron temperature and magnetic field initial conditon data:
+    // =================================================================
+    params->em_IC.Bx_profile.load(fileName5);
+    params->f_IC.Te_profile.load(fileName6);
+
+    // Electron temperature "x" scale:
+    // ===============================
+    int Te_NX = params->f_IC.Te_NX;
+
+    // Rescale profiles:
+    // ================
+    params->f_IC.Te_profile *= params->f_IC.Te;
+    params->em_IC.Bx_profile *= params->em_IC.BX;
+
+    // Get Ion initial condition profiles:
+    // ==============================
     for(int ss=0;ss<IONS->size();ss++)
     {
-
-        // Assemble  external filenames
-        std::string fileName  = params->PATH.substr(0,nn-13);
+        // Assemble  external filenames:
+        // =============================
         std::string fileName2 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tper_fileName;
         std::string fileName3 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tpar_fileName;
         std::string fileName4 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.densityFraction_fileName;
-        std::string fileName5 = fileName + "/inputFiles/" + params->em_IC.BX_fileName;
 
         // Load data from external file:
         // ============================
         IONS->at(ss).p_IC.Tper_profile.load(fileName2);
         IONS->at(ss).p_IC.Tpar_profile.load(fileName3);
         IONS->at(ss).p_IC.densityFraction_profile.load(fileName4);
-        params->em_IC.Bx_profile.load(fileName5);
 
         // Rescale the plasma Profiles:
         // ================================
@@ -532,24 +545,19 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, vector<ionSpeci
         IONS->at(ss).p_IC.Tpar_profile *= IONS->at(ss).p_IC.Tpar;
         IONS->at(ss).p_IC.densityFraction_profile *= params->f_IC.ne;
 
-        // Scale the normalized profile to Tesla:
-        // ====================================
-        params->em_IC.Bx_profile *= params->em_IC.BX;
-
         // Axial coordinate:
         // =================
         int Tper_NX = IONS->at(ss).p_IC.Tper_NX;
         IONS->at(ss).p_IC.x_profile = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
+    }
 
-        // Print to terminal:
-        // ==================
-        if(params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
-            cout << "+ Succesfully read IC external files                        " << endl;
-            cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
-        }
-
+    // Print to terminal:
+    // ==================
+    if(params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
+        cout << "+ Succesfully read IC external files                        " << endl;
+        cout << "* * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *" << endl;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -846,14 +854,12 @@ void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSp
     IONS->wxl.zeros(IONS->NSP);
     IONS->wxr.zeros(IONS->NSP);
 
-    IONS->wxc_.zeros(IONS->NSP);
-    IONS->wxl_.zeros(IONS->NSP);
-    IONS->wxr_.zeros(IONS->NSP);
-
     IONS->n_p.zeros(IONS->NSP);
     IONS->nv_p.zeros(IONS->NSP);
     IONS->Tpar_p.zeros(IONS->NSP);
     IONS->Tper_p.zeros(IONS->NSP);
+
+    IONS->Te_p.zeros(IONS->NSP);
 
     // Initialize particle defined flags:
     // ==================================
@@ -893,7 +899,7 @@ void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSp
 
 // Initialize ION particle position and velocity vector:
 // =============================================================================
-void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -965,6 +971,72 @@ void init_TYP::setupIonsInitialCondition(const params_TYP * params, const CS_TYP
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
+// Initialize electrons with profile data:
+// =============================================================================
+void init_TYP::initializeElectrons(const params_TYP * params, const CS_TYP * CS, electrons_TYP * electrons)
+{
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * INITIALIZING ELECTRON FLUID * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    // Number of mesh points with ghost cells included:
+    int NX(params->mesh.NX_IN_SIM + 2);
+
+    // Allocate memory to the mesh-defined electron temperature:
+    electrons->Te_m.zeros(NX);
+
+    //Interpolate at mesh points:
+    // ==========================
+    // Query points:
+    arma::vec xq = zeros(NX);
+    arma::vec yq = zeros(NX);
+    for(int ii=0; ii<NX; ii++)
+    {
+        xq(ii) = (double)ii*params->mesh.DX - (0.5*params->mesh.DX) + params->geometry.LX_min;
+    }
+
+    // Sample points:
+    int Te_NX  = params->f_IC.Te_NX;
+
+    // Spatial increment for external data:
+    double dX = params->mesh.LX/((double)(Te_NX - 2));
+    arma::vec xt = zeros(Te_NX);
+    arma::vec yt = zeros(Te_NX);
+    for(int ii=0; ii<Te_NX; ii++)
+    {
+        xt(ii) = (double)ii*dX - (0.5*dX) + params->geometry.LX_min;
+    }
+
+    // Te profile:
+    // ===========
+    arma::vec Te = params->f_IC.Te_profile;
+    yt = Te;
+    interp1(xt,yt,xq,yq);
+    electrons->Te_m = yq;
+
+    // Print to terminal:
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "Completed initializing the mesh-defined electron temperature" << endl;
+        cout << "+ Reference electron temperature: " << scientific << params->f_IC.Te*F_KB/F_E << fixed << " [eV] " << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Print to terminal:
+    // ==================
+	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << "* * * * * * * * * * * * ELECTRON FLUID INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+}
+
 // Initialize fields with profile data:
 // =============================================================================
 void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
@@ -994,9 +1066,6 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         //Interpolate at mesh points:
         // ==========================
         // Query points:
-        //arma::vec xq = params->geometry.LX_min + linspace(0,params->mesh.LX,NX);
-        //arma::vec yq(xq.size());
-
         arma::vec xq = zeros(NX);
         arma::vec yq = zeros(NX);
         for(int ii=0; ii<NX; ii++)
@@ -1008,8 +1077,6 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         int BX_NX  = params->em_IC.BX_NX;
 
         // Spatial increment for external data:
-        //arma::vec xt = params->geometry.LX_min + linspace(0,params->mesh.LX,BX_NX); // x-vector from the table
-        //arma::vec yt(xt.size());
         double dX = params->mesh.LX/((double)(BX_NX - 2));
         arma::vec xt = zeros(BX_NX);
         arma::vec yt = zeros(BX_NX);

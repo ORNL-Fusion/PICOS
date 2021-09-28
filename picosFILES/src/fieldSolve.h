@@ -27,14 +27,17 @@ class fields_solver_TYP
   	arma::vec ne__;  // tt - 2
   	arma::vec ne___; // tt - 3
 
-  	// Bulk plasma flux:
-  	//arma::vec nU;
+    // Electron temperature:
+    arma::vec Te;
 
-  	// Bulk plasma flow:
-  	//arma::vec U;
+    // Electron pressure:
+    arma::vec Pe;
+
+    // Electron pressure gradient:
+    arma::vec dPe;
 
   	// Electron density gradient:
-  	arma::vec dne;
+  	//arma::vec dne;
 
     // Electric field:
     arma::vec EX_m;
@@ -63,7 +66,7 @@ class fields_solver_TYP
 
   	//void advanceBField(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
 
-  	void advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
+  	void advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 };
 
 #endif
