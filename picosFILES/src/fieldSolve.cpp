@@ -23,11 +23,7 @@ fields_solver_TYP::fields_solver_TYP(const params_TYP * params, CS_TYP * CS)
 	// Electron pressure gradient:
 	dPe.zeros(NX_S);
 
-	//nU.zeros(NX_S);
-    //U.zeros(NX_S);
-
-    // Electron density gradient:
-	//dne.zeros(NX_S);
+    // Spatial increment:
 	dx = params->mesh.DX;
 
     // Electric field:
@@ -125,24 +121,11 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 		unsigned int iIndex = params->mpi.iIndex;
 		unsigned int fIndex = params->mpi.fIndex;
 
-		// Initialize the electron density:
+		// Initialize the electron density prior to the accumulation:
 		ne.zeros();
 		ne_.zeros();
 		ne__.zeros();
 		ne___.zeros();
-
-		// Initialize the electron temperature:
-		//Te.zeros();
-
-		// Initialize the electron pressure:
-		//Pe.zeros();
-
-        // Initialize the gradient:
-		//dPe.zeros();
-        //dne.zeros();
-
-		// Electron temperature:
-		//double Te = params->f_IC.Te;
 
 		// Accumulate the contribution from all species:
 		for(int ss=0; ss<IONS->size(); ss++)
@@ -171,12 +154,7 @@ void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fi
 		dPe.subvec(1,NX_S - 2) = 0.5*( Pe.subvec(2,NX_S-1) - Pe.subvec(0,NX_S-3) );
         fill4Ghosts(&dPe);
 
-		// Gradient of electron density:
-		//dne.subvec(1,NX_S - 2) = 0.5*( ne.subvec(2,NX_S-1) - ne.subvec(0,NX_S-3) );
-        //fill4Ghosts(&dne);
-
 		// Electric field based on Ohm's law:
-        // EX_m = -(Te/F_E_DS)*(1/ne)%dne/dx;
 		EX_m = -(1/ne)%dPe/dx;
 		fields->EX_m.subvec(iIndex,fIndex) = EX_m.subvec(1,NX_S - 2);
         fill4Ghosts(&fields->EX_m);

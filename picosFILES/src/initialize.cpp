@@ -1091,7 +1091,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         yt = BX;
         interp1(xt,yt,xq,yq);
         fields->BX_m = yq;
-
+    
         // dBX profile:
         // ===========
         arma::vec dBX(BX_NX,1);

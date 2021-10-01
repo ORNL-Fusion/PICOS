@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
 
     // Save 1st output:
     // =========================================================================
-    HDF.saveOutputs(&params, &IONS, &fields, &CS, 0, 0);
+    HDF.saveOutputs(&params, &IONS, &electrons, &fields, &CS, 0, 0);
 
     // Start timing simulations:
     // =========================================================================
@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
         {
             vector<ionSpecies_TYP> IONS_OUT = IONS;
 
-            HDF.saveOutputs(&params, &IONS_OUT, &fields, &CS, outputIterator+1, params.currentTime);
+            HDF.saveOutputs(&params, &IONS_OUT, &electrons, &fields, &CS, outputIterator+1, params.currentTime);
 
             outputIterator++;
         }

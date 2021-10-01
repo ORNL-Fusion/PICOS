@@ -10,8 +10,8 @@ coll_operator_TYP::coll_operator_TYP()
 // =============================================================================
 void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT)
 {
-    double BoozerFactor = (double)0.5;
-    // double BoozerFactor = (double)1.0;
+    // double BoozerFactor = (double)0.5;
+    double BoozerFactor = (double)1.0;
     double nu_E_dt(0.0);
     int energyOperatorModel = 2;
 
@@ -279,14 +279,8 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
                     interpolateElectronTemperature(params,IONS,aa,electrons);
 					arma::vec Te_p  = IONS->at(aa).Te_p*CS->temperature*F_KB/F_E;
 
-                    // if (params->mpi.IS_PARTICLES_ROOT)
-                    // {
-                    //     cout << "Te_p = " << Te_p.subvec(1,100) <<  endl;
-                    // }
-
 					// Background conditions:
 					nb  = n_i;
-					// Tb  = ones(NSP_a,1)*params->f_IC.Te*CS->temperature*F_KB/F_E;
                     Tb  = Te_p;
 					uxb = nUx_i/n_i;
 				}
@@ -397,14 +391,25 @@ double coll_operator_TYP::nu_E(double xab, double nb, double Tb, double Mb, doub
 
     if (energyOperatorModel == 1)
     {
-        // From Hinton 1983 EQ 92 and L. Chen 1988 EQ 50
+        // From Hinton 1983 EQ 92 and T.S. Chen 1988 EQ 50
         y = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*( (2.0*(Ma/Mb)*Gb(xab)/xab) - (erfp(xab)/(pow(xab,2.0)) ) );
     }
     else if  (energyOperatorModel == 2)
     {
-        // From L. Chen 1983 EQ 57 commonly used for NBI
+        //From T.S. Chen 1988 Report EQ 57 commonly used for NBI
         y = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*(2.0*(Ma/Mb))*(Gb(xab)/xab);
     }
+
+    /* References:
+    T.S Chen 1988:
+    "A General Form of the Coulomb Scattering Operators for Monte Carlo ...
+    Simulations and a Note on the Guiding Center Equations in Different Magnetic Coordinate Conventions"
+
+    Hinton 1983:
+    "Handbook of Plasma Physics
+    Editors: M.N. Rosenbluth and R.Z. Sagdeev
+    Chapter 1.5 - Collisional Transport in Plasma"
+    */
 
     return y;
 }
