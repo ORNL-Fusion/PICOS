@@ -232,9 +232,9 @@ public:
 	arma::vec resNum_;
 
 	// Rf terms:
-	arma::vec udErf;
-	arma::vec doppler;
-	arma::vec udE3;
+	arma::vec udErf;           // Perpendicular energy gained by particle during unit electric field RF interaction
+	arma::vec doppler;         // Doppler shift term
+	arma::vec udE3;						 // Total energy gained by particle during unit Electric field RF interaction
 
 	// Initial condition parameters:
 	p_IC_TYP p_IC;

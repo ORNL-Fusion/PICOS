@@ -468,38 +468,11 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ1 = F*DT;
 
-				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
-				{
-					cout << "Z0(0), 1 = " << Z0(0) << endl;
-					cout << "ZN(0), 1 = " << ZN(0) << endl;
-					cout << "ZN(1), 1 = " << ZN(1) << endl;
-					cout << "ZN(2), 1 = " << ZN(2) << endl;
-
-					cout << "E  = " << E  << endl;
-					cout << "B  = " << B  << endl;
-					cout << "dB = " << dB << endl;
-					cout << "EM(0) = " << EM(0) << endl;
-					cout << "EM(1) = " << EM(1) << endl;
-					cout << "EM(2) = " << EM(2) << endl;
-				}
-
                 // Step 2:
                 ZN = Z0 + dZ1/2;
                 interpEM(params, &IONS->at(ss), fields, &ZN, &EM);
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ2 = F*DT;
-
-				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
-				{
-					cout << "Z0(0), 2 = " << Z0(0) << endl;
-					cout << "ZN(0), 2 = " << ZN(0) << endl;
-					cout << "ZN(1), 2 = " << ZN(1) << endl;
-					cout << "ZN(2), 2 = " << ZN(2) << endl;
-
-					cout << "EM(0), 2 = " << EM(0) << endl;
-					cout << "EM(1), 2 = " << EM(1) << endl;
-					cout << "EM(2), 2 = " << EM(2) << endl;
-				}
 
                 // Step 3:
                 ZN = Z0 + dZ2/2;
@@ -507,27 +480,11 @@ void PIC_TYP::advanceParticles(const params_TYP * params, fields_TYP * fields, v
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ3 = F*DT;
 
-				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
-				{
-					cout << "Z0(0), 3 = " << Z0(0) << endl;
-					cout << "ZN(0), 3 = " << ZN(0) << endl;
-					cout << "ZN(1), 3 = " << ZN(1) << endl;
-					cout << "ZN(2), 3 = " << ZN(2) << endl;
-				}
-
                 // Step 4:
                 ZN = Z0 + dZ3;
                 interpEM(params, &IONS->at(ss), fields, &ZN, &EM);
                 calculateF(params, &IONS->at(ss), &ZN, &EM, &F);
                 dZ4 = F*DT;
-
-				if ( isnan(ZN(0)) || isnan(ZN(1)) || isnan(ZN(2)) )
-				{
-					cout << "Z0(0), 4 = " << Z0(0) << endl;
-					cout << "ZN(0), 4 = " << ZN(0) << endl;
-					cout << "ZN(1), 4 = " << ZN(1) << endl;
-					cout << "ZN(2), 4 = " << ZN(2) << endl;
-				}
 
                 // Assemble RK4 solution:
                 Z1 = Z0 + (dZ1 + 2*dZ2 + 2*dZ3 + dZ4)/6;
@@ -599,10 +556,6 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
 		if ( m < 0)
 		{
 			cout << "Main AssignCell out of bound, m = " << m << endl;
-			cout << "X_p = " << X_p << endl;
-			cout << "X_p_min = " << X_p_min << endl;
-			cout << "DX = " << DX << endl;
-
 			m = 0;
 		}
 
@@ -614,7 +567,7 @@ void PIC_TYP::assignCell(const params_TYP * params, ionSpecies_TYP * IONS)
 
 		// Assignment function:
 		IONS->wxl(ii) = 0.5*pow(1.5 + ((X - DX)/DX),2); // Left:
-		IONS->wxc(ii) = 0.75 - pow(X/DX,2);               // Center:
+		IONS->wxc(ii) = 0.75 - pow(X/DX,2);             // Center:
 		IONS->wxr(ii) = 0.5*pow(1.5 - ((X + DX)/DX),2); // Right:
 
 	} // parallel omp
@@ -682,20 +635,13 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * 
 			calculateDerivedIonMoments(params, CS, &IONS->at(ss));
         }
 
-		// 0th and 1st moments at various time levels are sent to fields processes:
+		// 0th moment at various time levels are sent to fields processes:
         // =============================================================
 		// Ion density:
         MPI_SendVec(params, &IONS->at(ss).n_m);
         MPI_SendVec(params, &IONS->at(ss).n_m_);
         MPI_SendVec(params, &IONS->at(ss).n_m__);
         MPI_SendVec(params, &IONS->at(ss).n_m___);
-
-		// For ES solution, we dont need to send these to the field ranks:
-		// Ion parallel flux:
-		//MPI_SendVec(params, &IONS->at(ss).nv_m);
-		//MPI_SendVec(params, &IONS->at(ss).nv_m_);
-		//MPI_SendVec(params, &IONS->at(ss).nv_m__);
-
 	}
 }
 
@@ -765,12 +711,12 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 			double c = 1;
 
 			// Particle weight:
-
+			/*
 			if (params->currentTime == 0)
 			{
-				//IONS->a_p(ii) = 1/c;
+				IONS->a_p(ii) = 1/c;
 			}
-
+			*/
 
 			double a = IONS->a_p(ii);
 
@@ -783,8 +729,6 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 			nv(ix-1) += IONS->wxl(ii)*a*vpar*c;
 			nv(ix) 	 += IONS->wxc(ii)*a*vpar*c;
 			nv(ix+1) += IONS->wxr(ii)*a*vpar*c;
-
-			// Unitary particle flux may be needed here
 
 			// Stress tensor P11:
 			P11(ix-1) += IONS->wxl(ii)*a*Ma*pow(vpar,2)*c;
@@ -824,14 +768,6 @@ void PIC_TYP::eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, i
 	IONS->P11_m = IONS->P11_m%c;
 	IONS->P22_m = IONS->P22_m%c;
 
-	// if (params->mpi.IS_PARTICLES_ROOT)
-	// {
-	// 	cout << "B0 = " << B0 << endl;
-	//
-	// 	cout << "c = " << c << endl;
-	//
-	// }
-
 	// Scale:
 	// =====
 	double A = params->geometry.A_0;
@@ -848,7 +784,7 @@ void PIC_TYP::calculateDerivedIonMoments(const params_TYP * params, CS_TYP * CS,
 
 	// Ion pressures:
 	arma::vec Ppar = IONS->P11_m - (Ma*IONS->nv_m % IONS->nv_m/IONS->n_m);
-	arma::vec Pper = IONS->P22_m; // We have neglected perp drift kinetic energy
+	arma::vec Pper = IONS->P22_m;
 
 	// Ion temperatures:
 	IONS->Tpar_m = Ppar/(F_E_DS*IONS->n_m);
