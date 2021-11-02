@@ -46,6 +46,8 @@ public:
     particleBC_TYP();
 
     void applyParticleReinjection(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
+    void ApplyBohmCondition_AllSpecies(const params_TYP * params, const CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 };
 
 #endif

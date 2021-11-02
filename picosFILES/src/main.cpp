@@ -206,6 +206,17 @@ int main(int argc, char* argv[])
         // =====================================================================
         PIC.extrapolateMoments_AllSpecies(&params,&CS,&fields,&IONS);
 
+        // Enforce Bohm condition at plasma-wall region:
+        // =====================================================================
+        if (params.currentTime >= 0.05e-3)
+        {
+            particleBC.ApplyBohmCondition_AllSpecies(&params,&CS,&fields,&IONS,&electrons);
+        }
+
+        // Calculate ion moments:
+        // =====================================================================
+        PIC.extrapolateMoments_AllSpecies(&params,&CS,&fields,&IONS);
+
         // Apply collision operator:
         // =====================================================================
         if (params.SW.Collisions == 1)
