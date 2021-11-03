@@ -208,9 +208,12 @@ int main(int argc, char* argv[])
 
         // Enforce Bohm condition at plasma-wall region:
         // =====================================================================
-        if (params.currentTime >= 0.05e-3)
+        if (params.SW.Bohm == 1)
         {
-            particleBC.ApplyBohmCondition_AllSpecies(&params,&CS,&fields,&IONS,&electrons);
+            if (params.currentTime >= params.Bohm.t_ON*params.ionGyroPeriod*CS.time)
+            {
+                particleBC.ApplyBohmCondition_AllSpecies(&params,&CS,&fields,&IONS,&electrons);
+            }
         }
 
         // Calculate ion moments:

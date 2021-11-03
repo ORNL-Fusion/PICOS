@@ -366,6 +366,21 @@ struct f_IC_TYP
 
 };
 
+// Define structure to store Bohm boundary condition parameters:
+// =============================================================================
+struct Bohm_TYP
+{
+	int type;        // 1: M = 1; 2: M > 1
+	int edgeCells;   // Number of cells at the edge to enforce Bohm condition
+	int t_ON;        // Time steps in terms of gyroperiods when the Bohm condition is applied
+	double gamma_i;  // Adiabatic index for one degree of freedom: 3
+
+	// Note:
+	// Method based on the following reference:
+	// M. Lampe, “Quasi-Neutral Particle Simulation of Magnetized Plasma Discharges: General Formalism and Application to ECR Discharges,” IEEE TRANSACTIONS ON PLASMA SCIENCE, vol. 26, no. 6, p. 18, 1998.
+	// Flow profile needs to be developed before we can apply Bohm condition and avoid errors in particle pusher
+};
+
 //  Define structure to store EM field initial condition parameters:
 // =============================================================================
 struct em_IC_TYP
@@ -430,6 +445,7 @@ struct SW_TYP
 	int RFheating;
 	int linearSolve;
 	int advancePos;
+	int Bohm;
 
 	SW_TYP()
 	{
@@ -439,6 +455,7 @@ struct SW_TYP
 		RFheating     = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
+		Bohm          = 0;
 	}
 
 };
@@ -644,6 +661,9 @@ struct params_TYP
 
 	// RF operator conditions:
 	RF_TYP RF;
+
+	// Bohm boundary condition parameters:
+	Bohm_TYP Bohm;
 
 	int filtersPerIterationFields;
 	int filtersPerIterationIons;

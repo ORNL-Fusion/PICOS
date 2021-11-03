@@ -544,34 +544,15 @@ void particleBC_TYP::ApplyBohmCondition_AllSpecies(const params_TYP * params, co
 {
     if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
-        // Initial estimate for edge region size:
+        // Select edge region:
         // =====================================
-        double edgeFraction = 0.01;
         int NX              = params->mesh.NX_IN_SIM;
-        int nEdge           = round(edgeFraction*NX);
-
-        if (nEdge == 0)
-        {
-            nEdge = 1;
-        }
-
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-        //     cout << "nEdge = " << nEdge << endl;
-        //     cout << "NX = "    << NX    << endl;
-        //     cout << "NX-1-nEdge = "    << NX-1-nEdge << endl;
-        // }
+        int nEdge           = params->Bohm.edgeCells;
 
         // Calculate mean electron temperature in edge region:
         // ===================================================
         double Te_left  = mean(electrons->Te_m.subvec(0,nEdge));
         double Te_right = mean(electrons->Te_m.subvec(NX-1-nEdge,NX-1));
-
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-        //     cout << "Te_left = "  << Te_left*CS->temperature*F_KB/F_E  << endl;
-        //     cout << "Te_right = " << Te_right*CS->temperature*F_KB/F_E << endl;
-        // }
 
         // Calculate mean ion temperature in edge region:
         // ==============================================
@@ -579,97 +560,112 @@ void particleBC_TYP::ApplyBohmCondition_AllSpecies(const params_TYP * params, co
         double Ti_left  = mean(IONS->at(0).Tpar_m.subvec(1,nEdge+1));
         double Ti_right = mean(IONS->at(0).Tpar_m.subvec(NX-1-nEdge,NX-1));
 
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-        //     cout << "Ti_left = "  << Ti_left*CS->temperature*F_KB/F_E  << endl;
-        //     cout << "Ti_right = " << Ti_right*CS->temperature*F_KB/F_E << endl;
-        // }
-
         // Parameters needed for ion sound speed calculation:
         // =================================================
-        // Adiabatic index for 1 degree of freedom:
-        double gamma_i = 3;
+        double gamma_i = params->Bohm.gamma_i; // Adiabatic index, 3: one degree of freedom
         double Z       = IONS->at(0).Z;
         double e_c     = F_E_DS;
         double Ma      = IONS->at(0).M;
 
         // Calculate ion sound speed in edge regions:
-        double Cs_left  = -sqrt( e_c*(Te_left + gamma_i*Ti_left)/Ma );
+        double Cs_left  = -sqrt( e_c*(Te_left  + gamma_i*Ti_left )/Ma );
         double Cs_right = +sqrt( e_c*(Te_right + gamma_i*Ti_right)/Ma );
-        // double Cs_left  = -sqrt( e_c*(Te_left)/Ma );
-        // double Cs_right = +sqrt( e_c*(Te_right)/Ma );
 
-
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-        //     cout << "Cs_left  = "  << Cs_left*CS->velocity  << endl;
-        //     cout << "Cs_right = "  << Cs_right*CS->velocity << endl;
-        //     cout << "DT = "  << params->DT*CS->time*1e9 << " [ns]" <<endl;
-        //     cout << "Cs_right*DT = "  << Cs_right*CS->velocity*params->DT*CS->time << endl;
-        //     cout << "wpi*DT = "  << IONS->at(0).Wp*params->DT << endl;
-        // }
+        if (params->mpi.IS_PARTICLES_ROOT)
+        {
+            // cout << "Cs_left  = "  << Cs_left*CS->velocity  << endl;
+            // cout << "Cs_right = "  << Cs_right*CS->velocity << endl;
+            // cout << "DT = "  << params->DT*CS->time*1e9 << " [ns]" <<endl;
+            // cout << "Cs_right*DT = "  << Cs_right*CS->velocity*params->DT*CS->time << endl;
+            // cout << "wpi*DT = "  << IONS->at(0).Wp*params->DT << endl;
+            // cout << "Ti_left = "  << Ti_left*CS->temperature*F_KB/F_E  << endl;
+            // cout << "Ti_right = " << Ti_right*CS->temperature*F_KB/F_E << endl;
+        }
 
         // Calculate Ion bulk velocity in the edge region:
         // ===============================================
         // Use zeroth element as the majority species:
+        
+        // We could potentially sum over all species as it is done in SOLPS
+        // See Equation 1.29 from the following:
+        // V. Kotov, D. Reiter, and A. S. Kukushkin, “Numerical study of the ITER divertor plasma with the B2-EIRENE code package,” 2007
+
         double U_left  = mean(IONS->at(0).nv_m.subvec(1,nEdge+1)      )/mean(IONS->at(0).n_m.subvec(1,nEdge+1)      );
         double U_right = mean(IONS->at(0).nv_m.subvec(NX-1-nEdge,NX-1))/mean(IONS->at(0).n_m.subvec(NX-1-nEdge,NX-1));
 
-        // Calculate velocity correction in edge regions:
-        // =============================================
-        double dU_left  = Cs_left  - U_left;
-        double dU_right = Cs_right - U_right;
+        // Set Bohm condition flag:
+        // ======================
+        int Bohm_left  = 1;
+        int Bohm_right = 1;
 
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-        //     cout << "U_left  = "   << U_left*CS->velocity  << endl;
-        //     cout << "U_right = "   << U_right*CS->velocity << endl;
-        //
-        //     cout << "Cs_left  = "   << Cs_left*CS->velocity  << endl;
-        //     cout << "Cs_right = "   << Cs_right*CS->velocity << endl;
-        //
-        //     cout << "dU_left  = "  << dU_left*CS->velocity  << endl;
-        //     cout << "dU_right = "  << dU_right*CS->velocity << endl;
-        // }
-
-        // Physical location of Bohm condition forcing boudary:
-        // ===================================================
-        double X_left  = params->mesh.nodesX(nEdge + 1);
-        double X_right = params->mesh.nodesX(NX-1-nEdge);
-
-        // if (params->mpi.IS_PARTICLES_ROOT)
-        // {
-            // cout << "X_left  = "   << X_left*CS->length  << endl;
-            // cout << "X_right = "   << X_right*CS->length << endl;
-        // }
-
-        // Apply velocity correction to all particles:
-        // ==========================================
-        for(int ss=0;ss<IONS->size();ss++)
+        if (params->Bohm.type == 2)
         {
-            // Number of computational particles per process:
-            int NSP(IONS->at(ss).NSP);
-
-            #pragma omp parallel for default(none) shared(IONS, std::cout,X_left,X_right,dU_right,dU_left) firstprivate(NSP, ss)
-            for(int ii=0; ii<NSP; ii++)
+            if ( abs(U_left) > abs(Cs_left) )
             {
-                if (IONS->at(ss).X_p(ii) <= X_left)
-                {
-                    IONS->at(ss).V_p(ii,0) += dU_left;
-                }
+                int Bohm_left = 0;
+            }
 
-                if (IONS->at(ss).X_p(ii) >= X_right)
+            if ( abs(U_right) > abs(Cs_right) )
+            {
+                int Bohm_right = 0;
+            }
+
+        }
+
+        // Apply velocity correction to all particles on LEFT boundary:
+        // ============================================================
+        if (Bohm_left == 1)
+        {
+            // Calculate velocity correction in edge regions:
+            double dU_left  = Cs_left  - U_left;
+
+            // Spatial location of edge:
+            double X_left  = params->mesh.nodesX(nEdge + 1);
+
+            // Apply velocity corrections:
+            for(int ss=0;ss<IONS->size();ss++)
+            {
+                int NSP(IONS->at(ss).NSP);
+
+                #pragma omp parallel for default(none) shared(IONS,X_left,dU_left) firstprivate(NSP,ss)
+                for(int ii=0; ii<NSP; ii++)
                 {
-                    IONS->at(ss).V_p(ii,0) += dU_right;
+                    if (IONS->at(ss).X_p(ii) <= X_left)
+                    {
+                        IONS->at(ss).V_p(ii,0) += dU_left;
+                    }
                 }
             }
-        }
+
+        } // IF
+
+
+        // Apply velocity correction to all particles in RIGHT boundary:
+        // ============================================================
+        if (Bohm_right == 1)
+        {
+            // Calculate velocity correction in edge regions:
+            double dU_right = Cs_right - U_right;
+
+            // Spatial location of edge:
+            double X_right  = params->mesh.nodesX(nEdge + 1);
+
+            // Apply velocity corrections:
+            for(int ss=0;ss<IONS->size();ss++)
+            {
+                int NSP(IONS->at(ss).NSP);
+
+                #pragma omp parallel for default(none) shared(IONS,X_right,dU_right) firstprivate(NSP,ss)
+                for(int ii=0; ii<NSP; ii++)
+                {
+                    if (IONS->at(ss).X_p(ii) >= X_right)
+                    {
+                        IONS->at(ss).V_p(ii,0) += dU_right;
+                    }
+                }
+            }
+
+        } // IF
 
     } // Particle MPI
 }
-
-// Note on multi-species Bohm condition:
-// =============================================================================
-// Multifluid equations of a plasma with various species of positive ions and the Bohm criterion
-// M S Benilov 1996
-// This paper contains more information on how to enforce the Bohm condition for a multi-species PLASMA

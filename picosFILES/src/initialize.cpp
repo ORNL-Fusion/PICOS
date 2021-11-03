@@ -237,6 +237,7 @@ void init_TYP::readInputFile(params_TYP * params)
     params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
     params->SW.advancePos    = stoi( parametersStringMap["SW_advancePos"] );
     params->SW.linearSolve   = stoi( parametersStringMap["SW_linearSolve"] );
+    params->SW.Bohm          = stoi( parametersStringMap["SW_Bohm"] );
 
     // Magnetic field initial conditions:
     // -------------------------------------------------------------------------
@@ -277,6 +278,13 @@ void init_TYP::readInputFile(params_TYP * params)
     params->RF.handedness = stoi( parametersStringMap["RF_handedness"]);
     params->RF.Prf_NS     = stoi( parametersStringMap["RF_Prf_NS"] );
     params->RF.Prf_fileName = parametersStringMap["RF_Prf_fileName"];
+
+    // Bohm boundary condition:
+    // -------------------------------------------------------------------------
+    params->Bohm.type      = stoi( parametersStringMap["Bohm_type"] );
+    params->Bohm.edgeCells = stoi( parametersStringMap["Bohm_edgeCells"] );
+    params->Bohm.t_ON      = stoi( parametersStringMap["Bohm_t_ON"] );
+    params->Bohm.gamma_i   = stod( parametersStringMap["Bohm_gamma_i"] );
 
     // Output variables:
     // -------------------------------------------------------------------------
@@ -1091,7 +1099,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         yt = BX;
         interp1(xt,yt,xq,yq);
         fields->BX_m = yq;
-    
+
         // dBX profile:
         // ===========
         arma::vec dBX(BX_NX,1);

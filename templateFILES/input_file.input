@@ -9,69 +9,79 @@ advanceParticleMethod       1
 // Characteristic values:
 // =============================================================================
 CV_ne                       5.0E19
-CV_Te                       15
+CV_Te                       5
 CV_B                        1.5
-CV_Tpar                     15
-CV_Tper                     15
+CV_Tpar                     5
+CV_Tper                     5
 
 // Simulation time:
 // =============================================================================
 DTc                         0.5
-simulationTime              25000
+simulationTime              5500
 
 // Switches:
 // =============================================================================
 SW_EfieldSolve               1
 SW_BfieldSolve               0
 SW_Collisions                1
-SW_RFheating                 1
+SW_RFheating                 0
 SW_advancePos                1
 SW_linearSolve               0
+SW_Bohm                      1
 
 // Magnetic field initial conditions:
 // =============================================================================
 IC_uniformBfield            0
-IC_BX                       0.2
+IC_BX                       0.07
 IC_BY                       0.0
 IC_BZ                       0.0
 IC_BX_NX                    200
-IC_BX_fileName              MPEX_B_norm_PICOS_scenario_14.txt
+IC_BX_fileName              ProtoMPEX_B_norm_PICOS_c.txt
 
 // Geometry:
 // =============================================================================
-dp                          0.4243
+dp                          0.1
 r1                          0.0
 r2                          0.05
-LX_min                      -2
-LX_max                      8
+LX_min                      0
+LX_max                      3.6
 
 // Electron initial conditions:
 // =============================================================================
 IC_ne                       1.0E18
-IC_Te                       15
+IC_Te                       5
+IC_Te_NX                    200
+IC_Te_fileName              ProtoMPEX_Te_norm_PICOS_c.txt
 
 // RF operator:
 // =============================================================================
-RF_Prf                      50E3
+RF_Prf                      500E3
 RF_n_harmonic               1
-RF_freq                     8.385E6
+RF_freq                     8.765E6
 RF_x1                       4.0
-RF_x2                       6.5
+RF_x2                       5.5
 RF_t_ON                     12000
-RF_t_OFF                    20000
+RF_t_OFF                    30000
 RF_kpar                     20
 RF_kper                     100
 RF_handedness               -1
 RF_Prf_fileName             Prf_profile.txt
 RF_Prf_NS                   200
 
+// Bohm boundary condition:
+// =============================================================================
+Bohm_type                    1
+Bohm_edgeCells               4
+Bohm_t_ON                    50
+Bohm_gamma_i                 3
+
 // Output variables:
 // =============================================================================
-outputCadence               500
-outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
+outputCadence               50
+outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,Te_m,u_m,EX_m}
 
 // Data smoothing:
 // =============================================================================
 smoothingParameter          1.0E-4
-filtersPerIterationFields   2
-filtersPerIterationIons     2
+filtersPerIterationFields   3
+filtersPerIterationIons     3
