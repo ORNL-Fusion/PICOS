@@ -33,10 +33,10 @@ Move to the directory in your computer where the installation of PICOS++ will be
 Clone the respository to your computer. Use the option Clone on the top left-hand corner of this page.
 
 
-A window will pop up showing two options: HTTPS and SSH. You will get something similar to: "git clone https://code.ornl.gov/78k/PICOS.git"
+A window will pop up showing two options: HTTPS and SSH. You will get something similar to: "git clone https://github.com/ORNL-Fusion/PICOS.git"
 
 
-Copy this link in your Terminal. If you want to rename the directory you can do this by including the name of the new directory as follows: "git clone https://code.ornl.gov/78k/PICOS.git new_folder"
+Copy this link in your Terminal. If you want to rename the directory you can do this by including the name of the new directory as follows: "git clone https://github.com/ORNL-Fusion/PICOS.git new_folder"
 
 
 You will be asked to enter your password.
