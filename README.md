@@ -16,7 +16,7 @@ PICOS++ a free scientific software distributed under the GNU General Public Lice
 In addition to the above, we ask to use and/or develop the code following standard principles used among the scientific community:
 
 If substantial changes are made to the code, including and/or extending the simulation capacities of PICOS++, we ask the developers to let the community know by generating a pull request within the repo, or emailing Atul Kumar (kumara(at)ornl.gov)
-When the use of PICOS++ results in a publication, please acknowledge the code by citing  A. Kumar et. al. Plasma Phys. Control. Fusion (2022) 64, 035012 (17pp); A. Kumar et. al., Nucl. Fusion (2023), 63, 036004 (20pp.
+When the use of PICOS++ results in a publication, please acknowledge the code by citing  A. Kumar et. al. Plasma Phys. Control. Fusion (2022) 64, 035012 (17pp) and A. Kumar et. al., Nucl. Fusion (2023), 63, 036004 (20pp).
 
 The users of PICOS++ will be the only accountable party for any published work that uses PICOS++ simulation results, therefore, it is encouraged to put in touch with A. Kumar (ORNL) or J. Caneses Marin (compX) to discuss the range of applicability and quality of the simulation results before publishing them.
 
