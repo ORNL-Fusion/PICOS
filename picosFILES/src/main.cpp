@@ -23,7 +23,6 @@
 
 // Include headers for parallelization:
 // =============================================================================
-#include <omp.h>
 #include "mpi_main.h"
 
 using namespace std;

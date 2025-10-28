@@ -1,5 +1,9 @@
 #include "rfOperator.h"
 
+#ifndef HAS_STD_BESSEL
+#include <boost/math/special_functions/bessel.hpp>
+#endif
+
 RF_Operator_TYP::RF_Operator_TYP(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
@@ -145,8 +149,8 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     // Calculate bessel terms:
     rL  = vper/Omega;
     flr = kper*rL;
-    J_nm1 = std::cyl_bessel_j(n - 1,flr);
-    J_np1 = std::cyl_bessel_j(n + 1,flr);
+    J_nm1 = CYL_BESSEL_J(n - 1,flr);
+    J_np1 = CYL_BESSEL_J(n + 1,flr);
 
     /*
     cout << "rL = " << rL*CS->length << endl;

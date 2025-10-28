@@ -22,7 +22,6 @@
 #include "types.h"
 
 // Parallelization libraries:
-#include <omp.h>
 #include "mpi_main.h"
 
 using namespace std;

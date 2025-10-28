@@ -9,7 +9,9 @@
 #include <string>
 #include <map>
 
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include "mpi.h"
 
 using namespace std;

@@ -15,3 +15,6 @@ picosFILES/nohup*
 picosFiles/MPEX_*
 *.fig
 picosFILES/*.csv
+ARMADILLO
+BOOST_MATH
+build

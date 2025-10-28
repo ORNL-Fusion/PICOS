@@ -14,7 +14,7 @@
 #include <armadillo>
 #include "types.h"
 
-#include "H5Cpp.h"
+#include <H5Cpp.h>
 
 using namespace H5;
 using namespace std;
@@ -26,10 +26,11 @@ class HDF_TYP
 	#ifdef HDF5_DOUBLE
 		#define HDF_TYPE PredType::NATIVE_DOUBLE
 		#define CPP_TYPE double
-	#elif defined HDF5_FLOAT
-		#define HDF_TYPE PredType::NATIVE_FLOAT
-		#define CPP_TYPE float
-	#endif
+    #else
+        #define HDF5_FLOAT
+        #define HDF_TYPE PredType::NATIVE_FLOAT
+        #define CPP_TYPE float
+    #endif
 
 	void saveToHDF5(H5File * file, string name, int * value);
 
