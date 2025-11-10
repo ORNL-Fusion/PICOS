@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <array>
 
 /*
 #ifdef __linux__
@@ -62,9 +63,15 @@ protected:
 
 	void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p);
 
-	void interpEM(const params_TYP * params, const ionSpecies_TYP * IONS, const fields_TYP * fields, arma::rowvec * ZN, arma::rowvec * EM);
+	void interpEM(const params_TYP &params, const fields_TYP &fields, const double xp, std::array<double, 3> &EM);
 
-	void calculateF(const params_TYP * params, const ionSpecies_TYP * IONS, arma::rowvec * ZN, arma::rowvec * EM, arma::rowvec * F);
+    typedef std::function<void(const double, const double, const double, double &)> pre_fn;
+    typedef std::function<void(const double, const double, double &)> post_fn;
+    typedef std::function<void(const double, const double, const std::array<double, 3> &, const std::array<double, 3> &, std::array<double, 3> &)> fn;
+    pre_fn pre;
+    post_fn post;
+    fn method;
+	void calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, const std::array<double, 3> &ZN, const std::array<double, 3> &EM, std::array<double, 3> &F);
 
 	void eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
 
@@ -78,7 +85,7 @@ protected:
 
 	void assignCell(const params_TYP * params, ionSpecies_TYP * IONS);
 
-  	void advanceParticles(const params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+  	void advanceParticles(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
 
 	void assignCell_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS);
 

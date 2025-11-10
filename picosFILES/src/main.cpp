@@ -186,7 +186,7 @@ int main(int argc, char* argv[])
         if (params.SW.advancePos == 1)
         {
             // Advance particle position and velocity to level X^(N+1):
-            PIC.advanceParticles(&params, &fields, &IONS);
+            PIC.advanceParticles(params, fields, IONS);
 
             // Re-inject particles that leave computational domain:
             particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
