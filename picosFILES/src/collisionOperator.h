@@ -86,8 +86,8 @@ private:
     double logA(double nb, double Tb);
     double Gb(double xab);
     double erfp(const double xab) const;
-    double erfpp(double xab);
-    double E_nuE_d_nu_E_dE(const double xab);
+    double erfpp(double xab) const;
+    double E_nuE_d_nu_E_dE(const double xab) const;
 
     std::random_device device;
     std::vector<uniform_random> randoms;

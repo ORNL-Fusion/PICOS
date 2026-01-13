@@ -427,13 +427,12 @@ double coll_operator_TYP::erfp(const double xab) const
     return 2.0*numbers::inv_sqrtpi_v<double>*exp(-xab*xab);
 }
 
-double coll_operator_TYP::erfpp(double xab)
+double coll_operator_TYP::erfpp(double xab) const
 {
-    double y = -(4.0*xab/sqrt(M_PI))*exp(-pow(xab,2.0));
-    return y;
+    return -2.0*xab*erfp(xab);
 }
 
-double coll_operator_TYP::E_nuE_d_nu_E_dE(const double xab)
+double coll_operator_TYP::E_nuE_d_nu_E_dE(const double xab) const
 {
     return 0.5*((3.0*(xab*erfp(xab) - erf(xab)) - xab*xab*erfpp(xab))/(erf(xab) - xab*erfp(xab)));
 }
