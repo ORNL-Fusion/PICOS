@@ -17,6 +17,11 @@
 //------------------------------------------------------------------------------
 template<std::floating_point T> void run_tests() {
     picos::random::test<T> ();
+
+    if constexpr (std::is_same<T, double> ()) {
+        coll_operator_TYP opt;
+        opt.unit_test();
+    }
 }
 
 //------------------------------------------------------------------------------

@@ -97,6 +97,43 @@ public:
     randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
 
     void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons);
+
+    void unit_test() {
+        const double wx = randoms[picos::random::thread()]();
+        const double wy = randoms[picos::random::thread()]();
+        const double wz = randoms[picos::random::thread()]();
+        double w;
+        double xi;
+        double phi;
+        double testx;
+        double testy;
+        double testz;
+        cartesian2Spherical(wx, wy, wz, w, xi, phi);
+        Spherical2Cartesian(w, xi, phi, testx, testy, testz);
+
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+        const double tolarance = 1.1E-15;
+        if (std::abs(wx - testx) > tolarance) {
+            std::cerr << "Cyl Cart conversion failed for x." << " "
+                      << rank << " " << picos::random::thread() << " "
+                      << wx - testx << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        if (std::abs(wy - testy) > tolarance) {
+            std::cerr << "Cyl Cart conversion failed for y." << " "
+                      << rank << " " << picos::random::thread() << " "
+                      << wy - testy << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        if (std::abs(wz - testz) > tolarance) {
+            std::cerr << "Cyl Cart conversion failed for z." << " "
+                      << rank << " " << picos::random::thread() << " "
+                      << wz - testz << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+    }
 };
 
 #endif
