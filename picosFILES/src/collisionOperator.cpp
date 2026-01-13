@@ -392,18 +392,19 @@ double coll_operator_TYP::nu_D(double xab, double nb, double Tb, double Mb, doub
     return y;
 }
 
-double coll_operator_TYP::nu_ab0(double nb, double Tb, double Mb, double Zb, double Za, double Ma)
+double coll_operator_TYP::nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
 {
-    double wTb = sqrt(2.0*F_E*Tb/Mb);
-    double y  = nb*pow(F_E,4.0)*pow(Za*Zb,2.0)*logA(nb,Tb)/(2.0*M_PI*Ma*Ma*F_EPSILON*F_EPSILON*pow(wTb,3.0));
-
-    return y;
+    const double wTb = sqrt(2.0*F_E*Tb/Mb);
+    const double wTb3 = wTb*wTb*wTb;
+    const double F_E4 = F_E*F_E*F_E*F_E;
+    const double ZaZb2 = Za*Zb*Za*Zb;
+    return nb*F_E4*ZaZb2*logA(nb,Tb)/(2.0*numbers::pi_v<double>*Ma*Ma*F_EPSILON*F_EPSILON*wTb3);
 }
 
-double coll_operator_TYP::logA(double nb, double Tb)
+double coll_operator_TYP::logA(const double nb, const double Tb) const
 {
-    double y = 30.0 - log( sqrt( nb*pow(Tb,-3.0/2) ) );
-    return y;
+    const double Tb_sr = sqrt(Tb);
+    return 30.0 - 0.5*log(nb/(Tb_sr*Tb_sr*Tb_sr));
 }
 
 double coll_operator_TYP::Gb(const double xab) const

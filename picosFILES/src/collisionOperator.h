@@ -82,8 +82,8 @@ private:
     }
 
     double nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma);
-    double nu_ab0(double nb, double Tb, double Mb, double Zb, double Za, double Ma);
-    double logA(double nb, double Tb);
+    double nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const;
+    double logA(const double nb, const double Tb) const;
     double Gb(const double xab) const;
     double erfp(const double xab) const;
     double erfpp(double xab) const;
