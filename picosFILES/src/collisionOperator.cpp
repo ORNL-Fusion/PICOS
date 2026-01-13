@@ -267,7 +267,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         double w;
                         double xi;
                         double phi;
-                        cartesian2Spherical(&wxa, &wya, &wza, &w, &xi, &phi);
+                        cartesian2Spherical(wxa, wya, wza, w, xi, phi);
                         
                         // Apply Monte-Carlo collision operator:
                         // =============================================================================
@@ -291,7 +291,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         
                         // Convert velocity from spherical to cartesian coordinate sytem:
                         // =====================================================================
-                        Spherical2Cartesian(&w,&xi,&phi,&wxa,&wya,&wza);
+                        Spherical2Cartesian(w, xi, phi, wxa, wya, wza);
                         
                         // Back to lab frame and normalize:
                         // =====================================================================
@@ -316,19 +316,19 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
 // Coordinate transformation function:
 // =============================================================================
-void coll_operator_TYP::cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi)
+void coll_operator_TYP::cartesian2Spherical(const double wx, const double wy, const double wz, double &w, double &xi, double &phi) const
 {
-    *w = sqrt( pow(*wx,2.0) + pow(*wy,2.0) + pow(*wz,2.0) );
-    *xi = (*wx)/(*w);
-    *phi = atan2(-*wy,*wz);
+    w = hypot(wx, wy, wz);
+    xi = wx/w;
+    phi = atan2(-wy,wz);
 }
 
-void coll_operator_TYP::Spherical2Cartesian(double * w, double * xi, double * phi, double * wx, double * wy, double * wz)
+void coll_operator_TYP::Spherical2Cartesian(const double w, const double xi, const double phi, double &wx, double &wy, double &wz) const
 {
-    double wper = (*w)*sqrt( 1.0 - pow((*xi),2.0) );
-    *wx   = (*w)*(*xi);
-    *wy   = -wper*sin(*phi);
-    *wz   = +wper*cos(*phi);
+    const double wper = w*sqrt(1.0 - xi*xi);
+    wx   = w*xi;
+    wy   = -wper*sin(phi);
+    wz   = +wper*cos(phi);
 }
 
 double coll_operator_TYP::nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const

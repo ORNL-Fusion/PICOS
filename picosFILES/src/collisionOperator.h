@@ -45,8 +45,8 @@ private:
                               const double DT, uniform_random &rand);
 
     // Coordinate transformation:
-    void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
-    void Spherical2Cartesian(double * w, double * xi, double * phi, double * wx, double * wy, double * wz);
+    void cartesian2Spherical(const double wx, const double wy, const double wz, double &w, double &xi, double &phi) const;
+    void Spherical2Cartesian(const double w, const double xi, const double phi, double &wx, double &wy, double &wz) const;
 
     // Collisional rates based on Maxwellian background species:
     // =============================================================================
