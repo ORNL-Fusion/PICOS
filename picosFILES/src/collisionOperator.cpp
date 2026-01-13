@@ -432,8 +432,7 @@ double coll_operator_TYP::erfpp(double xab)
     return y;
 }
 
-double coll_operator_TYP::E_nuE_d_nu_E_dE(double xab)
+double coll_operator_TYP::E_nuE_d_nu_E_dE(const double xab)
 {
-    double y = 0.5*(  ( 3.0*xab*erfp(xab) - 3.0*erf(xab) - (pow(xab,2.0))*erfpp(xab) )/( erf(xab) - (xab*erfp(xab)) )  );
-    return y;
+    return 0.5*((3.0*(xab*erfp(xab) - erf(xab)) - xab*xab*erfpp(xab))/(erf(xab) - xab*erfp(xab)));
 }

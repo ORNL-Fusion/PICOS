@@ -87,7 +87,7 @@ private:
     double Gb(double xab);
     double erfp(double xab);
     double erfpp(double xab);
-    double E_nuE_d_nu_E_dE(double xab);
+    double E_nuE_d_nu_E_dE(const double xab);
 
     std::random_device device;
     std::vector<uniform_random> randoms;
