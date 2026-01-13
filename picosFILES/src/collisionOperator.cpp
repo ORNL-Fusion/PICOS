@@ -1,5 +1,6 @@
 #include <cmath>
 #include <numbers>
+#include <algorithm>
 
 #include "collisionOperator.h"
 
@@ -19,22 +20,14 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
                                             const double DT,
                                             uniform_random &rand)
 {
-    // double BoozerFactor = (double)0.5;
-    const double BoozerFactor = (double)1.0;
+    const double BoozerFactor = 1.0;
     const uint8_t energyOperatorModel = 2;
 
     // Normalized collision rate:
     double nu_E_dt = BoozerFactor*nu_E<energyOperatorModel> (xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
 
     // Calculate substeps:
-    int Nstep = round(nu_E_dt*2.5) + 1;
-
-    // Limit substepping:
-    if (Nstep > 100)
-    {
-        cout << "Nstep for 'w' operator = " << Nstep << endl;
-        Nstep = 100;
-    }
+    const int Nstep = std::min(static_cast<int> (nu_E_dt*2.5) + 1, 100);
 
     // Apply operator:
     nu_E_dt  = nu_E_dt/Nstep;
@@ -75,13 +68,14 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
 {
     // Normalized collisional rate:
     // ===========================
-    double nu_D_dt(0.0);
-    nu_D_dt = nu_D(xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
+    double nu_D_dt = nu_D(xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
 
+// NOTE: The xi collision operator computes nu_D_dt before truncating Nstep so
+//       We cannot make nstep const here but we could in the u operator.
+    
     // Calculate substeps:
     // ===========================
-    int Nstep   = round(nu_D_dt/0.4) + 1;
-    double dt_s = (double) DT/Nstep;
+    int Nstep   = round(nu_D_dt*2.5) + 1;
 
     // Recalculate normalized rate:
     // ============================
@@ -101,19 +95,18 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
     {
         // Deterministic part:
         // ==================
-        double A = -xi*nu_D_dt;
-        double B = 0.0;
+        const double A = -xi*nu_D_dt;
 
         // Stochastic part:
         // ===============
         // Random number between 0 and 1:
         const short Rm = 2*rand() - 1;
 
-        double C = Rm*sqrt( (1.0 - pow(xi,2.0))*nu_D_dt );
+        const double C = Rm*sqrt((1.0 - xi*xi)*nu_D_dt);
 
         // Monte-Carlo change:
         // ==================
-       xi += A + B + C;
+       xi += A + C;
     }
 
 }
