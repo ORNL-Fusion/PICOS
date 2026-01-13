@@ -39,22 +39,24 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
     // Apply operator:
     nu_E_dt  = nu_E_dt/Nstep;
 
+    const double mof = Ma/(2*F_E);
+    const double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab))*Tb;
+    const double Tbnu_e_dt = Tb*nu_E_dt;
+    const double twonu_e_dt = -2*nu_E_dt;
+
+    w = w*w;
     for (int kk = 0; kk<Nstep; kk++)
     {
-        double E0 = (0.5*Ma*pow(w,2.0))/F_E;
-        double A = -2.0*nu_E_dt*E0;
-        double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab))*Tb;
+        const double E0 = mof*w;
+        const double A = twonu_e_dt*E0;
 
         // Random number between 0 and 1:
-        double randomNumber = (double) rand()/RAND_MAX;
-        //  double randomNumber = uniform_distribution(generator);
         const short Rm = 2*rand() - 1;
 
-        double C = 2.0*Rm*sqrt(Tb*E0*nu_E_dt);
-        E0 = E0 + A + B + C;
-        w = sqrt(2.0*F_E*E0/Ma);
+        const double C = 2*Rm*sqrt(Tbnu_e_dt*E0);
+        w = (E0 + A + B + C)/mof;
     }
-
+    w = sqrt(w);
 }
 
 // Pitch angle scattering operator:
@@ -105,7 +107,6 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
         // Stochastic part:
         // ===============
         // Random number between 0 and 1:
-        double randomNumber = (double) rand()/RAND_MAX;
         const short Rm = 2*rand() - 1;
 
         double C = Rm*sqrt( (1.0 - pow(xi,2.0))*nu_D_dt );
