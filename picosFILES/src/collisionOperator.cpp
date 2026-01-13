@@ -386,10 +386,9 @@ void coll_operator_TYP::Spherical2Cartesian(double * w, double * xi, double * ph
     *wz   = +wper*cos(*phi);
 }
 
-double coll_operator_TYP::nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma)
+double coll_operator_TYP::nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
 {
-    double y = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*(erf(xab) - Gb(xab))/pow(xab,3.0);
-    return y;
+    return nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*(erf(xab) - Gb(xab))/(xab*xab*xab);
 }
 
 double coll_operator_TYP::nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const

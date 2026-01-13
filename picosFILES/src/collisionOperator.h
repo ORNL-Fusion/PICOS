@@ -51,9 +51,9 @@ private:
     // Collisional rates based on Maxwellian background species:
     // =============================================================================
     template<uint8_t energyOperatorModel=2>
-    double nu_E(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma)
+    double nu_E(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
     {
-        const double mass_ratio = 2.0*(Ma/Mb)*Gb(xab);
+        const double mass_ratio = 2.0*Ma/Mb*Gb(xab);
         const double nu = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)/xab;
         if constexpr (energyOperatorModel == 1)
         {
@@ -81,7 +81,7 @@ private:
         */
     }
 
-    double nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma);
+    double nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const;
     double nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const;
     double logA(const double nb, const double Tb) const;
     double Gb(const double xab) const;
