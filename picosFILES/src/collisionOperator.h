@@ -85,7 +85,7 @@ private:
     double nu_ab0(double nb, double Tb, double Mb, double Zb, double Za, double Ma);
     double logA(double nb, double Tb);
     double Gb(double xab);
-    double erfp(double xab);
+    double erfp(const double xab) const;
     double erfpp(double xab);
     double E_nuE_d_nu_E_dE(const double xab);
 

@@ -1,4 +1,6 @@
-#include <math.h>
+#include <cmath>
+#include <numbers>
+
 #include "collisionOperator.h"
 
 using namespace std;
@@ -420,10 +422,9 @@ double coll_operator_TYP::Gb(double xab)
     return y;
 }
 
-double coll_operator_TYP::erfp(double xab)
+double coll_operator_TYP::erfp(const double xab) const
 {
-    double y = (2.0/sqrt(M_PI))*exp(-pow(xab,2.0));
-    return y;
+    return 2.0*numbers::inv_sqrtpi_v<double>*exp(-xab*xab);
 }
 
 double coll_operator_TYP::erfpp(double xab)
