@@ -5,16 +5,16 @@ using namespace std;
 
 // Velocity scattering operator:
 // =============================================================================
-void coll_operator_TYP::u_CollisionOperator(double * w,
-                                            double xab,
-                                            double wTb,
-                                            double nb,
-                                            double Tb,
-                                            double Mb,
-                                            double Zb,
-                                            double Za,
-                                            double Ma,
-                                            double DT,
+void coll_operator_TYP::u_CollisionOperator(double &w,
+                                            const double xab,
+                                            const double wTb,
+                                            const double nb,
+                                            const double Tb,
+                                            const double Mb,
+                                            const double Zb,
+                                            const double Za,
+                                            const double Ma,
+                                            const double DT,
                                             uniform_random &rand)
 {
     // double BoozerFactor = (double)0.5;
@@ -41,7 +41,7 @@ void coll_operator_TYP::u_CollisionOperator(double * w,
 
     for (int kk = 0; kk<Nstep; kk++)
     {
-        double E0 = (0.5*Ma*pow((*w),2.0))/F_E;
+        double E0 = (0.5*Ma*pow(w,2.0))/F_E;
         double A = -2.0*nu_E_dt*E0;
         double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab))*Tb;
 
@@ -52,23 +52,23 @@ void coll_operator_TYP::u_CollisionOperator(double * w,
 
         double C = 2.0*Rm*sqrt(Tb*E0*nu_E_dt);
         E0 = E0 + A + B + C;
-        *(w) = sqrt(2.0*F_E*E0/Ma);
+        w = sqrt(2.0*F_E*E0/Ma);
     }
 
 }
 
 // Pitch angle scattering operator:
 // =============================================================================
-void coll_operator_TYP:: xi_CollisionOperator(double * xi,
-                                              double xab,
-                                              double wTb,
-                                              double nb,
-                                              double Tb,
-                                              double Mb,
-                                              double Zb,
-                                              double Za,
-                                              double Ma,
-                                              double DT,
+void coll_operator_TYP:: xi_CollisionOperator(double &xi,
+                                              const double xab,
+                                              const double wTb,
+                                              const double nb,
+                                              const double Tb,
+                                              const double Mb,
+                                              const double Zb,
+                                              const double Za,
+                                              const double Ma,
+                                              const double DT,
                                               uniform_random &rand)
 {
     // Normalized collisional rate:
@@ -99,7 +99,7 @@ void coll_operator_TYP:: xi_CollisionOperator(double * xi,
     {
         // Deterministic part:
         // ==================
-        double A = -(*xi)*nu_D_dt;
+        double A = -xi*nu_D_dt;
         double B = 0.0;
 
         // Stochastic part:
@@ -108,11 +108,11 @@ void coll_operator_TYP:: xi_CollisionOperator(double * xi,
         double randomNumber = (double) rand()/RAND_MAX;
         const short Rm = 2*rand() - 1;
 
-        double C = Rm*sqrt( (1.0 - pow(*(xi),2.0))*nu_D_dt );
+        double C = Rm*sqrt( (1.0 - pow(xi,2.0))*nu_D_dt );
 
         // Monte-Carlo change:
         // ==================
-       *(xi) = *(xi) + A + B + C;
+       xi += A + B + C;
     }
 
 }
@@ -321,10 +321,10 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
                         double xab = w0/wTb;
                         
                         // Velocity operator:
-                        u_CollisionOperator(&w0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT, rand);
-                        
+                        u_CollisionOperator(w0, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
+
                         // Pitch angle operator:
-                        xi_CollisionOperator(&xi0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT, rand);
+                        xi_CollisionOperator(xi0, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
                         
                         // Final Velocity:
                         // =============================================================================

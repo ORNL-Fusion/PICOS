@@ -33,16 +33,16 @@ private:
     void interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons);
 
     // Scattering operators:
-    void u_CollisionOperator(double * w, double xab, double wTb,
-                             double nb, double Tb,
-                             double Mb, double Zb,
-                             double Za, double Ma,
-                             double DT, uniform_random &rand);
-    void xi_CollisionOperator(double * xi, double xab, double wTb,
-                              double nb, double Tb,
-                              double Mb, double Zb,
-                              double Za, double Ma,
-                              double DT, uniform_random &rand);
+    void u_CollisionOperator(double &w, const double xab, const double wTb,
+                             const double nb, const double Tb,
+                             const double Mb, const double Zb,
+                             const double Za, const double Ma,
+                             const double DT, uniform_random &rand);
+    void xi_CollisionOperator(double &xi, const double xab, const double wTb,
+                              const double nb, const double Tb,
+                              const double Mb, const double Zb,
+                              const double Za, const double Ma,
+                              const double DT, uniform_random &rand);
 
     // Coordinate transformation:
     void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
