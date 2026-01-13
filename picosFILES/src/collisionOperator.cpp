@@ -3,12 +3,19 @@
 
 using namespace std;
 
-coll_operator_TYP::coll_operator_TYP()
-{}
-
 // Velocity scattering operator:
 // =============================================================================
-void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT)
+void coll_operator_TYP::u_CollisionOperator(double * w,
+                                            double xab,
+                                            double wTb,
+                                            double nb,
+                                            double Tb,
+                                            double Mb,
+                                            double Zb,
+                                            double Za,
+                                            double Ma,
+                                            double DT,
+                                            uniform_random &rand)
 {
     // double BoozerFactor = (double)0.5;
     double BoozerFactor = (double)1.0;
@@ -41,17 +48,7 @@ void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, d
         // Random number between 0 and 1:
         double randomNumber = (double) rand()/RAND_MAX;
         //  double randomNumber = uniform_distribution(generator);
-        double Rm;
-
-        // -1 or +1 function:
-        if (randomNumber - 0.5 < 0)
-        {
-            Rm = -1.0;
-        }
-        else
-        {
-            Rm = +1.0;
-        }
+        const short Rm = 2*rand() - 1;
 
         double C = 2.0*Rm*sqrt(Tb*E0*nu_E_dt);
         E0 = E0 + A + B + C;
@@ -62,7 +59,17 @@ void coll_operator_TYP::u_CollisionOperator(double * w, double xab,double wTb, d
 
 // Pitch angle scattering operator:
 // =============================================================================
-void coll_operator_TYP:: xi_CollisionOperator(double * xi, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT)
+void coll_operator_TYP:: xi_CollisionOperator(double * xi,
+                                              double xab,
+                                              double wTb,
+                                              double nb,
+                                              double Tb,
+                                              double Mb,
+                                              double Zb,
+                                              double Za,
+                                              double Ma,
+                                              double DT,
+                                              uniform_random &rand)
 {
     // Normalized collisional rate:
     // ===========================
@@ -99,17 +106,7 @@ void coll_operator_TYP:: xi_CollisionOperator(double * xi, double xab, double wT
         // ===============
         // Random number between 0 and 1:
         double randomNumber = (double) rand()/RAND_MAX;
-        double Rm;
-
-        // -1 or +1 function:
-        if (randomNumber - 0.5 < 0)
-        {
-            Rm = -1.0;
-        }
-        else
-        {
-            Rm = +1.0;
-        }
+        const short Rm = 2*rand() - 1;
 
         double C = Rm*sqrt( (1.0 - pow(*(xi),2.0))*nu_D_dt );
 
@@ -287,76 +284,81 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 
                 // Apply collisions to all particles:
 				// ==================================
-                #pragma omp parallel for default(none) shared(params, IONS, aa, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout) firstprivate(NSP_a)
-				for(int ii=0; ii<NSP_a; ii++)
-				{
-					// Species "aa":
-					// =============================================================================
-					// Velocities:
-					double vxa = IONS->at(aa).V_p(ii,0)*CS->velocity;
-					double vya = IONS->at(aa).V_p(ii,1)*CS->velocity;
-					double vza = 0;
+                #pragma omp parallel default(none) shared(params, IONS, aa, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout, NSP_a)
+                {
+                    uniform_random &rand = randoms[picos::random::thread()];
 
-					// Convert to ion species "bb" frame:
-					// =============================================================================
-					double wxa = vxa - uxb(ii);
-					double wya = vya;
-					double wza = vza;
-
-                    // Convert velocity from cartesian to spherical coordinate system:
-					// =============================================================================
-					double w(0.0);
-					double xi(0.0);
-					double phi(0.0);
-					cartesian2Spherical(&wxa, &wya, &wza, &w, &xi, &phi);
-
-                    // Apply Monte-Carlo collision operator:
-					// =============================================================================
-					double w0   = w;
-					double xi0  = xi;
-					double phi0 = phi;
-
-					double wTb = sqrt(2*F_E*Tb(ii)/Mb);
-					double xab = w0/wTb;
-
-					// Velocity operator:
-					u_CollisionOperator(&w0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT);
-
-					// Pitch angle operator:
-					xi_CollisionOperator(&xi0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT);
-
-					// Final Velocity:
-					// =============================================================================
-					w = w0;
-
-					// Final pitch angle:
-					// =============================================================================
-					xi = xi0;
-					// Reflective boundary condition:
-					if (xi > 1)
-					{
-						xi = +1 - fmod(xi,+1);
-					}
-					else if (xi < -1)
-					{
-						xi = -1 - fmod(xi,-1);
-					}
-
-					// Convert velocity from spherical to cartesian coordinate sytem:
-					// =====================================================================
-					Spherical2Cartesian(&w,&xi,&phi,&wxa,&wya,&wza);
-
-					// Back to lab frame and normalize:
-					// =====================================================================
-					IONS->at(aa).V_p(ii,0) = (wxa + uxb(ii))/CS->velocity;
-					IONS->at(aa).V_p(ii,1) = wya/CS->velocity;
-
-                    if ( isnan(IONS->at(aa).V_p(ii,0)) || isnan(IONS->at(aa).V_p(ii,1)) )
+                    #pragma omp for firstprivate(NSP_a)
+                    for(int ii=0; ii<NSP_a; ii++)
                     {
-                        cout << "isnan(V) == 1" << endl;
-                    }
-
-                } // "ii" particle loop
+                        // Species "aa":
+                        // =============================================================================
+                        // Velocities:
+                        double vxa = IONS->at(aa).V_p(ii,0)*CS->velocity;
+                        double vya = IONS->at(aa).V_p(ii,1)*CS->velocity;
+                        double vza = 0;
+                        
+                        // Convert to ion species "bb" frame:
+                        // =============================================================================
+                        double wxa = vxa - uxb(ii);
+                        double wya = vya;
+                        double wza = vza;
+                        
+                        // Convert velocity from cartesian to spherical coordinate system:
+                        // =============================================================================
+                        double w(0.0);
+                        double xi(0.0);
+                        double phi(0.0);
+                        cartesian2Spherical(&wxa, &wya, &wza, &w, &xi, &phi);
+                        
+                        // Apply Monte-Carlo collision operator:
+                        // =============================================================================
+                        double w0   = w;
+                        double xi0  = xi;
+                        double phi0 = phi;
+                        
+                        double wTb = sqrt(2*F_E*Tb(ii)/Mb);
+                        double xab = w0/wTb;
+                        
+                        // Velocity operator:
+                        u_CollisionOperator(&w0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT, rand);
+                        
+                        // Pitch angle operator:
+                        xi_CollisionOperator(&xi0,xab,wTb,nb(ii),Tb(ii),Mb,Zb,Za,Ma,DT, rand);
+                        
+                        // Final Velocity:
+                        // =============================================================================
+                        w = w0;
+                        
+                        // Final pitch angle:
+                        // =============================================================================
+                        xi = xi0;
+                        // Reflective boundary condition:
+                        if (xi > 1)
+                        {
+                            xi = +1 - fmod(xi,+1);
+                        }
+                        else if (xi < -1)
+                        {
+                            xi = -1 - fmod(xi,-1);
+                        }
+                        
+                        // Convert velocity from spherical to cartesian coordinate sytem:
+                        // =====================================================================
+                        Spherical2Cartesian(&w,&xi,&phi,&wxa,&wya,&wza);
+                        
+                        // Back to lab frame and normalize:
+                        // =====================================================================
+                        IONS->at(aa).V_p(ii,0) = (wxa + uxb(ii))/CS->velocity;
+                        IONS->at(aa).V_p(ii,1) = wya/CS->velocity;
+                        
+                        if ( isnan(IONS->at(aa).V_p(ii,0)) || isnan(IONS->at(aa).V_p(ii,1)) )
+                        {
+                            cout << "isnan(V) == 1" << endl;
+                        }
+                        
+                    } // "ii" particle loop
+                }
 
             } // "bb" species loop
 

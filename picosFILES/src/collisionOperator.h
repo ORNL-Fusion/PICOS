@@ -11,12 +11,19 @@
 #include "types.h"
 #include "mpi_main.h"
 
+#include "parallel_random.hpp"
+
 using namespace std;
 using namespace arma;
 
 class coll_operator_TYP
 {
 private:
+    // A uniform distribution.
+    typedef uniform_int_distribution<short> uniform;
+    // A Uniform random instance type.
+    typedef picos::random::instance<short, uniform, 0, 1> uniform_random;
+
     // Ion moment interpolation functions:
     void interpolateIonMoments(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, int b);
     void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, arma::vec * F_m, arma::vec * F_p);
@@ -26,8 +33,16 @@ private:
     void interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons);
 
     // Scattering operators:
-    void u_CollisionOperator(double * w, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
-    void xi_CollisionOperator(double * xi, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
+    void u_CollisionOperator(double * w, double xab, double wTb,
+                             double nb, double Tb,
+                             double Mb, double Zb,
+                             double Za, double Ma,
+                             double DT, uniform_random &rand);
+    void xi_CollisionOperator(double * xi, double xab, double wTb,
+                              double nb, double Tb,
+                              double Mb, double Zb,
+                              double Za, double Ma,
+                              double DT, uniform_random &rand);
 
     // Coordinate transformation:
     void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
@@ -43,8 +58,13 @@ private:
     double erfpp(double xab);
     double E_nuE_d_nu_E_dE(double xab);
 
+    std::random_device device;
+    std::vector<uniform_random> randoms;
+
 public:
-    coll_operator_TYP();
+    coll_operator_TYP() :
+    randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
+
     void ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 };
 
