@@ -406,20 +406,16 @@ double coll_operator_TYP::logA(double nb, double Tb)
     return y;
 }
 
-double coll_operator_TYP::Gb(double xab)
+double coll_operator_TYP::Gb(const double xab) const
 {
-    double y;
-
     if (xab < 0.01)
     {
-        y = (2.0/sqrt(M_PI))*xab/3;
+        return (2.0*numbers::inv_sqrtpi_v<double>/3)*xab;
     }
     else
     {
-        y = (erf(xab) - xab*erfp(xab))/(2.0*pow(xab,2.0));
+        return (erf(xab) - xab*erfp(xab))/(2.0*xab*xab);
     }
-
-    return y;
 }
 
 double coll_operator_TYP::erfp(const double xab) const
