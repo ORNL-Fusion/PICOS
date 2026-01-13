@@ -27,10 +27,17 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
     double nu_E_dt = BoozerFactor*nu_E<energyOperatorModel> (xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
 
     // Calculate substeps:
-    const int Nstep = std::min(static_cast<int> (nu_E_dt*2.5) + 1, 100);
+    int Nstep = static_cast<int> (nu_E_dt*2.5) + 1;
 
     // Apply operator:
     nu_E_dt  = nu_E_dt/Nstep;
+
+    // Limit substepping:
+    if (Nstep > 100)
+    {
+        cout << "Nstep for 'w' operator = " << Nstep << endl;
+        Nstep = 100;
+    }
 
     const double mof = Ma/(2*F_E);
     const double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab))*Tb;
@@ -47,7 +54,9 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
         const short Rm = 2*rand() - 1;
 
         const double C = 2*Rm*sqrt(Tbnu_e_dt*E0);
-        w = (E0 + A + B + C)/mof;
+//  NOTE: w is actually w^2 here. Use the absolute value to prevent this from
+//        going negative and resulting in a NaN.
+        w = abs(E0 + A + B + C)/mof;
     }
     w = sqrt(w);
 }
@@ -75,7 +84,7 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
     
     // Calculate substeps:
     // ===========================
-    int Nstep   = round(nu_D_dt*2.5) + 1;
+    int Nstep   = static_cast<int> (nu_D_dt*2.5) + 1;
 
     // Recalculate normalized rate:
     // ============================
@@ -252,27 +261,20 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         // Species "aa":
                         // =============================================================================
                         // Velocities:
-                        double vxa = iona.V_p(ii,0)*CS.velocity;
-                        double vya = iona.V_p(ii,1)*CS.velocity;
-                        double vza = 0;
-                        
                         // Convert to ion species "bb" frame:
                         // =============================================================================
-                        double wxa = vxa - uxb(ii);
-                        double wya = vya;
-                        double wza = vza;
+                        double wxa = iona.V_p(ii,0)*CS.velocity - uxb(ii);
+                        double wya = iona.V_p(ii,1)*CS.velocity;;
                         
                         // Convert velocity from cartesian to spherical coordinate system:
                         // =============================================================================
                         double w;
                         double xi;
-                        double phi;
-                        cartesian2Spherical(wxa, wya, wza, w, xi, phi);
+                        double sinphi;
+                        cartesian2Spherical(wxa, wya, w, xi, sinphi);
                         
                         // Apply Monte-Carlo collision operator:
                         // =============================================================================
-                        double phi0 = phi;
-                        
                         double wTb = sqrt(2*F_E*Tb(ii)/Mb);
                         double xab = w/wTb;
                         
@@ -291,7 +293,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         
                         // Convert velocity from spherical to cartesian coordinate sytem:
                         // =====================================================================
-                        Spherical2Cartesian(w, xi, phi, wxa, wya, wza);
+                        Spherical2Cartesian(w, xi, sinphi, wxa, wya);
                         
                         // Back to lab frame and normalize:
                         // =====================================================================
@@ -316,19 +318,26 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
 // Coordinate transformation function:
 // =============================================================================
-void coll_operator_TYP::cartesian2Spherical(const double wx, const double wy, const double wz, double &w, double &xi, double &phi) const
+void coll_operator_TYP::cartesian2Spherical(const double wx, const double wy, double &w, double &xi, double &sinphi) const
 {
-    w = hypot(wx, wy, wz);
+    w = hypot(wx, wy);
     xi = wx/w;
-    phi = atan2(-wy,wz);
+
+//  NOTE: This is either -Pi, indeterminate, Pi depending on the value of wz so we can't
+//        eliminate phi even though wz is always zero. But we can store sin(phi)
+//        here istead and eliminate the calls to atan2 and sin.
+//    phi = atan2(-wy, 0);
+    sinphi = -copysign(1, wy);
 }
 
-void coll_operator_TYP::Spherical2Cartesian(const double w, const double xi, const double phi, double &wx, double &wy, double &wz) const
+void coll_operator_TYP::Spherical2Cartesian(const double w, const double xi, const double sinphi, double &wx, double &wy) const
 {
     const double wper = w*sqrt(1.0 - xi*xi);
     wx   = w*xi;
-    wy   = -wper*sin(phi);
-    wz   = +wper*cos(phi);
+//  NOTE: In cartesian2Spherical we eliminated the atan2 and computed sin(phi)
+//        directly. So phi here is realy sign phi.
+//    wy   = -wper*sin(phi);
+    wy = -wper*sinphi;
 }
 
 double coll_operator_TYP::nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const

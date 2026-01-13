@@ -45,8 +45,8 @@ private:
                               const double DT, uniform_random &rand);
 
     // Coordinate transformation:
-    void cartesian2Spherical(const double wx, const double wy, const double wz, double &w, double &xi, double &phi) const;
-    void Spherical2Cartesian(const double w, const double xi, const double phi, double &wx, double &wy, double &wz) const;
+    void cartesian2Spherical(const double wx, const double wy, double &w, double &xi, double &sinphi) const;
+    void Spherical2Cartesian(const double w, const double xi, const double sinphi, double &wx, double &wy) const;
 
     // Collisional rates based on Maxwellian background species:
     // =============================================================================
@@ -101,15 +101,13 @@ public:
     void unit_test() {
         const double wx = randoms[picos::random::thread()]();
         const double wy = randoms[picos::random::thread()]();
-        const double wz = randoms[picos::random::thread()]();
         double w;
         double xi;
-        double phi;
+        double sinphi;
         double testx;
         double testy;
-        double testz;
-        cartesian2Spherical(wx, wy, wz, w, xi, phi);
-        Spherical2Cartesian(w, xi, phi, testx, testy, testz);
+        cartesian2Spherical(wx, wy, w, xi, sinphi);
+        Spherical2Cartesian(w, xi, sinphi, testx, testy);
 
         int rank;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -125,12 +123,6 @@ public:
             std::cerr << "Cyl Cart conversion failed for y." << " "
                       << rank << " " << picos::random::thread() << " "
                       << wy - testy << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, -1);
-        }
-        if (std::abs(wz - testz) > tolarance) {
-            std::cerr << "Cyl Cart conversion failed for z." << " "
-                      << rank << " " << picos::random::thread() << " "
-                      << wz - testz << std::endl;
             MPI_Abort(MPI_COMM_WORLD, -1);
         }
     }
