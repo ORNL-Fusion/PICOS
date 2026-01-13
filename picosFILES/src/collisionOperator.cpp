@@ -264,42 +264,30 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         
                         // Convert velocity from cartesian to spherical coordinate system:
                         // =============================================================================
-                        double w(0.0);
-                        double xi(0.0);
-                        double phi(0.0);
+                        double w;
+                        double xi;
+                        double phi;
                         cartesian2Spherical(&wxa, &wya, &wza, &w, &xi, &phi);
                         
                         // Apply Monte-Carlo collision operator:
                         // =============================================================================
-                        double w0   = w;
-                        double xi0  = xi;
                         double phi0 = phi;
                         
                         double wTb = sqrt(2*F_E*Tb(ii)/Mb);
-                        double xab = w0/wTb;
+                        double xab = w/wTb;
                         
                         // Velocity operator:
-                        u_CollisionOperator(w0, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
+                        u_CollisionOperator(w, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
 
                         // Pitch angle operator:
-                        xi_CollisionOperator(xi0, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
+                        xi_CollisionOperator(xi, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
                         
                         // Final Velocity:
                         // =============================================================================
-                        w = w0;
-                        
                         // Final pitch angle:
                         // =============================================================================
-                        xi = xi0;
                         // Reflective boundary condition:
-                        if (xi > 1)
-                        {
-                            xi = +1 - fmod(xi,+1);
-                        }
-                        else if (xi < -1)
-                        {
-                            xi = -1 - fmod(xi,-1);
-                        }
+                        xi = xi*xi > 1 ? copysign(1,xi) - fmod(xi, copysign(1,xi)) : xi;
                         
                         // Convert velocity from spherical to cartesian coordinate sytem:
                         // =====================================================================
