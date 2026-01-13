@@ -18,16 +18,14 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
                                             uniform_random &rand)
 {
     // double BoozerFactor = (double)0.5;
-    double BoozerFactor = (double)1.0;
-    double nu_E_dt(0.0);
-    int energyOperatorModel = 2;
+    const double BoozerFactor = (double)1.0;
+    const uint8_t energyOperatorModel = 2;
 
     // Normalized collision rate:
-    nu_E_dt = BoozerFactor*nu_E(xab,nb,Tb,Mb,Zb,Za,Ma,energyOperatorModel)*DT;
+    double nu_E_dt = BoozerFactor*nu_E<energyOperatorModel> (xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
 
     // Calculate substeps:
-    int Nstep   = round(nu_E_dt/0.4) + 1;
-    double dt_s = (double) DT/Nstep;
+    int Nstep = round(nu_E_dt*2.5) + 1;
 
     // Limit substepping:
     if (Nstep > 100)
@@ -384,37 +382,6 @@ void coll_operator_TYP::Spherical2Cartesian(double * w, double * xi, double * ph
     *wx   = (*w)*(*xi);
     *wy   = -wper*sin(*phi);
     *wz   = +wper*cos(*phi);
-}
-
-// Collisional rates based on Maxwellian background species:
-// =============================================================================
-double coll_operator_TYP::nu_E(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma, int energyOperatorModel)
-{
-    double y;
-
-    if (energyOperatorModel == 1)
-    {
-        // From Hinton 1983 EQ 92 and T.S. Chen 1988 EQ 50
-        y = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*( (2.0*(Ma/Mb)*Gb(xab)/xab) - (erfp(xab)/(pow(xab,2.0)) ) );
-    }
-    else if  (energyOperatorModel == 2)
-    {
-        //From T.S. Chen 1988 Report EQ 57 commonly used for NBI
-        y = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*(2.0*(Ma/Mb))*(Gb(xab)/xab);
-    }
-
-    /* References:
-    T.S Chen 1988:
-    "A General Form of the Coulomb Scattering Operators for Monte Carlo ...
-    Simulations and a Note on the Guiding Center Equations in Different Magnetic Coordinate Conventions"
-
-    Hinton 1983:
-    "Handbook of Plasma Physics
-    Editors: M.N. Rosenbluth and R.Z. Sagdeev
-    Chapter 1.5 - Collisional Transport in Plasma"
-    */
-
-    return y;
 }
 
 double coll_operator_TYP::nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma)

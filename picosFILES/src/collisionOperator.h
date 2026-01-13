@@ -48,8 +48,39 @@ private:
     void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
     void Spherical2Cartesian(double * w, double * xi, double * phi, double * wx, double * wy, double * wz);
 
-    // Coulomb colliional rates:
-    double nu_E(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma, int energyOperatorModel);
+    // Collisional rates based on Maxwellian background species:
+    // =============================================================================
+    template<uint8_t energyOperatorModel=2>
+    double nu_E(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma)
+    {
+        const double mass_ratio = 2.0*(Ma/Mb)*Gb(xab);
+        const double nu = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)/xab;
+        if constexpr (energyOperatorModel == 1)
+        {
+            // From Hinton 1983 EQ 92 and T.S. Chen 1988 EQ 50
+            return nu*(mass_ratio - erfp(xab)/xab);
+        }
+        else if constexpr (energyOperatorModel == 2)
+        {
+            //From T.S. Chen 1988 Report EQ 57 commonly used for NBI
+            return nu*mass_ratio;
+        }
+        static_assert(energyOperatorModel != 1 ||
+                      energyOperatorModel != 2,
+                      "Invalid energy operator model.");
+
+        /* References:
+        T.S Chen 1988:
+        "A General Form of the Coulomb Scattering Operators for Monte Carlo ...
+        Simulations and a Note on the Guiding Center Equations in Different Magnetic Coordinate Conventions"
+
+        Hinton 1983:
+        "Handbook of Plasma Physics
+        Editors: M.N. Rosenbluth and R.Z. Sagdeev
+        Chapter 1.5 - Collisional Transport in Plasma"
+        */
+    }
+
     double nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma);
     double nu_ab0(double nb, double Tb, double Mb, double Zb, double Za, double Ma);
     double logA(double nb, double Tb);
