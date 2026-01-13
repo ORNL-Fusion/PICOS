@@ -209,7 +209,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.Collisions == 1)
         {
-            coll_operator.ApplyCollisions_AllSpecies(&params,&CS,&IONS,&electrons);
+            coll_operator.ApplyCollisions_AllSpecies(params, CS, IONS, electrons);
         }
 
         // Apply RF operator:

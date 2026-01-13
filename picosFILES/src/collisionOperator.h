@@ -25,12 +25,12 @@ private:
     typedef picos::random::instance<short, uniform, 0, 1> uniform_random;
 
     // Ion moment interpolation functions:
-    void interpolateIonMoments(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, int b);
-    void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, arma::vec * F_m, arma::vec * F_p);
-    void fill4Ghosts(arma::vec * v);
+    void interpolateIonMoments(const params_TYP &params, ionSpecies_TYP &iona, const ionSpecies_TYP &ionb) const;
+    void interpolateScalarField(const params_TYP &params, const ionSpecies_TYP &ion, const arma::vec &F_m, arma::vec &F_p) const;
+    void fill4Ghosts(arma::vec &v) const;
 
     // Electron temperature interpolation:
-    void interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons);
+    void interpolateElectronTemperature(const params_TYP &params, ionSpecies_TYP &ion, const electrons_TYP &electrons) const;
 
     // Scattering operators:
     void u_CollisionOperator(double &w, const double xab, const double wTb,
@@ -96,7 +96,7 @@ public:
     coll_operator_TYP() :
     randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
 
-    void ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
+    void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons);
 };
 
 #endif

@@ -112,119 +112,86 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
 }
 
 // Interpolate ion moments: test species "a" and background species "b"
-void coll_operator_TYP::interpolateIonMoments(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, int b)
+void coll_operator_TYP::interpolateIonMoments(const params_TYP &params, ionSpecies_TYP &iona, const ionSpecies_TYP &ionb) const
 {
-    //  Number of computational particles:
-    int NSP(IONS->at(a).NSP);
-
-    // Create particle-defined quantities:
-    arma::vec n_p    = zeros(NSP,1);
-    arma::vec nv_p   = zeros(NSP,1);
-    arma::vec Tpar_p = zeros(NSP,1);
-    arma::vec Tper_p = zeros(NSP,1);
-
-    // Create mesh defined quantities:
-    arma::vec n_m    = IONS->at(b).n_m;
-    arma::vec nv_m   = IONS->at(b).nv_m;
-    arma::vec Tpar_m = IONS->at(b).Tpar_m;
-    arma::vec Tper_m = IONS->at(b).Tper_m;
-
     // Interpolate:
-    interpolateScalarField(params, &IONS->at(a), &n_m   , &n_p   );
-    interpolateScalarField(params, &IONS->at(a), &nv_m  , &nv_p  );
-    interpolateScalarField(params, &IONS->at(a), &Tpar_m, &Tpar_p);
-    interpolateScalarField(params, &IONS->at(a), &Tper_m, &Tper_p);
-
-    // Assign values:
-    IONS->at(a).n_p    = n_p;
-    IONS->at(a).nv_p   = nv_p;
-    IONS->at(a).Tpar_p = Tpar_p;
-    IONS->at(a).Tper_p = Tper_p;
+    interpolateScalarField(params, iona, ionb.n_m   , iona.n_p   );
+    interpolateScalarField(params, iona, ionb.nv_m  , iona.nv_p  );
+    interpolateScalarField(params, iona, ionb.Tpar_m, iona.Tpar_p);
+    interpolateScalarField(params, iona, ionb.Tper_m, iona.Tper_p);
 }
 
 // Interpolate electron temperature : test species "a" and electron fluid as species "b"
-void coll_operator_TYP::interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons)
+void coll_operator_TYP::interpolateElectronTemperature(const params_TYP &params, ionSpecies_TYP &ion, const electrons_TYP &electrons) const
 {
-    //  Number of computational particles:
-    int NSP(IONS->at(a).NSP);
-
-    // Create particle-defined quantities:
-    arma::vec Te_p = zeros(NSP,1);
-
-    // Create mesh defined quantities:
-    arma::vec Te_m   = electrons->Te_m;
-
     // Interpolate:
-    interpolateScalarField(params, &IONS->at(a), &Te_m, &Te_p);
-
-    // Assign values:
-    IONS->at(a).Te_p = Te_p;
+    interpolateScalarField(params, ion, electrons.Te_m, ion.Te_p);
 }
 
 // Fill ghost cells:
 // =============================================================================
-void coll_operator_TYP::fill4Ghosts(arma::vec * v)
+void coll_operator_TYP::fill4Ghosts(arma::vec &v) const
 {
-	int N = v->n_elem;
+	const int N = v.n_elem;
 
-    v->subvec(N-2,N-1) = v->subvec(N-4,N-3);
-    v->subvec(0,1)     = v->subvec(2,3);
+    v.subvec(N-2,N-1) = v.subvec(N-4,N-3);
+    v.subvec(0,1)     = v.subvec(2,3);
 }
 
 // General scalar field second order interpolation method:
 // =============================================================================
-void coll_operator_TYP::interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, arma::vec * F_m, arma::vec * F_p)
+void coll_operator_TYP::interpolateScalarField(const params_TYP &params, const ionSpecies_TYP &ion, const arma::vec &F_m, arma::vec &F_p) const
 {
-	int NX =  params->mesh.NX_IN_SIM + 4; //Mesh size along the X axis (considering the gosht cell)
-	int NSP(IONS->NSP);
+	const int NX =  params.mesh.NX_IN_SIM + 4; //Mesh size along the X axis (considering the gosht cell)
 
 	arma::vec F = zeros(NX);
 
-	F.subvec(1,NX-2) = *F_m;
+	F.subvec(1,NX-2) = F_m;
 
-	fill4Ghosts(&F);
+	fill4Ghosts(F);
 
-	#pragma omp parallel for default(none) shared(params, IONS, F_p, F) firstprivate(NSP)
-	for(int ii=0; ii<NSP; ii++)
+	#pragma omp parallel for default(none) shared(params, ion, F_p, F)
+	for(int ii=0, iie = ion.NSP; ii<iie; ii++)
 	{
-		int ix = IONS->mn(ii) + 2;
+		const int ix = ion.mn(ii) + 2;
 
-		(*F_p)(ii) += IONS->wxl(ii)*F(ix-1);
-		(*F_p)(ii) += IONS->wxc(ii)*F(ix);
-		(*F_p)(ii) += IONS->wxr(ii)*F(ix+1);
+		F_p(ii) += ion.wxl(ii)*F(ix-1);
+		F_p(ii) += ion.wxc(ii)*F(ix);
+		F_p(ii) += ion.wxr(ii)*F(ix+1);
 
 	}//End of the parallel region
 }
 
 // Entire collision operator method:
 // =============================================================================
-void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons)
+void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons)
 {
-    if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+    if (params.mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
         // Number of ION species:
     	// =====================
-    	int numIonSpecies = IONS->size();
+    	const int numIonSpecies = IONS.size();
+        const int bbe = numIonSpecies + 1;
 
         // Time step:
         // =========
-        double DT = params->DT*CS->time;
+        const double DT = params.DT*CS.time;
 
-    	for (int aa=0; aa<numIonSpecies; aa++)
+    	for (ionSpecies_TYP &iona : IONS)
     	{
             // Number of particles is "aa" species:
         	// ===================================
-        	int NSP_a = IONS->at(aa).NSP;
+        	const int NSP_a = iona.NSP;
 
         	// Species "aa" parameters:
         	// =======================
-        	double Ma = IONS->at(aa).M*CS->mass;
-        	double Za = IONS->at(aa).Z;
+        	const double Ma = iona.M*CS.mass;
+        	const double Za = iona.Z;
 
             // Initialize Species "bb" parameters:
             // =======================
-            double Mb(0.0);
-            double Zb(0.0);
+            double Mb = 0.0;
+            double Zb = 0.0;
             arma::vec nb  =  zeros(NSP_a,1);
             arma::vec Tb  =  zeros(NSP_a,1);
             arma::vec uxb =  zeros(NSP_a,1);
@@ -234,30 +201,28 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
         	arma::vec nUx_i = zeros(NSP_a,1);
         	arma::vec n_i   = zeros(NSP_a,1);
 
-        	for (int bb=0; bb<(numIonSpecies+1); bb++)
+        	for (int bb=0; bb < bbe; bb++)
             {
                 // Background species "bb" conditions:
 				// ==================================
 				if (bb < numIonSpecies) // Ions:
 				{
 					// Background parameters:
-					Mb = IONS->at(bb).M*CS->mass;
-					Zb = IONS->at(bb).Z;
+                    ionSpecies_TYP &ionb = IONS[bb];
+					Mb = ionb.M*CS.mass;
+					Zb = ionb.Z;
 
 					// Interpolate moments:
-					interpolateIonMoments(params,IONS,aa,bb);
-					arma::vec n_p    = IONS->at(aa).n_p/CS->volume;
-					arma::vec nv_p   = IONS->at(aa).nv_p*CS->velocity/CS->volume;
-					arma::vec Tpar_p = IONS->at(aa).Tpar_p*CS->temperature*F_KB/F_E;
-					arma::vec Tper_p = IONS->at(aa).Tper_p*CS->temperature*F_KB/F_E;
+					interpolateIonMoments(params, iona, ionb);
+					const arma::vec nv_p   = iona.nv_p*CS.velocity/CS.volume;
 
 					// Background conditions:
-					nb = n_p;
-					Tb = 0.5*(Tpar_p + Tper_p);
-					uxb = nv_p/n_p;
+					nb = iona.n_p/CS.volume;
+					Tb = 0.5*(iona.Tpar_p + iona.Tper_p)*CS.temperature*F_KB/F_E;
+					uxb = nv_p/nb;
 
 					// Accumulate total ion density and ion flux density:
-					n_i   = n_i + n_p*Zb;
+					n_i   = n_i + nb*Zb;
 					nUx_i = nUx_i + nv_p*Zb;
 				}
 				else // Electrons:
@@ -267,18 +232,17 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
 					Zb = -1;
 
                     // Interpolate electron temperature:
-                    interpolateElectronTemperature(params,IONS,aa,electrons);
-					arma::vec Te_p  = IONS->at(aa).Te_p*CS->temperature*F_KB/F_E;
+                    interpolateElectronTemperature(params,iona,electrons);
+                    Tb = iona.Te_p*CS.temperature*F_KB/F_E;
 
 					// Background conditions:
 					nb  = n_i;
-                    Tb  = Te_p;
 					uxb = nUx_i/n_i;
 				}
 
                 // Apply collisions to all particles:
 				// ==================================
-                #pragma omp parallel default(none) shared(params, IONS, aa, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout, NSP_a)
+                #pragma omp parallel default(none) shared(params, iona, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout, NSP_a)
                 {
                     uniform_random &rand = randoms[picos::random::thread()];
 
@@ -288,8 +252,8 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
                         // Species "aa":
                         // =============================================================================
                         // Velocities:
-                        double vxa = IONS->at(aa).V_p(ii,0)*CS->velocity;
-                        double vya = IONS->at(aa).V_p(ii,1)*CS->velocity;
+                        double vxa = iona.V_p(ii,0)*CS.velocity;
+                        double vya = iona.V_p(ii,1)*CS.velocity;
                         double vza = 0;
                         
                         // Convert to ion species "bb" frame:
@@ -343,10 +307,10 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP * params, co
                         
                         // Back to lab frame and normalize:
                         // =====================================================================
-                        IONS->at(aa).V_p(ii,0) = (wxa + uxb(ii))/CS->velocity;
-                        IONS->at(aa).V_p(ii,1) = wya/CS->velocity;
+                        iona.V_p(ii,0) = (wxa + uxb(ii))/CS.velocity;
+                        iona.V_p(ii,1) = wya/CS.velocity;
                         
-                        if ( isnan(IONS->at(aa).V_p(ii,0)) || isnan(IONS->at(aa).V_p(ii,1)) )
+                        if ( isnan(iona.V_p(ii,0)) || isnan(iona.V_p(ii,1)) )
                         {
                             cout << "isnan(V) == 1" << endl;
                         }
