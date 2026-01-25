@@ -33,16 +33,16 @@ private:
     void interpolateElectronTemperature(const params_TYP &params, ionSpecies_TYP &ion, const electrons_TYP &electrons) const;
 
     // Scattering operators:
-    void u_CollisionOperator(double &w, const double xab, const double wTb,
-                             const double nb, const double Tb,
-                             const double Mb, const double Zb,
-                             const double Za, const double Ma,
-                             const double DT, uniform_random &rand);
-    void xi_CollisionOperator(double &xi, const double xab, const double wTb,
-                              const double nb, const double Tb,
-                              const double Mb, const double Zb,
-                              const double Za, const double Ma,
-                              const double DT, uniform_random &rand);
+    void u_CollisionOperator(double &w, const double xab, const double xab2,
+                             const double nuab0, const double Tb,
+                             const double Mb, const double Ma,
+                             const double erf_xab, const double erfp_xab,
+                             const double xerfp_xab, const double gb,
+                             const double DT, uniform_random &randuni);
+    void xi_CollisionOperator(double &xi, const double xab, const double xab2,
+                              const double nuab0, const double erf_xab,
+                              const double gb, const double DT,
+                              uniform_random &randuni);
 
     // Coordinate transformation:
     void cartesian2Spherical(const double wx, const double wy, double &w, double &xi, double &sinphi) const;
@@ -51,14 +51,14 @@ private:
     // Collisional rates based on Maxwellian background species:
     // =============================================================================
     template<uint8_t energyOperatorModel=2>
-    double nu_E(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
+    double nu_E(const double xab, const double nuab0, const double erfp_xab, const double Mb, const double Ma, const double gb) const
     {
-        const double mass_ratio = 2.0*Ma/Mb*Gb(xab);
-        const double nu = nu_ab0(nb,Tb,Mb,Zb,Za,Ma)/xab;
+        const double mass_ratio = 2.0*Ma/Mb*gb;
+        const double nu = nuab0/xab;
         if constexpr (energyOperatorModel == 1)
         {
             // From Hinton 1983 EQ 92 and T.S. Chen 1988 EQ 50
-            return nu*(mass_ratio - erfp(xab)/xab);
+            return nu*(mass_ratio - erfp_xab/xab);
         }
         else if constexpr (energyOperatorModel == 2)
         {
@@ -81,13 +81,13 @@ private:
         */
     }
 
-    double nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const;
-    double nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const;
+    double nu_D(const double xab, const double xab2, const double nuab0, const double erf_xab, const double gb) const;
+    double nu_ab0(const double wtb, const double nb, const double Tb, const double ZaZb2, const double Ma) const;
     double logA(const double nb, const double Tb) const;
-    double Gb(const double xab) const;
-    double erfp(const double xab) const;
-    double erfpp(double xab) const;
-    double E_nuE_d_nu_E_dE(const double xab) const;
+    double Gb(const double xab, const double xab2, const double erf_xab, const double xerfp_xab) const;
+    double erfp(const double xab2) const;
+    double erfpp(const double xerfp_xab) const;
+    double E_nuE_d_nu_E_dE(const double xab2, const double erf_xab, const double xerfp_xab) const;
 
     std::random_device device;
     std::vector<uniform_random> randoms;
@@ -96,7 +96,7 @@ public:
     coll_operator_TYP() :
     randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
 
-    void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons);
+    void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons);
 
     void unit_test() {
         const double wx = randoms[picos::random::thread()]();

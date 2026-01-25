@@ -1,6 +1,7 @@
 #include <cmath>
 #include <numbers>
 #include <algorithm>
+#include <cassert>
 
 #include "collisionOperator.h"
 
@@ -10,53 +11,50 @@ using namespace std;
 // =============================================================================
 void coll_operator_TYP::u_CollisionOperator(double &w,
                                             const double xab,
-                                            const double wTb,
-                                            const double nb,
+                                            const double xab2,
+                                            const double nuab0,
                                             const double Tb,
                                             const double Mb,
-                                            const double Zb,
-                                            const double Za,
                                             const double Ma,
+                                            const double erf_xab,
+                                            const double erfp_xab,
+                                            const double xerfp_xab,
+                                            const double gb,
                                             const double DT,
-                                            uniform_random &rand)
+                                            uniform_random &randuni)
 {
     const double BoozerFactor = 1.0;
     const uint8_t energyOperatorModel = 2;
 
     // Normalized collision rate:
-    double nu_E_dt = BoozerFactor*nu_E<energyOperatorModel> (xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
+    double nu_E_dt = BoozerFactor*nu_E<energyOperatorModel> (xab,nuab0,erfp_xab,Mb,Ma,gb)*DT;
 
     // Calculate substeps:
-    int Nstep = static_cast<int> (nu_E_dt*2.5) + 1;
+    // Limit substepping to 100: Note this matches the functions of the original
+    // master branch since that trucated the step size before the final nu_E_dt
+    // was computed.
+    const size_t Nstep = std::min(static_cast<int> (nu_E_dt*2.5) + 1, 100);
 
     // Apply operator:
-    nu_E_dt  = nu_E_dt/Nstep;
-
-    // Limit substepping:
-    if (Nstep > 100)
-    {
-        cout << "Nstep for 'w' operator = " << Nstep << endl;
-        Nstep = 100;
-    }
+    nu_E_dt = nu_E_dt/Nstep;
 
     const double mof = Ma/(2*F_E);
-    const double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab))*Tb;
+    const double B = 2.0*nu_E_dt*( 1.5 + E_nuE_d_nu_E_dE(xab2, erf_xab, xerfp_xab))*Tb;
     const double Tbnu_e_dt = Tb*nu_E_dt;
-    const double twonu_e_dt = -2*nu_E_dt;
+    const double A = 1 - 2*nu_E_dt;
 
     w = w*w;
-    for (int kk = 0; kk<Nstep; kk++)
+    for (size_t kk = 0; kk<Nstep; kk++)
     {
         const double E0 = mof*w;
-        const double A = twonu_e_dt*E0;
 
-        // Random number between 0 and 1:
-        const short Rm = 2*rand() - 1;
+        // Random number ±2:
+        const short Rm = 4*randuni() - 2;
 
-        const double C = 2*Rm*sqrt(Tbnu_e_dt*E0);
+        const double C = Rm*sqrt(Tbnu_e_dt*E0);
 //  NOTE: w is actually w^2 here. Use the absolute value to prevent this from
 //        going negative and resulting in a NaN.
-        w = abs(E0 + A + B + C)/mof;
+        w = (E0*A + B + C)/mof;
     }
     w = sqrt(w);
 }
@@ -65,26 +63,23 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
 // =============================================================================
 void coll_operator_TYP:: xi_CollisionOperator(double &xi,
                                               const double xab,
-                                              const double wTb,
-                                              const double nb,
-                                              const double Tb,
-                                              const double Mb,
-                                              const double Zb,
-                                              const double Za,
-                                              const double Ma,
+                                              const double xab2,
+                                              const double nuab0,
+                                              const double erf_xab,
+                                              const double gb,
                                               const double DT,
-                                              uniform_random &rand)
+                                              uniform_random &randuni)
 {
     // Normalized collisional rate:
     // ===========================
-    double nu_D_dt = nu_D(xab,nb,Tb,Mb,Zb,Za,Ma)*DT;
+    double nu_D_dt = nu_D(xab, xab2, nuab0, erf_xab, gb)*DT;
 
 // NOTE: The xi collision operator computes nu_D_dt before truncating Nstep so
 //       We cannot make nstep const here but we could in the u operator.
     
     // Calculate substeps:
     // ===========================
-    int Nstep   = static_cast<int> (nu_D_dt*2.5) + 1;
+    size_t Nstep = static_cast<int> (nu_D_dt*2.5) + 1;
 
     // Recalculate normalized rate:
     // ============================
@@ -94,13 +89,13 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
     // ===========================
     if (Nstep > 100)
     {
-        cout << "Nstep for 'xi' operator = " << Nstep << endl;
+        cout << "\33[2K\rNstep for 'xi' operator = " << Nstep << endl;
         Nstep = 100;
     }
 
     // Apply operator:
     // ===========================
-    for (int kk = 0; kk<Nstep; kk++)
+    for (size_t kk = 0; kk<Nstep; kk++)
     {
         // Deterministic part:
         // ==================
@@ -109,13 +104,13 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
         // Stochastic part:
         // ===============
         // Random number between 0 and 1:
-        const short Rm = 2*rand() - 1;
+        const short Rm = 2*randuni() - 1;
 
         const double C = Rm*sqrt((1.0 - xi*xi)*nu_D_dt);
 
         // Monte-Carlo change:
         // ==================
-       xi += A + C;
+        xi += A + C;
     }
 
 }
@@ -160,11 +155,11 @@ void coll_operator_TYP::interpolateScalarField(const params_TYP &params, const i
 	fill4Ghosts(F);
 
 	#pragma omp parallel for default(none) shared(params, ion, F_p, F)
-	for(int ii=0, iie = ion.NSP; ii<iie; ii++)
+	for(size_t ii=0, iie = ion.NSP; ii<iie; ii++)
 	{
-		const int ix = ion.mn(ii) + 2;
+		const size_t ix = ion.mn(ii) + 2;
 
-		F_p(ii) += ion.wxl(ii)*F(ix-1);
+		F_p(ii)  = ion.wxl(ii)*F(ix-1);
 		F_p(ii) += ion.wxc(ii)*F(ix);
 		F_p(ii) += ion.wxr(ii)*F(ix+1);
 
@@ -173,14 +168,15 @@ void coll_operator_TYP::interpolateScalarField(const params_TYP &params, const i
 
 // Entire collision operator method:
 // =============================================================================
-void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons)
+void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons)
 {
     if (params.mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
+        const double tnorm = CS.temperature*F_KB/F_E;
         // Number of ION species:
     	// =====================
-    	const int numIonSpecies = IONS.size();
-        const int bbe = numIonSpecies + 1;
+    	const size_t numIonSpecies = IONS.size();
+        const size_t bbe = numIonSpecies + 1;
 
         // Time step:
         // =========
@@ -190,17 +186,17 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
     	{
             // Number of particles is "aa" species:
         	// ===================================
-        	const int NSP_a = iona.NSP;
+        	const size_t NSP_a = iona.NSP;
 
         	// Species "aa" parameters:
         	// =======================
         	const double Ma = iona.M*CS.mass;
-        	const double Za = iona.Z;
+        	const double Za2 = iona.Z*iona.Z;
 
             // Initialize Species "bb" parameters:
             // =======================
-            double Mb = 0.0;
-            double Zb = 0.0;
+            double Mb;
+            double Zb2;
             arma::vec nb  =  zeros(NSP_a,1);
             arma::vec Tb  =  zeros(NSP_a,1);
             arma::vec uxb =  zeros(NSP_a,1);
@@ -210,7 +206,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
         	arma::vec nUx_i = zeros(NSP_a,1);
         	arma::vec n_i   = zeros(NSP_a,1);
 
-        	for (int bb=0; bb < bbe; bb++)
+        	for (size_t bb=0; bb < bbe; bb++)
             {
                 // Background species "bb" conditions:
 				// ==================================
@@ -219,7 +215,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 					// Background parameters:
                     ionSpecies_TYP &ionb = IONS[bb];
 					Mb = ionb.M*CS.mass;
-					Zb = ionb.Z;
+					Zb2 = ionb.Z*ionb.Z;
 
 					// Interpolate moments:
 					interpolateIonMoments(params, iona, ionb);
@@ -227,44 +223,47 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
 					// Background conditions:
 					nb = iona.n_p/CS.volume;
-					Tb = 0.5*(iona.Tpar_p + iona.Tper_p)*CS.temperature*F_KB/F_E;
+					Tb = 0.5*(iona.Tpar_p + iona.Tper_p)*tnorm;
 					uxb = nv_p/nb;
 
 					// Accumulate total ion density and ion flux density:
-					n_i   = n_i + nb*Zb;
-					nUx_i = nUx_i + nv_p*Zb;
+					n_i   = n_i + nb*ionb.Z;
+					nUx_i = nUx_i + nv_p*ionb.Z;
 				}
 				else // Electrons:
 				{
 					// Background parameters:
 					Mb = F_ME;
-					Zb = -1;
+					Zb2 = 1;
 
                     // Interpolate electron temperature:
                     interpolateElectronTemperature(params,iona,electrons);
-                    Tb = iona.Te_p*CS.temperature*F_KB/F_E;
+                    Tb = iona.Te_p*tnorm;
 
 					// Background conditions:
 					nb  = n_i;
 					uxb = nUx_i/n_i;
 				}
 
+                const double ZaZb2 = Za2*Zb2;
+
                 // Apply collisions to all particles:
 				// ==================================
-                #pragma omp parallel default(none) shared(params, iona, CS, Ma, Za, Mb, Zb, nb, Tb, uxb, DT, std::cout, NSP_a)
+                #pragma omp parallel default(none) shared(params, iona, CS, Ma, ZaZb2, Mb, nb, Tb, uxb, DT, std::cout, NSP_a)
                 {
-                    uniform_random &rand = randoms[picos::random::thread()];
+                    uniform_random &randuni = randoms[picos::random::thread()];
 
                     #pragma omp for firstprivate(NSP_a)
-                    for(int ii=0; ii<NSP_a; ii++)
+                    for(size_t ii=0; ii<NSP_a; ii++)
                     {
                         // Species "aa":
                         // =============================================================================
                         // Velocities:
                         // Convert to ion species "bb" frame:
                         // =============================================================================
-                        double wxa = iona.V_p(ii,0)*CS.velocity - uxb(ii);
-                        double wya = iona.V_p(ii,1)*CS.velocity;;
+                        const double local_uxb = uxb(ii);
+                        double wxa = iona.V_p(ii,0)*CS.velocity - local_uxb;
+                        double wya = iona.V_p(ii,1)*CS.velocity;
                         
                         // Convert velocity from cartesian to spherical coordinate system:
                         // =============================================================================
@@ -275,15 +274,27 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         
                         // Apply Monte-Carlo collision operator:
                         // =============================================================================
-                        double wTb = sqrt(2*F_E*Tb(ii)/Mb);
-                        double xab = w/wTb;
-                        
+                        const double local_tb = Tb(ii);
+                        const double wTb = sqrt(2*F_E*local_tb/Mb);
+                        const double xab = w/wTb;
+
+                        // These get called multiple times in the collision
+                        // operators so compute them once and pass them into
+                        // the operators.
+                        const double erf_xab = erf(xab);
+                        // Every call to erfp has xab multiplied by it.
+                        const double xab2 = xab*xab;
+                        const double erfp_xab = erfp(xab2);
+                        const double xerfp_xab = xab*erfp_xab;
+                        const double gb = Gb(xab, xab2, erf_xab, xerfp_xab);
+                        const double nuab0 = nu_ab0(wTb,nb(ii),local_tb,ZaZb2,Ma);
+
                         // Velocity operator:
-                        u_CollisionOperator(w, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
+                        u_CollisionOperator(w, xab, xab2, nuab0, local_tb, Mb, Ma, erf_xab, erfp_xab, xerfp_xab, gb, DT, randuni);
 
                         // Pitch angle operator:
-                        xi_CollisionOperator(xi, xab, wTb, nb(ii), Tb(ii), Mb, Zb, Za, Ma, DT, rand);
-                        
+                        xi_CollisionOperator(xi, xab, xab2, nuab0, erf_xab, gb, DT, randuni);
+
                         // Final Velocity:
                         // =============================================================================
                         // Final pitch angle:
@@ -297,13 +308,8 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         
                         // Back to lab frame and normalize:
                         // =====================================================================
-                        iona.V_p(ii,0) = (wxa + uxb(ii))/CS.velocity;
+                        iona.V_p(ii,0) = (wxa + local_uxb)/CS.velocity;
                         iona.V_p(ii,1) = wya/CS.velocity;
-                        
-                        if ( isnan(iona.V_p(ii,0)) || isnan(iona.V_p(ii,1)) )
-                        {
-                            cout << "isnan(V) == 1" << endl;
-                        }
                         
                     } // "ii" particle loop
                 }
@@ -340,17 +346,15 @@ void coll_operator_TYP::Spherical2Cartesian(const double w, const double xi, con
     wy = -wper*sinphi;
 }
 
-double coll_operator_TYP::nu_D(const double xab, const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
+double coll_operator_TYP::nu_D(const double xab, const double xab2, const double nuab0, const double erf_xab, const double gb) const
 {
-    return nu_ab0(nb,Tb,Mb,Zb,Za,Ma)*(erf(xab) - Gb(xab))/(xab*xab*xab);
+    return nuab0*(erf_xab - gb)/(xab*xab2);
 }
 
-double coll_operator_TYP::nu_ab0(const double nb, const double Tb, const double Mb, const double Zb, const double Za, const double Ma) const
+double coll_operator_TYP::nu_ab0(const double wtb, const double nb, const double Tb, const double ZaZb2, const double Ma) const
 {
-    const double wTb = sqrt(2.0*F_E*Tb/Mb);
-    const double wTb3 = wTb*wTb*wTb;
+    const double wTb3 = wtb*wtb*wtb;
     const double F_E4 = F_E*F_E*F_E*F_E;
-    const double ZaZb2 = Za*Zb*Za*Zb;
     return nb*F_E4*ZaZb2*logA(nb,Tb)/(2.0*numbers::pi_v<double>*Ma*Ma*F_EPSILON*F_EPSILON*wTb3);
 }
 
@@ -360,7 +364,7 @@ double coll_operator_TYP::logA(const double nb, const double Tb) const
     return 30.0 - 0.5*log(nb/(Tb_sr*Tb_sr*Tb_sr));
 }
 
-double coll_operator_TYP::Gb(const double xab) const
+double coll_operator_TYP::Gb(const double xab, const double xab2, const double erf_xab, const double xerfp_xab) const
 {
     if (xab < 0.01)
     {
@@ -368,21 +372,21 @@ double coll_operator_TYP::Gb(const double xab) const
     }
     else
     {
-        return (erf(xab) - xab*erfp(xab))/(2.0*xab*xab);
+        return (erf_xab - xerfp_xab)/(2.0*xab2);
     }
 }
 
-double coll_operator_TYP::erfp(const double xab) const
+double coll_operator_TYP::erfp(const double xab2) const
 {
-    return 2.0*numbers::inv_sqrtpi_v<double>*exp(-xab*xab);
+    return 2.0*numbers::inv_sqrtpi_v<double>*exp(-xab2);
 }
 
-double coll_operator_TYP::erfpp(double xab) const
+double coll_operator_TYP::erfpp(const double xerfp_xab) const
 {
-    return -2.0*xab*erfp(xab);
+    return -2.0*xerfp_xab;
 }
 
-double coll_operator_TYP::E_nuE_d_nu_E_dE(const double xab) const
+double coll_operator_TYP::E_nuE_d_nu_E_dE(const double xab2, const double erf_xab, const double xerfp_xab) const
 {
-    return 0.5*((3.0*(xab*erfp(xab) - erf(xab)) - xab*xab*erfpp(xab))/(erf(xab) - xab*erfp(xab)));
+    return 0.5*((3.0*(xerfp_xab - erf_xab) - xab2*erfpp(xerfp_xab))/(erf_xab - xerfp_xab));
 }
