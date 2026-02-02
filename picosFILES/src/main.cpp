@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
 
     // Create PIC solver:
     // =========================================================================
-    PIC_TYP PIC(&params, &CS, &fields, &IONS, &electrons);
+    const PIC_TYP PIC(params, CS, fields, IONS, electrons);
 
     // Create RF operator object:
     // =========================================================================
@@ -192,18 +192,18 @@ int main(int argc, char* argv[])
             particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
 
             // Assign cell:
-            PIC.assignCell_AllSpecies(&params,&IONS);
+            PIC.assignCell_AllSpecies(params, IONS);
 
             // Interpolate all fields:
-            PIC.interpolateFields_AllSpecies(&params,&IONS,&fields);
+            PIC.interpolateFields_AllSpecies(params,IONS,fields);
 
             // Interpolate electron temperature:
-        	PIC.interpolateElectrons_AllSpecies(&params,&IONS,&electrons);
+        	PIC.interpolateElectrons_AllSpecies(params,IONS,electrons);
         }
 
         // Calculate ion moments:
         // =====================================================================
-        PIC.extrapolateMoments_AllSpecies(&params,&CS,&fields,&IONS);
+        PIC.extrapolateMoments_AllSpecies(params,CS,fields,IONS);
 
         // Apply collision operator:
         // =====================================================================

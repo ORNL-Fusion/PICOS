@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <array>
+#include <numbers>
 
 /*
 #ifdef __linux__
@@ -25,6 +26,8 @@
 // Parallelization libraries:
 #include "mpi_main.h"
 
+#include "parallel_random.hpp"
+
 using namespace std;
 using namespace arma;
 
@@ -32,38 +35,42 @@ class PIC_TYP
 {
 
 protected:
+    typedef uniform_real_distribution<double> uniform;
+    typedef picos::random::instance<double, uniform, 0.0, 2*numbers::pi_v<double>> uniform_random;
+    mutable std::random_device device;
+    mutable std::vector<uniform_random> randoms;
 
 	// MPI methods:
-	void MPI_AllreduceVec(const params_TYP * params, arma::vec * v);
+	//void MPI_AllreduceVec(const params_TYP * params, arma::vec * v);
 
-	void MPI_SendVec(const params_TYP * params, arma::vec * v);
+	void MPI_SendVec(const params_TYP &params, arma::vec &v) const;
 
-	void MPI_ReduceVec(const params_TYP * params, arma::vec * v);
+	void MPI_ReduceVec(const params_TYP &params, arma::vec &v) const;
 
 	void MPI_Allgathervec(const params_TYP * params, arma::vec * field);
 
-	void MPI_Recvvec(const params_TYP * params, arma::vec * field);
+	void MPI_Recvvec(const params_TYP &params, arma::vec &field) const;
 
-	void MPI_Recv_AllFields(const params_TYP * params, fields_TYP * fields);
+	void MPI_Recv_AllFields(const params_TYP &params, fields_TYP &fields) const;
 
 	// Ghost contributions:
-	void fillGhosts(arma::vec * C);
+	void fillGhosts(arma::vec &C) const;
 
-	void fill4Ghosts(arma::vec * v);
+	void fill4Ghosts(arma::vec &v) const;
 
-	void fillGhost_AllFields(const params_TYP * params, fields_TYP * fields);
+	void fillGhost_AllFields(const params_TYP &params, fields_TYP &fields) const;
 
 	// Smoothing:
-	void smooth(arma::vec * v, double as);
+	void smooth(arma::vec &v, double as) const;
 
 	// PIC related:
-	void interpolateFields(const params_TYP * params, ionSpecies_TYP * IONS, const fields_TYP * fields);
+	void interpolateFields(const params_TYP &params, ionSpecies_TYP &IONS, const fields_TYP &fields) const;
 
-	void interpolateElectrons(const params_TYP * params, ionSpecies_TYP * IONS, const electrons_TYP * electrons);
+	void interpolateElectrons(const params_TYP &params, ionSpecies_TYP &IONS, const electrons_TYP &electrons) const;
 
-	void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, const arma::vec * F_m, arma::vec * F_p);
+	void interpolateScalarField(const params_TYP &params, ionSpecies_TYP &IONS, const arma::vec &F_m, arma::vec &F_p) const;
 
-	void interpEM(const params_TYP &params, const fields_TYP &fields, const double xp, std::array<double, 3> &EM);
+	void interpEM(const params_TYP &params, const fields_TYP &fields, const double xp, std::array<double, 3> &EM) const;
 
     typedef std::function<void(const double, const double, const double, double &)> pre_fn;
     typedef std::function<void(const double, const double, double &)> post_fn;
@@ -71,29 +78,29 @@ protected:
     pre_fn pre;
     post_fn post;
     fn method;
-	void calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, const std::array<double, 3> &ZN, const std::array<double, 3> &EM, std::array<double, 3> &F);
+	void calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, const std::array<double, 3> &ZN, const std::array<double, 3> &EM, std::array<double, 3> &F) const;
 
-	void eim(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
+	void eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionSpecies_TYP &ION) const;
 
-	void calculateIonMoments(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, ionSpecies_TYP * IONS);
+	void calculateIonMoments(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionSpecies_TYP &ION) const;
 
-	void calculateDerivedIonMoments(const params_TYP * params, CS_TYP * CS, ionSpecies_TYP * IONS);
+	void calculateDerivedIonMoments(const params_TYP &params, CS_TYP &CS, ionSpecies_TYP &ION) const;
 
   public:
 
-	PIC_TYP(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
+	PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons);
 
-	void assignCell(const params_TYP * params, ionSpecies_TYP * IONS);
+	void assignCell(const params_TYP &params, ionSpecies_TYP &ION) const;
 
-  	void advanceParticles(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
+  	void advanceParticles(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const;
 
-	void assignCell_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS);
+	void assignCell_AllSpecies(const params_TYP &params, vector<ionSpecies_TYP> &IONS) const;
 
-	void interpolateFields_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const fields_TYP * fields);
+	void interpolateFields_AllSpecies(const params_TYP &params, vector<ionSpecies_TYP> &IONS, const fields_TYP &fields) const;
 
-	void interpolateElectrons_AllSpecies(const params_TYP * params, vector<ionSpecies_TYP> * IONS, const electrons_TYP * electrons);
+	void interpolateElectrons_AllSpecies(const params_TYP &params, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons) const;
 
-  	void extrapolateMoments_AllSpecies(const params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+  	void extrapolateMoments_AllSpecies(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const;
 
 };
 
