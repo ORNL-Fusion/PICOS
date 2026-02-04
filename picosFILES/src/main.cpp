@@ -189,7 +189,7 @@ int main(int argc, char* argv[])
             PIC.advanceParticles(params, fields, IONS);
 
             // Re-inject particles that leave computational domain:
-            particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
+            particleBC.applyParticleReinjection(params,CS,fields,IONS);
 
             // Assign cell:
             PIC.assignCell_AllSpecies(params, IONS);
