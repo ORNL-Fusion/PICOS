@@ -260,8 +260,9 @@ void PIC_TYP::interpolateScalarField(const params_TYP &params, ionSpecies_TYP &I
     // Take care of ghost cells:
     fill4Ghosts(F);
 
-    #pragma omp parallel for default(none) shared(params, IONS, F_p, F)
-    for(int ii=0, iie = IONS.NSP; ii<iie; ii++)
+    const int iie = IONS.NSP;
+    #pragma omp parallel for default(none) shared(params, IONS, F_p, F, iie)
+    for(int ii=0; ii<iie; ii++)
     {
         const int ix = IONS.mn(ii) + 2;
 
@@ -526,8 +527,9 @@ void PIC_TYP::assignCell(const params_TYP &params, ionSpecies_TYP &ION) const
     ION.wxl.zeros();
     ION.wxr.zeros();
 
-	#pragma omp parallel for default(none) shared(ION, params, std::cout)
-    for(int ii=0, iie = ION.NSP; ii<iie; ii++)
+    const int iie = ION.NSP;
+	#pragma omp parallel for default(none) shared(ION, params, std::cout, iie)
+    for(int ii=0; ii<iie; ii++)
     {
 		// Calculate nearest grid point:
 		const double X_p     = ION.X_p(ii);
@@ -655,7 +657,7 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 	ION.P11_m.zeros();
 	ION.P22_m.zeros();
 
-	#pragma omp parallel default(none) shared(params, IONS, B0, Ma)
+	#pragma omp parallel default(none) shared(params, ION, B0, Ma)
 	{
         uniform_random &randuni = randoms[picos::random::thread()];
 
@@ -668,8 +670,9 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 
 		// Assemble moments:
 		// =================
+                const int iie = ION.NSP;
         #pragma omp parallel for
-		for(int ii=0, iie = ION.NSP; ii<iie; ii++)
+		for(int ii=0; ii<iie; ii++)
 		{
 			// Nearest grid point:
 			const int ix = ION.mn(ii) + 2;
