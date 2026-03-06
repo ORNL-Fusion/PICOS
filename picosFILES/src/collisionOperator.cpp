@@ -33,7 +33,7 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
     // Limit substepping to 100: Note this matches the functions of the original
     // master branch since that trucated the step size before the final nu_E_dt
     // was computed.
-    const size_t Nstep = std::min(static_cast<int> (nu_E_dt*2.5) + 1, 100);
+    const size_t Nstep = std::min(static_cast<int> (round(nu_E_dt*2.5)) + 1, 100);
 
     // Apply operator:
     nu_E_dt = nu_E_dt/Nstep;
@@ -79,7 +79,7 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
     
     // Calculate substeps:
     // ===========================
-    size_t Nstep = static_cast<int> (nu_D_dt*2.5) + 1;
+    size_t Nstep = static_cast<int> (round(nu_D_dt*2.5)) + 1;
 
     // Recalculate normalized rate:
     // ============================
@@ -154,8 +154,9 @@ void coll_operator_TYP::interpolateScalarField(const params_TYP &params, const i
 
 	fill4Ghosts(F);
 
-	#pragma omp parallel for default(none) shared(params, ion, F_p, F)
-	for(size_t ii=0, iie = ion.NSP; ii<iie; ii++)
+        const size_t iie = ion.NSP;
+	#pragma omp parallel for default(shared)
+	for(size_t ii = 0; ii<iie; ii++)
 	{
 		const size_t ix = ion.mn(ii) + 2;
 

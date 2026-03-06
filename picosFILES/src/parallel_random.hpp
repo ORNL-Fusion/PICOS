@@ -47,7 +47,7 @@ namespace picos {
 ///  @returns rank*num_thread + thread_number
 //------------------------------------------------------------------------------
         size_t offset(const size_t t);
-    
+
 //------------------------------------------------------------------------------
 ///  @brief A random number instance class.
 ///
@@ -63,7 +63,7 @@ namespace picos {
             D dist;
 ///  Random engine.
             std::mt19937_64 engine;
-            
+
         public:
 //------------------------------------------------------------------------------
 ///  @brief An instance constructor.
@@ -166,7 +166,7 @@ namespace picos {
             int rank;
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-#pragma omp parallel default(none) shared(rank, randoms, ie, result)
+#pragma omp parallel default(shared)
             for (size_t i = rank*randoms.size()*batch_size, ie = i + batch_size; i < ie; i++) {
                 result[i] = randoms[thread()]();
             }
@@ -176,7 +176,7 @@ namespace picos {
 
             const T base = autocorrelation(result, 0)*static_cast<T>(0.05);
             MPI_Barrier(MPI_COMM_WORLD);
-#pragma omp parallel default(none) shared(rank, ie, base, result)
+#pragma omp parallel default(shared)
             for (size_t i = 1 + rank*randoms.size()*batch_size/2, ie = i - 1 + batch_size/2; i < ie; i++) {
                 const T test = autocorrelation(result, i);
                 if (test > base) {
