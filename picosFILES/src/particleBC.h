@@ -48,9 +48,10 @@ private:
         // ==================================================
         // NOTE: Assumes v1 and v2 are the same size.
         assert(V1.n_elem == V2.n_elem && "V1 and V2 have different sizes.");
+        const int iie=V1.n_elem;
         #pragma omp declare reduction(sum: std::array<double, 2> : omp_out[0] += omp_in[0], omp_out[1] += omp_in[1])
-        #pragma omp parallel for default(none) shared(V, std::cout) reduction(sum:S)
-        for(int ii=0, iie=V1.n_elem; ii<iie; ii++)
+        #pragma omp parallel for default(none) shared(V1, V2, iie) reduction(sum:S)
+        for(int ii=0; ii<iie; ii++)
         {
             S[0] += V1(ii);
             S[1] += V2(ii);

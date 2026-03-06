@@ -22,8 +22,9 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
 
             // Particle loop:
             // ==================================
-            #pragma omp parallel for default(none) shared(params, IONS, aa, CS, std::cout) firstprivate(NSP,Ma)
-            for(int ii=0, iie = ion.NSP; ii<iie; ii++)
+            const int iie = ion.NSP;
+            #pragma omp parallel for default(none) shared(params, ion, Ma, iie)
+            for(int ii=0; ii<iie; ii++)
             {
                 // left boundary:
                 if (ion.X_p(ii) <= params.geometry.LX_min)
@@ -133,9 +134,10 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
         {
             const double NCP = ion.NCP/DT;
 
-            #pragma omp declare declare reduction(sum : struct dot_ : omp_out.N1 += omp_in.N1, omp_out.E1 += omp_in.E1, omp_out.N1 += omp_in.N2, omp_out.E1 += omp_in.E2)
-            #pragma omp parallel for default(none) shared(params, ion, CS, std::cout, NCP) reduction(sum:dot_);
-            for(int ii=0, iie=ion.NSP; ii<iie; ii++)
+            const int iie=ion.NSP;
+            #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N1 += omp_in.N1, omp_out.E1 += omp_in.E1, omp_out.N2 += omp_in.N2, omp_out.E2 += omp_in.E2)
+            #pragma omp parallel for default(none) shared(params, ion, NCP, iie) reduction(sum:dot_)
+            for(int ii=0; ii<iie; ii++)
             {
                 // Boundary 1:
                 if ( ion.f1(ii) == 1 )
@@ -199,8 +201,9 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
                 uniform_2Pi &rand_2pi = randoms_2pi[picos::random::thread()];
                 uniform_one &rand_one = randoms_one[picos::random::thread()];
 
+                const int iie=ion.NSP;
                 #pragma omp parallel for
-                for(int ii=0, iie=ion.NSP; ii<iie; ii++)
+                for(int ii=0; ii<iie; ii++)
                 {
                     if ( ion.f1(ii) == 1 || ion.f2(ii) == 1 )
                     {
@@ -250,9 +253,10 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
         {
             const double NCP = ion.NCP/DT;
 
-            #pragma omp declare declare reduction(sum : struct dot_ : omp_out.N5 += omp_in.N5, omp_out.E5 += omp_in.E5)
-            #pragma omp parallel for default(none) shared(params, ion, CS, std::cout, NCP) reduction(sum:dot_);
-            for(int ii=0, iie=ion.NSP; ii<iie; ii++)
+            const int iie=ion.NSP;
+            #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N5 += omp_in.N5, omp_out.E5 += omp_in.E5)
+            #pragma omp parallel for default(none) shared(ion, iie, NCP) reduction(sum:dot_)
+            for(int ii=0; ii<iie; ii++)
             {
                 // Boundary 1:
                 if (ion.f5(ii) == 1 )
