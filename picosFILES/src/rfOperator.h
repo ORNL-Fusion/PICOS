@@ -9,7 +9,6 @@
 #include "armadillo"
 #include "types.h"
 #include "mpi_main.h"
-#include "omp.h"
 
 using namespace std;
 using namespace arma;

@@ -10,7 +10,8 @@
 #include "armadillo"
 #include "types.h"
 #include "mpi_main.h"
-#include "omp.h"
+
+#include "parallel_random.hpp"
 
 using namespace std;
 using namespace arma;
@@ -18,35 +19,113 @@ using namespace arma;
 class coll_operator_TYP
 {
 private:
+    // A uniform distribution.
+    typedef uniform_int_distribution<short> uniform;
+    // A Uniform random instance type.
+    typedef picos::random::instance<short, uniform, 0, 1> uniform_random;
+
     // Ion moment interpolation functions:
-    void interpolateIonMoments(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, int b);
-    void interpolateScalarField(const params_TYP * params, ionSpecies_TYP * IONS, arma::vec * F_m, arma::vec * F_p);
-    void fill4Ghosts(arma::vec * v);
+    void interpolateIonMoments(const params_TYP &params, ionSpecies_TYP &iona, const ionSpecies_TYP &ionb) const;
+    void interpolateScalarField(const params_TYP &params, const ionSpecies_TYP &ion, const arma::vec &F_m, arma::vec &F_p) const;
+    void fill4Ghosts(arma::vec &v) const;
 
     // Electron temperature interpolation:
-    void interpolateElectronTemperature(const params_TYP * params, vector<ionSpecies_TYP> * IONS, int a, electrons_TYP * electrons);
+    void interpolateElectronTemperature(const params_TYP &params, ionSpecies_TYP &ion, const electrons_TYP &electrons) const;
 
     // Scattering operators:
-    void u_CollisionOperator(double * w, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
-    void xi_CollisionOperator(double * xi, double xab, double wTb, double nb, double Tb, double Mb, double Zb, double Za, double Ma, double DT);
+    void u_CollisionOperator(double &w, const double xab, const double xab2,
+                             const double nuab0, const double Tb,
+                             const double Mb, const double Ma,
+                             const double erf_xab, const double erfp_xab,
+                             const double xerfp_xab, const double gb,
+                             const double DT, uniform_random &randuni);
+    void xi_CollisionOperator(double &xi, const double xab, const double xab2,
+                              const double nuab0, const double erf_xab,
+                              const double gb, const double DT,
+                              uniform_random &randuni);
 
     // Coordinate transformation:
-    void cartesian2Spherical(double * wx, double * wy, double * wz, double * w, double * xi, double * phi);
-    void Spherical2Cartesian(double * w, double * xi, double * phi, double * wx, double * wy, double * wz);
+    void cartesian2Spherical(const double wx, const double wy, double &w, double &xi, double &sinphi) const;
+    void Spherical2Cartesian(const double w, const double xi, const double sinphi, double &wx, double &wy) const;
 
-    // Coulomb colliional rates:
-    double nu_E(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma, int energyOperatorModel);
-    double nu_D(double xab, double nb, double Tb, double Mb, double Zb, double Za, double Ma);
-    double nu_ab0(double nb, double Tb, double Mb, double Zb, double Za, double Ma);
-    double logA(double nb, double Tb);
-    double Gb(double xab);
-    double erfp(double xab);
-    double erfpp(double xab);
-    double E_nuE_d_nu_E_dE(double xab);
+    // Collisional rates based on Maxwellian background species:
+    // =============================================================================
+    template<uint8_t energyOperatorModel=2>
+    double nu_E(const double xab, const double nuab0, const double erfp_xab, const double Mb, const double Ma, const double gb) const
+    {
+        const double mass_ratio = 2.0*Ma/Mb*gb;
+        const double nu = nuab0/xab;
+        if constexpr (energyOperatorModel == 1)
+        {
+            // From Hinton 1983 EQ 92 and T.S. Chen 1988 EQ 50
+            return nu*(mass_ratio - erfp_xab/xab);
+        }
+        else if constexpr (energyOperatorModel == 2)
+        {
+            //From T.S. Chen 1988 Report EQ 57 commonly used for NBI
+            return nu*mass_ratio;
+        }
+        static_assert(energyOperatorModel != 1 ||
+                      energyOperatorModel != 2,
+                      "Invalid energy operator model.");
+
+        /* References:
+        T.S Chen 1988:
+        "A General Form of the Coulomb Scattering Operators for Monte Carlo ...
+        Simulations and a Note on the Guiding Center Equations in Different Magnetic Coordinate Conventions"
+
+        Hinton 1983:
+        "Handbook of Plasma Physics
+        Editors: M.N. Rosenbluth and R.Z. Sagdeev
+        Chapter 1.5 - Collisional Transport in Plasma"
+        */
+    }
+
+    double nu_D(const double xab, const double xab2, const double nuab0, const double erf_xab, const double gb) const;
+    double nu_ab0(const double wtb, const double nb, const double Tb, const double ZaZb2, const double Ma) const;
+    double logA(const double nb, const double Tb) const;
+    double Gb(const double xab, const double xab2, const double erf_xab, const double xerfp_xab) const;
+    double erfp(const double xab2) const;
+    double erfpp(const double xerfp_xab) const;
+    double E_nuE_d_nu_E_dE(const double xab2, const double erf_xab, const double xerfp_xab) const;
+
+    std::random_device device;
+    std::vector<uniform_random> randoms;
 
 public:
-    coll_operator_TYP();
-    void ApplyCollisions_AllSpecies(const params_TYP * params, const CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
+    coll_operator_TYP() :
+    randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
+
+    void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons);
+
+    void unit_test() {
+        const double wx = randoms[picos::random::thread()]();
+        const double wy = randoms[picos::random::thread()]();
+        double w;
+        double xi;
+        double sinphi;
+        double testx;
+        double testy;
+        cartesian2Spherical(wx, wy, w, xi, sinphi);
+        Spherical2Cartesian(w, xi, sinphi, testx, testy);
+
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+        const double tolarance = 1.1E-15;
+        if (std::abs(wx - testx) > tolarance) {
+            std::cerr << "Cyl Cart conversion failed for x." << " "
+                      << rank << " " << picos::random::thread() << " "
+                      << wx - testx << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        if (std::abs(wy - testy) > tolarance) {
+            std::cerr << "Cyl Cart conversion failed for y." << " "
+                      << rank << " " << picos::random::thread() << " "
+                      << wy - testy << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+    }
 };
 
 #endif

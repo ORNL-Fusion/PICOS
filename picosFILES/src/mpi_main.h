@@ -5,7 +5,6 @@
 #include <vector>
 #define ARMA_ALLOW_FAKE_GCC
 #include <armadillo>
-#include <omp.h>
 #include <cmath>
 
 #include "types.h"

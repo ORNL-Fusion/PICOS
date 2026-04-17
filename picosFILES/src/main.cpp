@@ -23,7 +23,6 @@
 
 // Include headers for parallelization:
 // =============================================================================
-#include <omp.h>
 #include "mpi_main.h"
 
 using namespace std;
@@ -143,7 +142,7 @@ int main(int argc, char* argv[])
 
     // Create PIC solver:
     // =========================================================================
-    PIC_TYP PIC(&params, &CS, &fields, &IONS, &electrons);
+    const PIC_TYP PIC(params, CS, fields, IONS, electrons);
 
     // Create RF operator object:
     // =========================================================================
@@ -187,30 +186,30 @@ int main(int argc, char* argv[])
         if (params.SW.advancePos == 1)
         {
             // Advance particle position and velocity to level X^(N+1):
-            PIC.advanceParticles(&params, &fields, &IONS);
+            PIC.advanceParticles(params, fields, IONS);
 
             // Re-inject particles that leave computational domain:
-            particleBC.applyParticleReinjection(&params,&CS,&fields,&IONS);
+            particleBC.applyParticleReinjection(params,CS,fields,IONS);
 
             // Assign cell:
-            PIC.assignCell_AllSpecies(&params,&IONS);
+            PIC.assignCell_AllSpecies(params, IONS);
 
             // Interpolate all fields:
-            PIC.interpolateFields_AllSpecies(&params,&IONS,&fields);
+            PIC.interpolateFields_AllSpecies(params,IONS,fields);
 
             // Interpolate electron temperature:
-        	PIC.interpolateElectrons_AllSpecies(&params,&IONS,&electrons);
+        	PIC.interpolateElectrons_AllSpecies(params,IONS,electrons);
         }
 
         // Calculate ion moments:
         // =====================================================================
-        PIC.extrapolateMoments_AllSpecies(&params,&CS,&fields,&IONS);
+        PIC.extrapolateMoments_AllSpecies(params,CS,fields,IONS);
 
         // Apply collision operator:
         // =====================================================================
         if (params.SW.Collisions == 1)
         {
-            coll_operator.ApplyCollisions_AllSpecies(&params,&CS,&IONS,&electrons);
+            coll_operator.ApplyCollisions_AllSpecies(params, CS, IONS, electrons);
         }
 
         // Apply RF operator:
