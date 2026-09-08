@@ -42,6 +42,10 @@ class fields_solver_TYP
     // Electric field:
     arma::vec EX_m;
 
+    // Electrostatic Poisson fields:
+    arma::vec Phi_m;
+    arma::vec chargeDensity;
+
   	// Grid cell increment
   	double dx;
 
@@ -53,10 +57,24 @@ class fields_solver_TYP
     // Ghost cells:
     void fillGhosts(arma::vec * C);
 
+    void fillPeriodicGhosts(arma::vec * C);
+
     void fill4Ghosts(arma::vec * v);
 
-  	// Smoothing:
-  	void smooth(arma::vec * v, double as);
+    // Smoothing:
+    void smooth(arma::vec * v, double as);
+
+    void smoothPeriodic(arma::vec * v, double as);
+
+    void advanceEfieldOhmLaw(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
+
+    void advanceEfieldPoisson(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
+
+    void solveDirichletPoisson(const params_TYP * params, const arma::vec * rho, arma::vec * phi) const;
+
+    void solvePeriodicPoisson(const params_TYP * params, const arma::vec * rho, arma::vec * phi) const;
+
+    double poissonBoundaryPotential(const params_TYP * params, bool rightBoundary) const;
 
 	public:
 

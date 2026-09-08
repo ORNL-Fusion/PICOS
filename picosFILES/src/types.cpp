@@ -11,6 +11,7 @@ double F_C_DS = F_C;                // Dimensionless speed of light
 void fields_TYP::zeros(unsigned int N)
 {
 	EX_m.zeros(N);
+	Phi_m.zeros(N);
 	BX_m.zeros(N);
 	dBX_m.zeros(N);
 	ddBX_m.zeros(N);
@@ -19,6 +20,7 @@ void fields_TYP::zeros(unsigned int N)
 void fields_TYP::fill(double A)
 {
 	EX_m.fill(A);
+	Phi_m.fill(A);
 	BX_m.fill(A);
 	dBX_m.fill(A);
 	ddBX_m.fill(A);

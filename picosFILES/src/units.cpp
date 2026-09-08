@@ -1,5 +1,8 @@
 #include "units.h"
 
+#include <algorithm>
+#include <limits>
+
 void units_TYP::defineCharacteristicScalesAndBcast(params_TYP * params, vector<ionSpecies_TYP> * IONS, CS_TYP * CS)
 {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -181,16 +184,33 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
     // =================
 	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-        cout << endl << "* * * * * * * * * * * * CHECKING VALIDITY OF HYBRID MODEL FOR THE SIMULATED PLASMA * * * * * * * * * * * * * * * * * *" << endl;
-        cout << "Electron skin depth to grid size ratio: " << scientific << FS->electronSkinDepth/params->mesh.DX << fixed << endl;
-        cout << "* * * * * * * * * * * * VALIDITY OF HYBRID MODEL FOR THE SIMULATED PLASMA CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
+        if (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+        {
+            const double electronDebyeLength = sqrt(F_EPSILON*F_KB*params->CV.Te/(params->CV.ne*F_E*F_E));
+
+            cout << endl << "* * * * * * * * * * * * CHECKING KINETIC-POISSON SPATIAL SCALES * * * * * * * * * * * * * * * * * *" << endl;
+            cout << "Electron Debye length to grid size ratio: " << scientific << electronDebyeLength/params->mesh.DX << fixed << endl;
+
+            if (params->mesh.DX > electronDebyeLength)
+            {
+                cout << "WARNING: DX is larger than the electron Debye length; electrostatic kinetic PIC results may be under-resolved." << endl;
+            }
+
+            cout << "* * * * * * * * * * * * KINETIC-POISSON SPATIAL SCALES CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
+        }
+        else
+        {
+            cout << endl << "* * * * * * * * * * * * CHECKING VALIDITY OF HYBRID MODEL FOR THE SIMULATED PLASMA * * * * * * * * * * * * * * * * * *" << endl;
+            cout << "Electron skin depth to grid size ratio: " << scientific << FS->electronSkinDepth/params->mesh.DX << fixed << endl;
+            cout << "* * * * * * * * * * * * VALIDITY OF HYBRID MODEL FOR THE SIMULATED PLASMA CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
+        }
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	// Check that DX is larger than the electron skin depth, otherwise, abort simulation:
         // ==================================================================================
-	if (params->mesh.DX <= FS->electronSkinDepth)
+	if ((params->SW.fieldSolveModel != FIELD_SOLVE_POISSON) && (params->mesh.DX <= FS->electronSkinDepth))
     {
         cout << "ERROR: Grid size violates assumptions of hybrid model for the plasma -- lenght scales smaller than the electron skind depth can not be resolved." << endl;
         cout << "ABORTING SIMULATION..." << endl;
@@ -212,64 +232,116 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 
     // Define variables:
     // =================
-	double ionsMaxVel(0.0);	// Maximum speed of simulated ions
-	double DT(0.0); 	// Time step defined by user
-	double DT_CFL_I(0.0);	// Minimum time step defined by CFL condition for ions
-	bool CFL_I(false);
+	double particlesMaxVel(0.0);
+	double electronMaxVel(0.0);
+	double fastestGyroPeriod(params->ionGyroPeriod);
+	double electronGyroPeriod(std::numeric_limits<double>::infinity());
+	double electronPlasmaTime(std::numeric_limits<double>::infinity());
+	double DT(0.0);
+	double DT_particleTimeScale(0.0);
+	double DT_CFL_particles(std::numeric_limits<double>::infinity());
+	double DT_CFL_electrons(std::numeric_limits<double>::infinity());
+	double DT_electronGyro(std::numeric_limits<double>::infinity());
+	double DT_electronPlasma(std::numeric_limits<double>::infinity());
+	bool CFL_particles(false);
+	bool hasKineticElectrons(false);
 
-	// Time step given by user:
-    // ========================
-	DT = params->DTc*params->ionGyroPeriod;
+	// Time-scale limiter. For the hybrid model this is the main ion gyro
+	// period. If a kinetic electron species is present, it also includes the
+	// electron gyro period and electron plasma period for Poisson readiness.
+	DT_particleTimeScale = params->DTc*params->ionGyroPeriod;
+	DT = DT_particleTimeScale;
 
-	// CFL condition for ions:
-    // =======================
+	// CFL condition for self-consistent particles:
+    // ===========================================
 	if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-        {
-            for (int ss=0; ss<params->numberOfParticleSpecies; ss++)
-            {
-                    vec V = sqrt( pow(IONS->at(ss).V_p.col(0), 2.0) + pow(IONS->at(ss).V_p.col(1), 2.0) );
+	{
+	    for (int ss=0; ss<params->numberOfParticleSpecies; ss++)
+	    {
+	        vec V = sqrt( pow(IONS->at(ss).V_p.col(0), 2.0) + pow(IONS->at(ss).V_p.col(1), 2.0) );
+	        if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && IONS->at(ss).V_p.n_cols > 2)
+	        {
+	            V = sqrt( pow(V, 2.0) + pow(IONS->at(ss).V_p.col(2), 2.0) );
+	        }
+	        const double speciesMaxVel = V.max();
 
-                    ionsMaxVel = (ionsMaxVel < V.max()) ? V.max() : ionsMaxVel;
-            }
+	        particlesMaxVel = std::max(particlesMaxVel, speciesMaxVel);
 
-            // Minimum time step required by CFL condition for ions:
-            DT_CFL_I = params->mesh.DX/ionsMaxVel;
+	        if (IONS->at(ss).GyroPeriod > 0.0)
+	        {
+	            fastestGyroPeriod = std::min(fastestGyroPeriod, IONS->at(ss).GyroPeriod);
+	        }
 
-            // We gather DT_CFL_I from all MPI processes in particles communicator:
-            double * DT_CFL_I_MPI;
+	        if (IONS->at(ss).Z < 0.0)
+	        {
+	            hasKineticElectrons = true;
+	            electronMaxVel = std::max(electronMaxVel, speciesMaxVel);
+	            if (IONS->at(ss).GyroPeriod > 0.0)
+	            {
+	                electronGyroPeriod = std::min(electronGyroPeriod, IONS->at(ss).GyroPeriod);
+	            }
+	            if (IONS->at(ss).Wp > 0.0)
+	            {
+	                electronPlasmaTime = std::min(electronPlasmaTime, 1.0/IONS->at(ss).Wp);
+	            }
+	        }
+	    }
 
-            DT_CFL_I_MPI = (double*)malloc( params->mpi.MPIS_PARTICLES*sizeof(double) );
+	    if (particlesMaxVel > 0.0)
+	    {
+	        DT_CFL_particles = params->mesh.DX/particlesMaxVel;
+	    }
+	    if (hasKineticElectrons && electronMaxVel > 0.0)
+	    {
+	        DT_CFL_electrons = params->mesh.DX/electronMaxVel;
+	    }
 
-            MPI_Allgather(&DT_CFL_I, 1, MPI_DOUBLE, DT_CFL_I_MPI, 1, MPI_DOUBLE, params->mpi.COMM);
+	    DT_particleTimeScale = params->DTc*fastestGyroPeriod;
+	    if (hasKineticElectrons && std::isfinite(electronPlasmaTime))
+	    {
+	        DT_particleTimeScale = std::min(DT_particleTimeScale, params->DTc*electronPlasmaTime);
+	    }
+	    DT_electronGyro = params->DTc*electronGyroPeriod;
+	    DT_electronPlasma = params->DTc*electronPlasmaTime;
 
-            // Sort the DT_CFL_I_MPI values:
-            // =============================
-            if (params->mpi.IS_PARTICLES_ROOT)
-            {
-                // Find maximum value of DT_CFL_I accross all MPIs:
-                for (int ii=0; ii<params->mpi.MPIS_PARTICLES; ii++)
-                {
-                    DT_CFL_I = (DT_CFL_I > *(DT_CFL_I_MPI + ii)) ? *(DT_CFL_I_MPI + ii) : DT_CFL_I;
-                }
+	    vector<double> DT_CFL_particles_MPI(params->mpi.MPIS_PARTICLES);
+	    vector<double> DT_CFL_electrons_MPI(params->mpi.MPIS_PARTICLES);
+	    vector<double> DT_particleTimeScale_MPI(params->mpi.MPIS_PARTICLES);
+	    vector<double> DT_electronGyro_MPI(params->mpi.MPIS_PARTICLES);
+	    vector<double> DT_electronPlasma_MPI(params->mpi.MPIS_PARTICLES);
+	    vector<int> hasKineticElectrons_MPI(params->mpi.MPIS_PARTICLES);
+	    int hasKineticElectrons_int = hasKineticElectrons ? 1 : 0;
 
-                // Check against user defined time step:
-                if (DT > DT_CFL_I)
-                {
-                        DT = DT_CFL_I;
-                        CFL_I = true;
-                }
+	    MPI_Allgather(&DT_CFL_particles, 1, MPI_DOUBLE, DT_CFL_particles_MPI.data(), 1, MPI_DOUBLE, params->mpi.COMM);
+	    MPI_Allgather(&DT_CFL_electrons, 1, MPI_DOUBLE, DT_CFL_electrons_MPI.data(), 1, MPI_DOUBLE, params->mpi.COMM);
+	    MPI_Allgather(&DT_particleTimeScale, 1, MPI_DOUBLE, DT_particleTimeScale_MPI.data(), 1, MPI_DOUBLE, params->mpi.COMM);
+	    MPI_Allgather(&DT_electronGyro, 1, MPI_DOUBLE, DT_electronGyro_MPI.data(), 1, MPI_DOUBLE, params->mpi.COMM);
+	    MPI_Allgather(&DT_electronPlasma, 1, MPI_DOUBLE, DT_electronPlasma_MPI.data(), 1, MPI_DOUBLE, params->mpi.COMM);
+	    MPI_Allgather(&hasKineticElectrons_int, 1, MPI_INT, hasKineticElectrons_MPI.data(), 1, MPI_INT, params->mpi.COMM);
 
-				//Assign final DT for the simulation
-				//==================================
-				params->DT = DT;
+	    if (params->mpi.IS_PARTICLES_ROOT)
+	    {
+	        for (int ii=0; ii<params->mpi.MPIS_PARTICLES; ii++)
+	        {
+	            DT_CFL_particles = std::min(DT_CFL_particles, DT_CFL_particles_MPI[ii]);
+	            DT_CFL_electrons = std::min(DT_CFL_electrons, DT_CFL_electrons_MPI[ii]);
+	            DT_particleTimeScale = std::min(DT_particleTimeScale, DT_particleTimeScale_MPI[ii]);
+	            DT_electronGyro = std::min(DT_electronGyro, DT_electronGyro_MPI[ii]);
+	            DT_electronPlasma = std::min(DT_electronPlasma, DT_electronPlasma_MPI[ii]);
+	            hasKineticElectrons = hasKineticElectrons || (hasKineticElectrons_MPI[ii] > 0);
+	        }
 
-                params->timeIterations = (int)ceil( params->simulationTime*params->ionGyroPeriod/params->DT );
+	        DT = DT_particleTimeScale;
+	        if (DT > DT_CFL_particles)
+	        {
+	            DT = DT_CFL_particles;
+	            CFL_particles = true;
+	        }
 
-                params->outputCadenceIterations = (int)ceil( params->outputCadence*params->ionGyroPeriod/params->DT );
-            }
-
-            // Deallocate memory:
-            free(DT_CFL_I_MPI);
+	        params->DT = DT;
+            params->timeIterations = (int)ceil( params->simulationTime*params->ionGyroPeriod/params->DT );
+            params->outputCadenceIterations = (int)ceil( params->outputCadence*params->ionGyroPeriod/params->DT );
+	    }
 	}
 
 	// Broadcast correct time step, time iterations in simulation, and cadence for generating outputs:
@@ -284,17 +356,28 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
     // ==================================
 	if (params->mpi.IS_PARTICLES_ROOT)
         {
-            if (CFL_I)
+            if (CFL_particles)
             {
-                cout << "+ Simulation time step defined by CFL condition for IONS" << endl;
+                cout << "+ Simulation time step defined by CFL condition for PARTICLES" << endl;
             }
             else
             {
-                cout << "+ Simulation time step defined by USER: " <<  scientific << DT << fixed  << endl;
+                cout << "+ Simulation time step defined by particle time-scale limiter: " <<  scientific << DT_particleTimeScale << fixed  << endl;
             }
 
-            cout << "+ Time step defined by USER: " << scientific << DT << fixed << endl;
-            cout << "+ Time step defined by CFL condition for ions: " << scientific << DT_CFL_I << fixed << endl;
+            cout << "+ Time step defined by particle time-scale limiter: " << scientific << DT_particleTimeScale << fixed << endl;
+            cout << "+ Time step defined by CFL condition for particles: " << scientific << DT_CFL_particles << fixed << endl;
+            if (hasKineticElectrons)
+            {
+                cout << "+ Kinetic electron species detected: YES" << endl;
+                cout << "+ Time step defined by CFL condition for electrons: " << scientific << DT_CFL_electrons << fixed << endl;
+                cout << "+ Time step defined by electron gyro period: " << scientific << DT_electronGyro << fixed << endl;
+                cout << "+ Time step defined by electron plasma time: " << scientific << DT_electronPlasma << fixed << endl;
+            }
+            else
+            {
+                cout << "+ Kinetic electron species detected: NO" << endl;
+            }
             cout << "+ Time step used in simulation: " << scientific << params->DT << fixed << endl;
             cout << "+ Time steps in simulation: " << params->timeIterations << endl;
             cout << "+ Simulation time: " << scientific << params->DT*params->timeIterations << fixed << " s" << endl;
@@ -349,6 +432,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->em_IC.EY     	 /= CS->eField;
 	params->em_IC.EZ         /= CS->eField;
 	params->em_IC.Ex_profile /= CS->eField;
+	params->em_IC.phiLeft    /= (CS->eField*CS->length);
+	params->em_IC.phiRight   /= (CS->eField*CS->length);
 
 	// Geometry:
 	// ---------
@@ -382,6 +467,9 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     params->RF.t_OFF /= CS->time;
     params->RF.kpar *= CS->length;
     params->RF.kper *= CS->length;
+    params->RF.eFieldAmplitude /= CS->eField;
+    params->RF.maxParticleEnergy *= F_E/CS->energy;
+    params->RF.maxVelocityFractionC *= F_C_DS;
 
 	// Normalizing IONS:
     // =========================================================================
@@ -432,6 +520,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     // Normalizing "fields":
     // =========================================================================
 	fields->EX_m   /=  CS->eField;
+	fields->Phi_m  /= (CS->eField*CS->length);
 	fields->BX_m   /=  CS->bField;
     fields->dBX_m  /= (CS->bField/pow(CS->length,1));
     fields->ddBX_m /= (CS->bField/pow(CS->length,2));

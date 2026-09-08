@@ -1,0 +1,83 @@
+// =============================================================================
+// Species 1: deuterium ions
+// =============================================================================
+
+// General:
+// =============================================================================
+SPECIES1                      1
+NPC1                          200
+pctSupPartOutput1             25
+Z1                            1
+M1                            2.0
+
+// Initial conditions:
+// =============================================================================
+IC_type_1                     1
+
+IC_Tper_1                     5
+IC_Tper_fileName_1            MPEX_Tper_norm_scenario_14.txt
+IC_Tper_NX_1                  200
+
+IC_Tpar_1                     5
+IC_Tpar_fileName_1            MPEX_Tpar_norm_scenario_14.txt
+IC_Tpar_NX_1                  200
+
+IC_densityFraction_1          1.0
+IC_densityFraction_fileName_1 MPEX_n_norm_scenario_14.txt
+IC_densityFraction_NX_1       200
+
+// Boundary conditions:
+// =============================================================================
+BC_type_1                     3
+
+BC_T_1                        5
+BC_E_1                        0
+BC_eta_1                      45
+BC_mean_x_1                   0
+BC_sigma_x_1                  0.01
+
+BC_G_1                        0
+BC_G_fileName_1               G_profile.txt
+BC_G_NS_1                     200
+
+// =============================================================================
+// Species 2: kinetic electrons
+// =============================================================================
+
+// General:
+// =============================================================================
+SPECIES2                      1
+NPC2                          200
+pctSupPartOutput2             25
+Z2                            -1
+M2                            0.000548579909
+
+// Initial conditions:
+// =============================================================================
+IC_type_2                     1
+
+IC_Tper_2                     5
+IC_Tper_fileName_2            MPEX_Tper_norm_scenario_14.txt
+IC_Tper_NX_2                  200
+
+IC_Tpar_2                     5
+IC_Tpar_fileName_2            MPEX_Tpar_norm_scenario_14.txt
+IC_Tpar_NX_2                  200
+
+IC_densityFraction_2          1.0
+IC_densityFraction_fileName_2 MPEX_n_norm_scenario_14.txt
+IC_densityFraction_NX_2       200
+
+// Boundary conditions:
+// =============================================================================
+BC_type_2                     3
+
+BC_T_2                        5
+BC_E_2                        0
+BC_eta_2                      45
+BC_mean_x_2                   0
+BC_sigma_x_2                  0.01
+
+BC_G_2                        0
+BC_G_fileName_2               G_profile.txt
+BC_G_NS_2                     200

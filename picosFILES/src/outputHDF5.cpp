@@ -287,6 +287,14 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(outputFile, name, &params->filtersPerIterationFields);
         name.clear();
 
+        name = "fieldSolveModel";
+        saveToHDF5(outputFile, name, &params->SW.fieldSolveModel);
+        name.clear();
+
+        name = "relativisticElectrons";
+        saveToHDF5(outputFile, name, &params->SW.relativisticElectrons);
+        name.clear();
+
         name = "numOfMPIs";
         saveToHDF5(outputFile, name, &params->mpi.NUMBER_MPI_DOMAINS);
         name.clear();
@@ -299,6 +307,42 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         name = "numMPIsFields";
         saveToHDF5(outputFile, name, &params->mpi.MPIS_FIELDS);
         name.clear();
+
+        Group * group_rf = new Group( outputFile->createGroup( "/rf" ) );
+
+        name = "eFieldMode";
+        saveToHDF5(group_rf, name, &params->RF.eFieldMode);
+        name.clear();
+
+        name = "heatIons";
+        saveToHDF5(group_rf, name, &params->RF.heatIons);
+        name.clear();
+
+        name = "heatElectrons";
+        saveToHDF5(group_rf, name, &params->RF.heatElectrons);
+        name.clear();
+
+        name = "eFieldAmplitude";
+        cpp_type_value = params->RF.eFieldAmplitude;
+        saveToHDF5(group_rf, name, &cpp_type_value);
+        name.clear();
+
+        name = "maxEnergyGainFraction";
+        cpp_type_value = params->RF.maxEnergyGainFraction;
+        saveToHDF5(group_rf, name, &cpp_type_value);
+        name.clear();
+
+        name = "maxParticleEnergy";
+        cpp_type_value = params->RF.maxParticleEnergy;
+        saveToHDF5(group_rf, name, &cpp_type_value);
+        name.clear();
+
+        name = "maxVelocityFractionC";
+        cpp_type_value = params->RF.maxVelocityFractionC;
+        saveToHDF5(group_rf, name, &cpp_type_value);
+        name.clear();
+
+        delete group_rf;
 
         // Fundamental scales group
         Group * group_scales = new Group( outputFile->createGroup( "/scales" ) );
@@ -665,12 +709,13 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 				{
 					// Velocity vector:
 					name = "V_p";
+					const unsigned int lastVelocityColumn = (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT) ? 2 : 1;
 
 					#ifdef HDF5_DOUBLE
-					mat_values = CS->velocity*IONS->at(ii).V_p.submat(0,0,N-1,1);
+					mat_values = CS->velocity*IONS->at(ii).V_p.submat(0,0,N-1,lastVelocityColumn);
 					saveToHDF5(group_ionSpecies, name, &mat_values);
 					#elif defined HDF5_FLOAT
-					fmat_values = conv_to<fmat>::from(CS->velocity*IONS->at(ii).V_p.submat(0,0,N-1,1));
+					fmat_values = conv_to<fmat>::from(CS->velocity*IONS->at(ii).V_p.submat(0,0,N-1,lastVelocityColumn));
 					saveToHDF5(group_ionSpecies, name, &fmat_values);
 					#endif
 					name.clear();
@@ -950,9 +995,25 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = CS->eField*fields->EX_m.subvec(iIndex,fIndex);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( CS->eField*fields->EX_m.subvec(iIndex,fIndex) );
+				saveToHDF5(group_field, name, &fvec_values);
+				#endif
+				name.clear();
+
+				delete group_field;
+			}
+			if(params->outputs_variables.at(ov) == "Phi_m")
+			{
+				Group * group_field = new Group( group_fields->createGroup( "Phi_m" ) );//Electrostatic potential
+
+				name = "x";
+				#ifdef HDF5_DOUBLE
+				vec_values = CS->eField*CS->length*fields->Phi_m.subvec(iIndex,fIndex);
+				saveToHDF5(group_field, name, &vec_values);
+				#elif defined HDF5_FLOAT
+				fvec_values = conv_to<fvec>::from( CS->eField*CS->length*fields->Phi_m.subvec(iIndex,fIndex) );
 				saveToHDF5(group_field, name, &fvec_values);
 				#endif
 				name.clear();
@@ -967,7 +1028,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = CS->bField*fields->BX_m.subvec(iIndex,fIndex);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( CS->bField*fields->BX_m.subvec(iIndex,fIndex) );
 				saveToHDF5(group_field, name, &fvec_values);
@@ -983,7 +1044,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = fields->dBX_m.subvec(iIndex,fIndex)*CS->bField/CS->length;
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( fields->dBX_m.subvec(iIndex,fIndex)*CS->bField/CS->length );
 				saveToHDF5(group_field, name, &fvec_values);
@@ -999,7 +1060,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = fields->ddBX_m.subvec(iIndex,fIndex)*CS->bField/pow(CS->length,2);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( fields->ddBX_m.subvec(iIndex,fIndex)*CS->bField/pow(CS->length,2) );
 				saveToHDF5(group_field, name, &fvec_values);

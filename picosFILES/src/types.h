@@ -22,6 +22,16 @@ using namespace std;
 #define PARTICLES_MPI_COLOR 1
 #define FIELDS_TAG 100
 #define PARTICLES_TAG 200
+#define FIELD_SOLVE_OHM 0
+#define FIELD_SOLVE_POISSON 1
+#define POISSON_BC_DIRICHLET 0
+#define POISSON_BC_PERIODIC 1
+#define POISSON_BC_SHEATH 2
+#define PARTICLE_PUSH_GC_VPER 1
+#define PARTICLE_PUSH_GC_MU 2
+#define PARTICLE_PUSH_BORIS_FULL_ORBIT 3
+#define RF_EFIELD_POWER_BALANCE 0
+#define RF_EFIELD_FIXED 1
 
 #define float_zero 1E-7
 #define double_zero 1E-15
@@ -275,13 +285,14 @@ class fields_TYP
 public:
 
 	arma::vec EX_m;
+	arma::vec Phi_m;
 	arma::vec BX_m;
 	arma::vec dBX_m;
 	arma::vec ddBX_m;
 
 	fields_TYP(){};
 
-	fields_TYP(unsigned int N) : EX_m(N), BX_m(N), dBX_m(N), ddBX_m(N) {};
+	fields_TYP(unsigned int N) : EX_m(N), Phi_m(N), BX_m(N), dBX_m(N), ddBX_m(N) {};
 
 	~fields_TYP(){};
 
@@ -383,6 +394,10 @@ struct em_IC_TYP
 	double EX;
 	double EY;
 	double EZ;
+	double phiLeft;
+	double phiRight;
+	int poissonBCModel;
+	double sheathCoefficient;
 	string EX_fileName;
 	int EX_NX;
 	arma::vec Ex_profile;
@@ -398,6 +413,10 @@ struct em_IC_TYP
 		EX     = 0;
 		EY     = 0;
 		EZ     = 0;
+		phiLeft = 0;
+		phiRight = 0;
+		poissonBCModel = POISSON_BC_DIRICHLET;
+		sheathCoefficient = 3.0;
 		EX_NX  = 0;
 	}
 };
@@ -427,18 +446,22 @@ struct CV_TYP
 struct SW_TYP
 {
 	int EfieldSolve;
+	int fieldSolveModel;
 	int BfieldSolve;
 	int Collisions;
 	int RFheating;
+	int relativisticElectrons;
 	int linearSolve;
 	int advancePos;
 
 	SW_TYP()
 	{
 		EfieldSolve   = 0;
+		fieldSolveModel = FIELD_SOLVE_OHM;
 		BfieldSolve   = 0;
 		Collisions    = 0;
 		RFheating     = 0;
+		relativisticElectrons = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
 	}
@@ -545,6 +568,13 @@ struct RF_TYP
 	double kpar;
 	double kper;
 	int handedness;
+	int heatIons;
+	int heatElectrons;
+	int eFieldMode;
+	double eFieldAmplitude;
+	double maxEnergyGainFraction;
+	double maxParticleEnergy;
+	double maxVelocityFractionC;
 
 	// Name and storage time-dependent RF power trace:
 	// ========================================
@@ -577,6 +607,13 @@ struct RF_TYP
 		kper = 0;
 		Prf_NS = 0;
 		handedness = 0;
+		heatIons = 1;
+		heatElectrons = 1;
+		eFieldMode = RF_EFIELD_POWER_BALANCE;
+		eFieldAmplitude = 0;
+		maxEnergyGainFraction = 0;
+		maxParticleEnergy = 0;
+		maxVelocityFractionC = 0;
 		E3   = 0;
 		uE3  = 0;
 		Erf  = 0;

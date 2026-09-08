@@ -4,7 +4,9 @@
 #include <mpi.h>
 
 #include <concepts>
+#include <iostream>
 #include <random>
+#include <vector>
 
 /// Name space for PICOS.
 namespace picos {
@@ -153,8 +155,8 @@ namespace picos {
         void test() {
             constexpr T one = static_cast<T> (1.0);
             constexpr T none = -one;
-            typedef instance<T, uniform_real_distribution<T>, none, one> uniform_random;
-            std::vector<uniform_random> randoms = instances<T, uniform_real_distribution<T>, none, one> (0);
+            typedef instance<T, std::uniform_real_distribution<T>, none, one> uniform_random;
+            std::vector<uniform_random> randoms = instances<T, std::uniform_real_distribution<T>, none, one> (0);
 
             const size_t batch_size = 10000;
 

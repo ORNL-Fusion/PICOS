@@ -144,6 +144,11 @@ int main(int argc, char* argv[])
     // =========================================================================
     const PIC_TYP PIC(params, CS, fields, IONS, electrons);
 
+    if (params.SW.EfieldSolve == 1)
+    {
+        fields_solver.advanceEfield(&params,&fields,&CS,&IONS,&electrons);
+    }
+
     // Create RF operator object:
     // =========================================================================
     RF_Operator_TYP RF_operator(&params,&CS,&fields,&IONS);
@@ -241,7 +246,7 @@ int main(int argc, char* argv[])
 
         if (params.SW.EfieldSolve == 1)
         {
-            // Use Ohm's law to advance the electric field:
+            // Advance electric field with the selected field model.
             fields_solver.advanceEfield(&params,&fields,&CS,&IONS,&electrons);
         }
 

@@ -186,15 +186,45 @@ void init_TYP::readInputFile(params_TYP * params)
 	std::map<string,string> parametersStringMap;
 	parametersStringMap = readTextFile(&name);
 
+    auto getString = [&parametersStringMap](const string& key, const string& defaultValue)
+    {
+        auto it = parametersStringMap.find(key);
+        if (it == parametersStringMap.end())
+        {
+            return defaultValue;
+        }
+        return it->second;
+    };
+
+    auto getInt = [&getString](const string& key, int defaultValue)
+    {
+        string value = getString(key, "");
+        if (value.empty())
+        {
+            return defaultValue;
+        }
+        return stoi(value);
+    };
+
+    auto getDouble = [&getString](const string& key, double defaultValue)
+    {
+        string value = getString(key, "");
+        if (value.empty())
+        {
+            return defaultValue;
+        }
+        return stod(value);
+    };
+
     // Create HDF5 folders if they don't exist:
     // ========================================
 	if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-		string mkdir_outputs_dir = "mkdir " + params->PATH;
+		string mkdir_outputs_dir = "mkdir -p " + params->PATH;
 		const char * sys = mkdir_outputs_dir.c_str();
 		int rsys = system(sys);
 
-		string mkdir_outputs_dir_HDF5 = mkdir_outputs_dir + "/HDF5";
+		string mkdir_outputs_dir_HDF5 = "mkdir -p " + params->PATH + "/HDF5";
 		sys = mkdir_outputs_dir_HDF5.c_str();
 		rsys = system(sys);
 	}
@@ -232,9 +262,11 @@ void init_TYP::readInputFile(params_TYP * params)
     // Switches:
     // -------------------------------------------------------------------------
     params->SW.EfieldSolve   = stoi( parametersStringMap["SW_EfieldSolve"] );
+    params->SW.fieldSolveModel = getInt("SW_fieldSolveModel", FIELD_SOLVE_OHM);
     params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
     params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
     params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
+    params->SW.relativisticElectrons = getInt("SW_relativisticElectrons", 0);
     params->SW.advancePos    = stoi( parametersStringMap["SW_advancePos"] );
     params->SW.linearSolve   = stoi( parametersStringMap["SW_linearSolve"] );
 
@@ -246,6 +278,10 @@ void init_TYP::readInputFile(params_TYP * params)
     params->em_IC.BZ            = stod( parametersStringMap["IC_BZ"] );
     params->em_IC.BX_NX         = stoi( parametersStringMap["IC_BX_NX"] );
     params->em_IC.BX_fileName   = parametersStringMap["IC_BX_fileName"];
+    params->em_IC.phiLeft       = getDouble("IC_phiLeft", 0.0);
+    params->em_IC.phiRight      = getDouble("IC_phiRight", 0.0);
+    params->em_IC.poissonBCModel = getInt("Poisson_BCModel", POISSON_BC_DIRICHLET);
+    params->em_IC.sheathCoefficient = getDouble("Poisson_sheathCoefficient", 3.0);
 
     // Geometry:
     // -------------------------------------------------------------------------
@@ -260,8 +296,8 @@ void init_TYP::readInputFile(params_TYP * params)
     // -------------------------------------------------------------------------
     params->f_IC.ne          = stod( parametersStringMap["IC_ne"] );
     params->f_IC.Te          = stod( parametersStringMap["IC_Te"] )*F_E/F_KB; // Te in eV in input file
-    params->f_IC.Te_NX       = stoi( parametersStringMap["IC_Te_NX"] );
-    params->f_IC.Te_fileName = parametersStringMap["IC_Te_fileName"];
+    params->f_IC.Te_NX       = getInt("IC_Te_NX", params->em_IC.BX_NX);
+    params->f_IC.Te_fileName = getString("IC_Te_fileName", "ProtoMPEX_Te_norm_PICOS_c.txt");
 
     // RF parameters
     // -------------------------------------------------------------------------
@@ -275,6 +311,13 @@ void init_TYP::readInputFile(params_TYP * params)
     params->RF.kpar       = stod( parametersStringMap["RF_kpar"]);
     params->RF.kper       = stod( parametersStringMap["RF_kper"]);
     params->RF.handedness = stoi( parametersStringMap["RF_handedness"]);
+    params->RF.heatIons = getInt("SW_RFheatingIons", 1);
+    params->RF.heatElectrons = getInt("SW_RFheatingElectrons", 1);
+    params->RF.eFieldMode = getInt("RF_EfieldMode", RF_EFIELD_POWER_BALANCE);
+    params->RF.eFieldAmplitude = getDouble("RF_EfieldAmplitude", 0.0);
+    params->RF.maxEnergyGainFraction = getDouble("RF_maxEnergyGainFraction", 0.0);
+    params->RF.maxParticleEnergy = getDouble("RF_maxParticleEnergy", 0.0);
+    params->RF.maxVelocityFractionC = getDouble("RF_maxVelocityFractionC", 0.0);
     params->RF.Prf_NS     = stoi( parametersStringMap["RF_Prf_NS"] );
     params->RF.Prf_fileName = parametersStringMap["RF_Prf_fileName"];
 
@@ -499,15 +542,11 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
         cout << "* * * * * * * * * * * *  LOADING INITIAL CONDITION PROFILES  * * * * * * * * * * * * * * * * * *" << endl;
     }
 
-    // Assemble PATH:
-    // ==============
-    int nn = params->PATH.length();
-    std::string fileName  = params->PATH.substr(0,nn-13);
-
     // Assemble file paths:
     // ====================
-    std::string fileName5 = fileName + "/inputFiles/" + params->em_IC.BX_fileName;
-    std::string fileName6 = fileName + "/inputFiles/" + params->f_IC.Te_fileName;
+    std::string inputPath = "inputFiles/";
+    std::string fileName5 = inputPath + params->em_IC.BX_fileName;
+    std::string fileName6 = inputPath + params->f_IC.Te_fileName;
 
     // Get electron temperature and magnetic field initial conditon data:
     // =================================================================
@@ -529,9 +568,9 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
     {
         // Assemble  external filenames:
         // =============================
-        std::string fileName2 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tper_fileName;
-        std::string fileName3 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.Tpar_fileName;
-        std::string fileName4 = fileName + "/inputFiles/" + IONS->at(ss).p_IC.densityFraction_fileName;
+        std::string fileName2 = inputPath + IONS->at(ss).p_IC.Tper_fileName;
+        std::string fileName3 = inputPath + IONS->at(ss).p_IC.Tpar_fileName;
+        std::string fileName4 = inputPath + IONS->at(ss).p_IC.densityFraction_fileName;
 
         // Load data from external file:
         // ============================
@@ -612,6 +651,7 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
         double M       = IONS->at(ss).M;
         double Z       = IONS->at(ss).Z;
         double Q       = F_E*Z;
+        double absQ    = fabs(Q);
 
         // Select ion density profile:
         if (params->quietStart)
@@ -628,12 +668,12 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
 
         // Characteristic frequencies:
         IONS->at(ss).Q     = Q;
-        IONS->at(ss).Wc    = Q*B/M;
+        IONS->at(ss).Wc    = absQ*B/M;
         IONS->at(ss).Wp    = sqrt(f*ne*Q*Q/(F_EPSILON*M));
 
         // Characteristic thermal velocities:
-        IONS->at(ss).VTper = sqrt(2.0*F_KB*params->CV.Tper/M);
-        IONS->at(ss).VTpar = sqrt(2.0*F_KB*params->CV.Tpar/M);
+        IONS->at(ss).VTper = sqrt(2.0*F_KB*IONS->at(ss).p_IC.Tper/M);
+        IONS->at(ss).VTpar = sqrt(2.0*F_KB*IONS->at(ss).p_IC.Tpar/M);
 
         // Characteristic lengths and time scales:
         IONS->at(ss).LarmorRadius = IONS->at(ss).VTper/IONS->at(ss).Wc;
@@ -643,10 +683,20 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
 
     // Characteristic length and time scales of simulation:
     // ===================================================
-    // Assume that species 0 is the majority species
-    params->ionLarmorRadius = IONS->at(0).LarmorRadius;
-    params->ionSkinDepth    = IONS->at(0).SkinDepth;
-    params->ionGyroPeriod   = IONS->at(0).GyroPeriod;
+    // Use the first positive-Z self-consistent species as the ion reference.
+    int referenceIonSpecies = 0;
+    for(int ss=0; ss<params->numberOfParticleSpecies; ss++)
+    {
+        if (IONS->at(ss).Z > 0.0)
+        {
+            referenceIonSpecies = ss;
+            break;
+        }
+    }
+
+    params->ionLarmorRadius = IONS->at(referenceIonSpecies).LarmorRadius;
+    params->ionSkinDepth    = IONS->at(referenceIonSpecies).SkinDepth;
+    params->ionGyroPeriod   = IONS->at(referenceIonSpecies).GyroPeriod;
 
     // RF start and end time:
     // ======================
@@ -842,7 +892,8 @@ void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSp
     // Initialize particle-defined quantities:
     // ==================================
     IONS->X_p.zeros(IONS->NSP);
-    IONS->V_p.zeros(IONS->NSP,2);
+    const unsigned int velocityComponents = (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT) ? 3 : 2;
+    IONS->V_p.zeros(IONS->NSP, velocityComponents);
     IONS->mn.zeros(IONS->NSP);
 
     IONS->EX_p.zeros(IONS->NSP);

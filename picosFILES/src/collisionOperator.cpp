@@ -175,24 +175,30 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
     {
         const double tnorm = CS.temperature*F_KB/F_E;
         // Number of ION species:
-    	// =====================
-    	const size_t numIonSpecies = IONS.size();
-        const size_t bbe = numIonSpecies + 1;
+        // =====================
+        const size_t numIonSpecies = IONS.size();
+        bool hasKineticElectrons = false;
+        for (const ionSpecies_TYP &ion : IONS)
+        {
+            hasKineticElectrons = hasKineticElectrons || (ion.Z < 0.0);
+        }
+        const size_t bbe = hasKineticElectrons ? numIonSpecies : numIonSpecies + 1;
 
         // Time step:
         // =========
         const double DT = params.DT*CS.time;
 
-    	for (ionSpecies_TYP &iona : IONS)
-    	{
+        for (ionSpecies_TYP &iona : IONS)
+        {
             // Number of particles is "aa" species:
         	// ===================================
         	const size_t NSP_a = iona.NSP;
 
         	// Species "aa" parameters:
         	// =======================
-        	const double Ma = iona.M*CS.mass;
-        	const double Za2 = iona.Z*iona.Z;
+            const double Ma = iona.M*CS.mass;
+            const double Za2 = iona.Z*iona.Z;
+            const bool fullOrbit = (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && iona.V_p.n_cols > 2);
 
             // Initialize Species "bb" parameters:
             // =======================
@@ -250,7 +256,7 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
                 // Apply collisions to all particles:
 				// ==================================
-                #pragma omp parallel default(none) shared(params, iona, CS, Ma, ZaZb2, Mb, nb, Tb, uxb, DT, std::cout, NSP_a)
+                #pragma omp parallel default(none) shared(params, iona, CS, Ma, ZaZb2, Mb, nb, Tb, uxb, DT, std::cout, NSP_a) firstprivate(fullOrbit)
                 {
                     uniform_random &randuni = randoms[picos::random::thread()];
 
@@ -264,7 +270,10 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         // =============================================================================
                         const double local_uxb = uxb(ii);
                         double wxa = iona.V_p(ii,0)*CS.velocity - local_uxb;
-                        double wya = iona.V_p(ii,1)*CS.velocity;
+                        const double oldVy = fullOrbit ? iona.V_p(ii,1) : 0.0;
+                        const double oldVz = fullOrbit ? iona.V_p(ii,2) : 0.0;
+                        const double oldVper = fullOrbit ? hypot(oldVy, oldVz) : iona.V_p(ii,1);
+                        double wya = oldVper*CS.velocity;
                         
                         // Convert velocity from cartesian to spherical coordinate system:
                         // =============================================================================
@@ -310,7 +319,25 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
                         // Back to lab frame and normalize:
                         // =====================================================================
                         iona.V_p(ii,0) = (wxa + local_uxb)/CS.velocity;
-                        iona.V_p(ii,1) = wya/CS.velocity;
+                        if (fullOrbit)
+                        {
+                            const double newVper = abs(wya/CS.velocity);
+                            if (oldVper > double_zero)
+                            {
+                                const double scale = newVper/oldVper;
+                                iona.V_p(ii,1) = oldVy*scale;
+                                iona.V_p(ii,2) = oldVz*scale;
+                            }
+                            else
+                            {
+                                iona.V_p(ii,1) = newVper;
+                                iona.V_p(ii,2) = 0.0;
+                            }
+                        }
+                        else
+                        {
+                            iona.V_p(ii,1) = wya/CS.velocity;
+                        }
                         
                     } // "ii" particle loop
                 }

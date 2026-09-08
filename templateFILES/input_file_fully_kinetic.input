@@ -2,91 +2,91 @@
 // =============================================================================
 mpisForFields               2
 quietStart                  1
-numberOfParticleSpecies     1
+numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       1
 
 // Characteristic values:
 // =============================================================================
-CV_ne                       5.0E19
-CV_Te                       15
-CV_B                        1.5
-CV_Tpar                     15
-CV_Tper                     15
+CV_ne                       1.0E14
+CV_Te                       5
+CV_B                        0.02
+CV_Tpar                     5
+CV_Tper                     5
 
 // Simulation time:
 // =============================================================================
-DTc                         0.5
-simulationTime              25000
+DTc                         0.05
+simulationTime              2.0E-4
 
 // Switches:
 // =============================================================================
-SW_EfieldSolve               1
-SW_fieldSolveModel           0
-SW_BfieldSolve               0
-SW_Collisions                1
-SW_RFheating                 1
-SW_RFheatingIons             1
-SW_RFheatingElectrons        0
-SW_relativisticElectrons     0
-SW_advancePos                1
-SW_linearSolve               0
+SW_EfieldSolve              1
+SW_fieldSolveModel          1
+SW_BfieldSolve              0
+SW_Collisions               0
+SW_RFheating                1
+SW_RFheatingIons            0
+SW_RFheatingElectrons       1
+SW_relativisticElectrons    1
+SW_advancePos               1
+SW_linearSolve              0
 
 // Magnetic field initial conditions:
 // =============================================================================
 IC_uniformBfield            0
-IC_BX                       0.2
+IC_BX                       0.02
 IC_BY                       0.0
 IC_BZ                       0.0
 IC_BX_NX                    200
 IC_BX_fileName              MPEX_B_norm_PICOS_scenario_14.txt
 IC_phiLeft                  0.0
 IC_phiRight                 0.0
-Poisson_BCModel             0
+Poisson_BCModel             1
 Poisson_sheathCoefficient   3.0
 
 // Geometry:
 // =============================================================================
-dp                          0.4243
+dp                          5.0E-5
 r1                          0.0
-r2                          0.05
-LX_min                      -2
-LX_max                      8
+r2                          0.02
+LX_min                      -0.05
+LX_max                      0.05
 
 // Electron initial conditions:
 // =============================================================================
-IC_ne                       1.0E18
-IC_Te                       15
+IC_ne                       1.0E14
+IC_Te                       5
 IC_Te_NX                    200
 IC_Te_fileName              ProtoMPEX_Te_norm_PICOS_c.txt
 
 // RF operator:
 // =============================================================================
-RF_Prf                      50E3
+RF_Prf                      10
 RF_n_harmonic               1
-RF_freq                     8.385E6
-RF_x1                       4.0
-RF_x2                       6.5
-RF_t_ON                     12000
-RF_t_OFF                    20000
-RF_kpar                     20
-RF_kper                     100
+RF_freq                     5.6E8
+RF_x1                       -0.025
+RF_x2                       0.025
+RF_t_ON                     0
+RF_t_OFF                    2.0E-4
+RF_kpar                     0
+RF_kper                     50
 RF_handedness               -1
-RF_EfieldMode               0
-RF_EfieldAmplitude          0.0
-RF_maxEnergyGainFraction    0.0
-RF_maxParticleEnergy        0.0
-RF_maxVelocityFractionC     0.0
+RF_EfieldMode               1
+RF_EfieldAmplitude          1000
+RF_maxEnergyGainFraction    0.25
+RF_maxParticleEnergy        5000
+RF_maxVelocityFractionC     0.2
 RF_Prf_fileName             Prf_profile.txt
 RF_Prf_NS                   200
 
 // Output variables:
 // =============================================================================
-outputCadence               500
-outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
+outputCadence               5.0E-5
+outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
 
 // Data smoothing:
 // =============================================================================
-smoothingParameter          1.0E-4
+smoothingParameter          1.0E-3
 filtersPerIterationFields   2
 filtersPerIterationIons     2

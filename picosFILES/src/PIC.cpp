@@ -2,6 +2,41 @@
 
 #include "PIC.h"
 
+namespace
+{
+bool relativisticElectronLimitEnabled(const params_TYP &params, const ionSpecies_TYP &species)
+{
+	return params.SW.relativisticElectrons == 1 && species.Z < 0.0;
+}
+
+void enforceRelativisticElectronSpeedLimit(const params_TYP &params, ionSpecies_TYP &species, int ii)
+{
+	if (!relativisticElectronLimitEnabled(params, species))
+	{
+		return;
+	}
+
+	double speed2 = species.V_p(ii,0)*species.V_p(ii,0) + species.V_p(ii,1)*species.V_p(ii,1);
+	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+	{
+		speed2 += species.V_p(ii,2)*species.V_p(ii,2);
+	}
+
+	const double maxSpeed = F_C_DS*(1.0 - 1.0e-9);
+	const double maxSpeed2 = maxSpeed*maxSpeed;
+	if (speed2 > maxSpeed2 && speed2 > double_zero)
+	{
+		const double scale = maxSpeed/sqrt(speed2);
+		species.V_p(ii,0) *= scale;
+		species.V_p(ii,1) *= scale;
+		if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+		{
+			species.V_p(ii,2) *= scale;
+		}
+	}
+}
+}
+
 #if 0
 void PIC_TYP::MPI_AllreduceVec(const params_TYP * params, arma::vec * v)
 {
@@ -104,6 +139,10 @@ void PIC_TYP::MPI_Recv_AllFields(const params_TYP &params, fields_TYP &fields) c
 {
 	// Send field data from FIELDS ranks and recieve fields data at PARTICLE ranks
 	MPI_Recvvec(params,fields.EX_m);
+	if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+	{
+		MPI_Recvvec(params,fields.Phi_m);
+	}
 	MPI_Recvvec(params,fields.BX_m);
 	MPI_Recvvec(params,fields.dBX_m);
 
@@ -121,9 +160,30 @@ void PIC_TYP::fillGhosts(arma::vec &C) const
 	C(NX-1) = C(NX-2);
 }
 
+void PIC_TYP::fillPeriodicGhosts(arma::vec &C) const
+{
+	const int NX = C.n_elem;
+
+	C(0)    = C(NX-2);
+	C(NX-1) = C(1);
+}
+
 void PIC_TYP::fillGhost_AllFields(const params_TYP &params, fields_TYP &fields) const
 {
-	fillGhosts(fields.EX_m);
+	if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+	    params.em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+	{
+		fillPeriodicGhosts(fields.EX_m);
+		fillPeriodicGhosts(fields.Phi_m);
+	}
+	else
+	{
+		fillGhosts(fields.EX_m);
+		if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+		{
+			fillGhosts(fields.Phi_m);
+		}
+	}
 	fillGhosts(fields.BX_m);
 	fillGhosts(fields.dBX_m);
 
@@ -242,6 +302,14 @@ randoms(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> 
                 F[0] = +vpar;
                 F[1] = -(mu/Ma)*dB + (qa/Ma)*E;
                 F[2] = 0;
+            };
+            break;
+        case 3:
+            pre = [](const double EM, const double Ma, const double vper, double &Z0)->void {};
+            post = [](const double EM, const double Ma, double &Z1)->void {};
+            method = [](const double qa, const double Ma, const std::array<double, 3> &EM, const std::array<double, 3> &ZN, std::array<double, 3> &F)->void
+            {
+                F = {0.0, 0.0, 0.0};
             };
             break;
     }
@@ -374,6 +442,114 @@ void PIC_TYP::calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, c
     method(qa, Ma, EM, ZN, F);
 }
 
+double PIC_TYP::perpendicularSpeed(const ionSpecies_TYP &ION, int ii, const params_TYP &params)
+{
+	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
+	{
+		return hypot(ION.V_p(ii,1), ION.V_p(ii,2));
+	}
+
+	return ION.V_p(ii,1);
+}
+
+void PIC_TYP::setPerpendicularSpeed(ionSpecies_TYP &ION, int ii, const params_TYP &params, double vper)
+{
+	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
+	{
+		const double oldVper = hypot(ION.V_p(ii,1), ION.V_p(ii,2));
+		if (oldVper > double_zero)
+		{
+			const double scale = vper/oldVper;
+			ION.V_p(ii,1) *= scale;
+			ION.V_p(ii,2) *= scale;
+		}
+		else
+		{
+			ION.V_p(ii,1) = vper;
+			ION.V_p(ii,2) = 0.0;
+		}
+	}
+	else
+	{
+		ION.V_p(ii,1) = vper;
+	}
+}
+
+void PIC_TYP::advanceParticlesBorisFullOrbit(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const
+{
+	if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR)
+	{
+		return;
+	}
+
+	const double DT = params.DT;
+	const double By = params.em_IC.BY;
+	const double Bz = params.em_IC.BZ;
+	const double Ey = params.em_IC.EY;
+	const double Ez = params.em_IC.EZ;
+
+	for(auto &ion: IONS)
+	{
+		const int NSP = ion.NSP;
+		const double Ma = ion.M;
+		const double qaOverMa = ion.Q/Ma;
+
+		#pragma omp parallel for default(none) shared(params, fields, ion, std::cout) firstprivate(NSP, DT, Ma, qaOverMa, By, Bz, Ey, Ez)
+		for(int ii=0; ii<NSP; ii++)
+		{
+			std::array<double, 3> EM;
+			interpEM(params, fields, ion.X_p(ii), EM);
+
+			const double Ex = EM[0];
+			const double Bx = EM[1];
+
+			double vx = ion.V_p(ii,0);
+			double vy = ion.V_p(ii,1);
+			double vz = ion.V_p(ii,2);
+
+			const double halfQmdt = 0.5*qaOverMa*DT;
+			const double vMinusX = vx + halfQmdt*Ex;
+			const double vMinusY = vy + halfQmdt*Ey;
+			const double vMinusZ = vz + halfQmdt*Ez;
+
+			const double tx = halfQmdt*Bx;
+			const double ty = halfQmdt*By;
+			const double tz = halfQmdt*Bz;
+			const double t2 = tx*tx + ty*ty + tz*tz;
+			const double sx = 2.0*tx/(1.0 + t2);
+			const double sy = 2.0*ty/(1.0 + t2);
+			const double sz = 2.0*tz/(1.0 + t2);
+
+			const double vPrimeX = vMinusX + vMinusY*tz - vMinusZ*ty;
+			const double vPrimeY = vMinusY + vMinusZ*tx - vMinusX*tz;
+			const double vPrimeZ = vMinusZ + vMinusX*ty - vMinusY*tx;
+
+			const double vPlusX = vMinusX + vPrimeY*sz - vPrimeZ*sy;
+			const double vPlusY = vMinusY + vPrimeZ*sx - vPrimeX*sz;
+			const double vPlusZ = vMinusZ + vPrimeX*sy - vPrimeY*sx;
+
+			vx = vPlusX + halfQmdt*Ex;
+			vy = vPlusY + halfQmdt*Ey;
+			vz = vPlusZ + halfQmdt*Ez;
+
+			ion.X_p(ii) += vx*DT;
+			ion.V_p(ii,0) = vx;
+			ion.V_p(ii,1) = vy;
+			ion.V_p(ii,2) = vz;
+			enforceRelativisticElectronSpeedLimit(params, ion, ii);
+
+			const double Bmag = sqrt(Bx*Bx + By*By + Bz*Bz);
+			const double vper = hypot(ion.V_p(ii,1), ion.V_p(ii,2));
+			ion.mu_p(ii) = 0.5*Ma*vper*vper/max(Bmag, double_zero);
+
+			if (isnan(ion.X_p(ii)) || isnan(ion.V_p(ii,0)) || isnan(ion.V_p(ii,1)) || isnan(ion.V_p(ii,2)))
+			{
+				cout << "Non finite Boris particle state at particle " << ii << endl;
+			}
+		}
+	}
+}
+
 void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const
 {
     // Get latest mesh-defined values from FIELDS MPIs:
@@ -381,6 +557,12 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
 
 	// Fill the ghost cells in all fields:
 	fillGhost_AllFields(params, fields);
+
+	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT)
+	{
+		advanceParticlesBorisFullOrbit(params, fields, IONS);
+		return;
+	}
 
 	// Iterate over all the ion species:
     if (params.mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
@@ -513,7 +695,8 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
                 ion.X_p(ii)   = Z1[0];
                 ion.V_p(ii,0) = Z1[1]; // vpar
                 ion.V_p(ii,1) = Z1[2]; // vper
-                ion.mu_p(ii)  = 0.5*Ma*Z1[2]*Z1[2]/EM[1] ; // mu
+                enforceRelativisticElectronSpeedLimit(params, ion, ii);
+                ion.mu_p(ii)  = 0.5*Ma*ion.V_p(ii,1)*ion.V_p(ii,1)/EM[1] ; // mu
 
 			} // End of parallel region
 		} //structure to iterate over all the ion species.
@@ -679,10 +862,13 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 
 			// Particle velocity:
 			const double vpar = ION.V_p(ii,0);
-			const double vper = ION.V_p(ii,1);
-
-			// vx component:
-			const double vy = vper*cos(randuni());
+			const double vper = perpendicularSpeed(ION, ii, params);
+			double perpMoment = 0.5*vper*vper;
+			if (params.advanceParticleMethod != PARTICLE_PUSH_BORIS_FULL_ORBIT)
+			{
+				const double vy = vper*cos(randuni());
+				perpMoment = vy*vy;
+			}
 
 			// Particle-defined magnetic field:
 			const double B = ION.BX_p(ii);
@@ -722,11 +908,33 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 			P11(ix+1) += wr*acmvpar2;
 
 			// Stress tensor P22:
-            const double acmvy2 = ac*Ma*vy*vy;
+            const double acmvy2 = ac*Ma*perpMoment;
 			P22(ix-1) += wl*acmvy2;
 			P22(ix)   += wc*acmvy2;
 			P22(ix+1) += wr*acmvy2;
 		}
+
+		auto foldBoundaryContribution = [&](arma::vec &moment)->void
+		{
+			const int N = params.mesh.NX_IN_SIM;
+			if (ION.p_BC.BC_type == 3)
+			{
+				moment(N + 1) += moment(1);
+				moment(2) += moment(N + 2);
+			}
+			else
+			{
+				moment(2) += moment(1);
+				moment(N + 1) += moment(N + 2);
+			}
+			moment(1) = 0.0;
+			moment(N + 2) = 0.0;
+		};
+
+		foldBoundaryContribution(n);
+		foldBoundaryContribution(nv);
+		foldBoundaryContribution(P11);
+		foldBoundaryContribution(P22);
 
 		// Reduce partial moments from each thread:
 		// ========================================

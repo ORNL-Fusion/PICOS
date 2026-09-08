@@ -1,8 +1,96 @@
 #include "rfOperator.h"
 
+#include <algorithm>
+
 #ifndef HAS_STD_BESSEL
 #include <boost/math/special_functions/bessel.hpp>
 #endif
+
+namespace
+{
+bool rfHeatingEnabledForSpecies(const params_TYP * params, const ionSpecies_TYP & species)
+{
+    if (species.Z > 0.0)
+    {
+        return params->RF.heatIons == 1;
+    }
+    if (species.Z < 0.0)
+    {
+        return params->RF.heatElectrons == 1;
+    }
+    return false;
+}
+
+bool relativisticElectronsEnabledForSpecies(const params_TYP * params, const ionSpecies_TYP & species)
+{
+    return params->SW.relativisticElectrons == 1 && species.Z < 0.0;
+}
+
+double perpendicularSpeedForRf(const params_TYP * params, const ionSpecies_TYP & species, int ii)
+{
+    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+    {
+        return hypot(species.V_p(ii,1), species.V_p(ii,2));
+    }
+    return species.V_p(ii,1);
+}
+
+double gammaFromSpeed(double speed)
+{
+    const double c = std::max(F_C_DS, double_zero);
+    double beta2 = speed*speed/(c*c);
+    beta2 = std::max(0.0, std::min(beta2, 1.0 - 1.0e-12));
+    return 1.0/sqrt(1.0 - beta2);
+}
+
+double gammaFromVelocity(double vpar, double vper)
+{
+    return gammaFromSpeed(hypot(vpar, vper));
+}
+
+double kineticEnergyFromSpeed(double mass, double speed, bool relativistic)
+{
+    if (!relativistic)
+    {
+        return 0.5*mass*speed*speed;
+    }
+    const double gamma = gammaFromSpeed(speed);
+    return (gamma - 1.0)*mass*F_C_DS*F_C_DS;
+}
+
+double speedFromKineticEnergy(double mass, double kineticEnergy, bool relativistic)
+{
+    if (kineticEnergy <= 0.0)
+    {
+        return 0.0;
+    }
+    if (!relativistic)
+    {
+        return sqrt(2.0*kineticEnergy/mass);
+    }
+
+    const double restEnergy = mass*F_C_DS*F_C_DS;
+    const double gamma = 1.0 + kineticEnergy/restEnergy;
+    const double beta2 = std::max(0.0, std::min(1.0 - 1.0e-12, 1.0 - 1.0/(gamma*gamma)));
+    return F_C_DS*sqrt(beta2);
+}
+
+double perpendicularKineticEnergy(double mass, double vpar, double vper, bool relativistic)
+{
+    if (!relativistic)
+    {
+        return 0.5*mass*vper*vper;
+    }
+
+    const double speed2 = vpar*vpar + vper*vper;
+    if (speed2 <= double_zero)
+    {
+        return 0.0;
+    }
+    const double totalEnergy = kineticEnergyFromSpeed(mass, sqrt(speed2), true);
+    return totalEnergy*(vper*vper/speed2);
+}
+}
 
 RF_Operator_TYP::RF_Operator_TYP(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
@@ -29,8 +117,10 @@ void RF_Operator_TYP::calculateResNum(int ii, params_TYP * params, CS_TYP * CS, 
 
     // Particle states:
     double vpar = IONS->V_p(ii,0);
+    double vper = perpendicularSpeedForRf(params, *IONS, ii);
     double Bp   = IONS->BX_p(ii);
-    double wcp   = abs(Q)*Bp/Ma;
+    double gamma = relativisticElectronsEnabledForSpecies(params, *IONS) ? gammaFromVelocity(vpar, vper) : 1.0;
+    double wcp   = abs(Q)*Bp/(gamma*Ma);
 
     // RF paramters:
     int n       = params->RF.n_harmonic;
@@ -46,10 +136,18 @@ void RF_Operator_TYP::calculateResNum_AllSpecies(params_TYP * params, CS_TYP * C
 {
         for (int ss=0; ss<IONS->size();ss++)
         {
-            int NSP   = IONS->at(ss).NSP;
-            double Ma = IONS->at(ss).M;
+            if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+            {
+                IONS->at(ss).f3.zeros();
+                IONS->at(ss).dE3.zeros();
+                IONS->at(ss).udErf.zeros();
+                IONS->at(ss).udE3.zeros();
+                continue;
+            }
 
-            #pragma omp parallel for default(none) shared(params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,Ma)
+            int NSP   = IONS->at(ss).NSP;
+
+            #pragma omp parallel for default(none) shared(params, IONS, ss, CS, fields, std::cout) firstprivate(NSP)
             for(int ii=0; ii<NSP; ii++)
             {
                 // Store previous resNum:
@@ -66,6 +164,11 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
 {
     for (int ss=0; ss<IONS->size();ss++)
     {
+        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        {
+            continue;
+        }
+
         int NSP   = IONS->at(ss).NSP;
 
         #pragma omp parallel for default(none) shared(params, IONS, ss, CS, fields, std::cout) firstprivate(NSP)
@@ -99,7 +202,7 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     double Ma = IONS->M;
     double Q  = IONS->Q;
     double e  = F_E_DS;
-    int Z     = IONS->Z;
+    double Z  = IONS->Z;
 
     // RF paramters:
     int n         = params->RF.n_harmonic;
@@ -114,7 +217,9 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
 
     // Particle states:
     double vpar = IONS->V_p(ii,0);
-    double vper = IONS->V_p(ii,1);
+    double vper = perpendicularSpeedForRf(params, *IONS, ii);
+    const bool relativistic = relativisticElectronsEnabledForSpecies(params, *IONS);
+    const double gamma = relativistic ? gammaFromVelocity(vpar, vper) : 1.0;
 
     // Particle-defined fields:
     double Bp   = IONS->BX_p(ii);
@@ -123,15 +228,14 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     double Ep   = IONS->EX_p(ii);
 
     // Derived quantities:
-    double KE_par  = 0.5*Ma*vper*vper;
-    double KE_per  = 0.5*Ma*vper*vper;
-    double Omega   = abs(Q)*Bp/Ma;
-    double dOmega  = abs(Q)*dBp/Ma;
-    double ddOmega = abs(Q)*ddBp/Ma;
+    double Omega   = abs(Q)*Bp/(gamma*Ma);
+    double dOmega  = abs(Q)*dBp/(gamma*Ma);
+    double ddOmega = abs(Q)*ddBp/(gamma*Ma);
+    double qOverMass = Q/(gamma*Ma);
 
     // Calculate the first and second time derivative of Omega:
     double Omega_dot  = vpar*dOmega;
-    double Omega_ddot = pow(vpar,2)*ddOmega  - pow(vper,2)*pow(dOmega,2)/(2.*Omega)  +  (Q/Ma)*Ep*dOmega;
+    double Omega_ddot = pow(vpar,2)*ddOmega  - pow(vper,2)*pow(dOmega,2)/(2.*Omega)  +  qOverMass*Ep*dOmega;
 
     // Calculate the interaction time:
     if ( pow(n*Omega_ddot,2) > 4.8175*abs(pow(n*Omega_dot,3)) )
@@ -168,13 +272,13 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     {
         double E_m = 0;
         double E_p = 1;
-        mean_dKE_per = 0.5*(pow(e,2)/Ma)*pow(abs(E_p*J_nm1 + E_m*J_np1)*tau_rf,2); // [J] normalized energy
+        mean_dKE_per = 0.5*(pow(e,2)/(gamma*Ma))*pow(abs(E_p*J_nm1 + E_m*J_np1)*tau_rf,2); // [J] normalized energy
     }
     if (Z < 0) // Negative particles
     {
         double E_m = 1;
         double E_p = 0;
-        mean_dKE_per = 0.5*(pow(e,2)/Ma)*pow(abs(E_m*J_nm1 + E_p*J_np1)*tau_rf,2); // [J] normalized energy
+        mean_dKE_per = 0.5*(pow(e,2)/(gamma*Ma))*pow(abs(E_m*J_nm1 + E_p*J_np1)*tau_rf,2); // [J] normalized energy
     }
 
     // Populate output:
@@ -187,6 +291,11 @@ void RF_Operator_TYP::calculateRfTerms_AllSpecies(params_TYP * params, CS_TYP * 
 {
     for (int ss=0; ss<IONS->size();ss++)
     {
+        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        {
+            continue;
+        }
+
         int NSP   = IONS->at(ss).NSP;
 
         #pragma omp parallel for default(none) shared(params, IONS, ss, CS, fields, std::cout) firstprivate(NSP)
@@ -209,6 +318,11 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
 
     for (int ss=0; ss<IONS->size();ss++)
     {
+        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        {
+            continue;
+        }
+
         double NCP = IONS->at(ss).NCP;
         int NSP    = IONS->at(ss).NSP;
 
@@ -251,7 +365,12 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
 void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
     // Calculate electric field:
-    double E_rf = sqrt(params->RF.Prf/params->RF.uE3);
+    double E_rf = params->RF.eFieldAmplitude;
+    if (params->RF.eFieldMode == RF_EFIELD_POWER_BALANCE)
+    {
+        E_rf = sqrt(params->RF.Prf/params->RF.uE3);
+    }
+    params->RF.Erf = E_rf;
 
     /*
     if (params->mpi.IS_PARTICLES_ROOT)
@@ -268,10 +387,16 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
     for (int ss=0; ss<IONS->size();ss++)
     {
-        int NSP = IONS->at(ss).NSP;
-        int Ma  = IONS->at(ss).M;
+        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        {
+            continue;
+        }
 
-        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution) firstprivate(generator)
+        const bool relativistic = relativisticElectronsEnabledForSpecies(params, IONS->at(ss));
+        int NSP = IONS->at(ss).NSP;
+        double Ma  = IONS->at(ss).M;
+
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution) firstprivate(generator, relativistic)
         {
             #pragma omp for
             for(int ii=0; ii<NSP; ii++)
@@ -280,18 +405,18 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                 {
                     //  Particle states:
                     double vpar = IONS->at(ss).V_p(ii,0);
-                    double vper = IONS->at(ss).V_p(ii,1);
+                    double vper = perpendicularSpeedForRf(params, IONS->at(ss), ii);
 
                     // Sign of vpar:
-                    double eps  = abs(vpar)/vpar;
+                    double eps  = (vpar >= 0.0) ? 1.0 : -1.0;
 
                     // RF terms:
                     double mean_udKE_per = IONS->at(ss).udErf(ii);
                     double doppler       = IONS->at(ss).doppler(ii);
 
                     // Derived quantities:
-                    double KE_par = Ma*vpar*vpar/2;
-                    double KE_per = Ma*vper*vper/2;
+                    double KE_per = perpendicularKineticEnergy(Ma, vpar, vper, relativistic);
+                    const double KE_total_before = kineticEnergyFromSpeed(Ma, hypot(vpar, vper), relativistic);
 
                     // Calculate mean RF energy kick:
                     double mean_dKE_per = mean_udKE_per*pow(E_rf,2);
@@ -302,25 +427,107 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
                     // Monte-Carlo operaton in kinetic energy:
                     double dKE_per = mean_dKE_per + Rm*sqrt(2*KE_per*mean_dKE_per);
+                    if (params->RF.maxEnergyGainFraction > 0.0)
+                    {
+                        const double referenceEnergy = std::max(KE_per, params->f_IC.Te);
+                        const double maxPositiveKick = params->RF.maxEnergyGainFraction*referenceEnergy;
+                        dKE_per = std::min(dKE_per, maxPositiveKick);
+                    }
+                    dKE_per = std::max(dKE_per, -0.95*KE_per);
 
                     // Total change in kinetic energy:
                     double dKE = dKE_per*(1 + doppler);
 
-                    // Final perpendicular kinetic energy:
-                    KE_per += dKE_per;
-
-                    if (KE_per < 0)
+                    if (relativistic)
                     {
-                        cout << "KE_per is negative" << endl;
-                    }
+                        double targetTotalKE = std::max(0.0, KE_total_before + dKE);
+                        double targetPerpKE = std::max(0.0, KE_per + dKE_per);
+                        if (targetTotalKE < targetPerpKE)
+                        {
+                            targetTotalKE = targetPerpKE;
+                        }
 
-                    // Convert back to velocities:
-                    vpar += (doppler/vpar)*(dKE_per/Ma);
-                    vper = sqrt(2*KE_per/Ma);
+                        if (params->RF.maxParticleEnergy > 0.0)
+                        {
+                            targetTotalKE = std::min(targetTotalKE, params->RF.maxParticleEnergy);
+                        }
+                        if (params->RF.maxVelocityFractionC > 0.0)
+                        {
+                            const double maxSpeed = std::min(params->RF.maxVelocityFractionC, F_C_DS*(1.0 - 1.0e-9));
+                            const double maxSpeedEnergy = kineticEnergyFromSpeed(Ma, maxSpeed, true);
+                            targetTotalKE = std::min(targetTotalKE, maxSpeedEnergy);
+                        }
+
+                        targetPerpKE = std::min(targetPerpKE, targetTotalKE);
+                        const double newSpeed = speedFromKineticEnergy(Ma, targetTotalKE, true);
+                        const double perpFraction = (targetTotalKE > double_zero) ? std::max(0.0, std::min(1.0, targetPerpKE/targetTotalKE)) : 0.0;
+                        vper = newSpeed*sqrt(perpFraction);
+                        vpar = eps*newSpeed*sqrt(std::max(0.0, 1.0 - perpFraction));
+                        dKE = targetTotalKE - KE_total_before;
+                    }
+                    else
+                    {
+                        // Final perpendicular kinetic energy:
+                        KE_per += dKE_per;
+
+                        if (KE_per < 0)
+                        {
+                            cout << "KE_per is negative" << endl;
+                            KE_per = 0.0;
+                        }
+
+                        // Convert back to velocities:
+                        if (abs(vpar) > double_zero)
+                        {
+                            vpar += (doppler/vpar)*(dKE_per/Ma);
+                        }
+                        else
+                        {
+                            vpar += eps*sqrt(2.0*abs(doppler*dKE_per)/Ma);
+                        }
+                        vper = sqrt(2*KE_per/Ma);
+
+                        double totalKE = 0.5*Ma*(vpar*vpar + vper*vper);
+                        double cappedKE = totalKE;
+                        if (params->RF.maxParticleEnergy > 0.0)
+                        {
+                            cappedKE = std::min(cappedKE, params->RF.maxParticleEnergy);
+                        }
+                        if (params->RF.maxVelocityFractionC > 0.0)
+                        {
+                            const double maxSpeedEnergy = 0.5*Ma*params->RF.maxVelocityFractionC*params->RF.maxVelocityFractionC;
+                            cappedKE = std::min(cappedKE, maxSpeedEnergy);
+                        }
+                        if (cappedKE < totalKE && totalKE > double_zero)
+                        {
+                            const double scale = sqrt(cappedKE/totalKE);
+                            vpar *= scale;
+                            vper *= scale;
+                            dKE = cappedKE - KE_total_before;
+                        }
+                    }
 
                     // Output data:
                     IONS->at(ss).V_p(ii,0) = vpar;
-                    IONS->at(ss).V_p(ii,1) = vper;
+                    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && IONS->at(ss).V_p.n_cols > 2)
+                    {
+                        const double oldVper = hypot(IONS->at(ss).V_p(ii,1), IONS->at(ss).V_p(ii,2));
+                        if (oldVper > double_zero)
+                        {
+                            const double scale = vper/oldVper;
+                            IONS->at(ss).V_p(ii,1) *= scale;
+                            IONS->at(ss).V_p(ii,2) *= scale;
+                        }
+                        else
+                        {
+                            IONS->at(ss).V_p(ii,1) = vper;
+                            IONS->at(ss).V_p(ii,2) = 0.0;
+                        }
+                    }
+                    else
+                    {
+                        IONS->at(ss).V_p(ii,1) = vper;
+                    }
 
                     // Energy increments:
                     IONS->at(ss).dE3(ii) = dKE;
@@ -342,6 +549,11 @@ void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_
 
     for (int ss=0; ss<IONS->size();ss++)
     {
+        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        {
+            continue;
+        }
+
         double NCP = IONS->at(ss).NCP;
         int NSP    = IONS->at(ss).NSP;
 
@@ -409,6 +621,18 @@ void RF_Operator_TYP::ApplyRfHeating_AllSpecies(params_TYP * params, CS_TYP * CS
 
         // Calculate RF power per unit electric field over all species:
         calculatePowerPerUnitErf_AllSpecies(params,CS,fields,IONS);
+
+        if (params->RF.eFieldMode == RF_EFIELD_POWER_BALANCE &&
+            ((params->RF.uE3 <= double_zero) || !std::isfinite(params->RF.uE3)))
+        {
+            for (ionSpecies_TYP &ion : *IONS)
+            {
+                ion.f3.zeros();
+                ion.dE3.zeros();
+            }
+            params->RF.E3 = 0.0;
+            return;
+        }
 
         // Apply RF heating to all allSpecies:
         ApplyRfOperator_AllSpecies(params,CS,fields,IONS);

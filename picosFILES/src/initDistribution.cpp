@@ -32,7 +32,15 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
 
     // Assign velocities:
     IONS->V_p.col(0) = V1;
-    IONS->V_p.col(1) = V4;
+    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT)
+    {
+        IONS->V_p.col(1) = V2;
+        IONS->V_p.col(2) = V3;
+    }
+    else
+    {
+        IONS->V_p.col(1) = V4;
+    }
 }
 
 double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, double X, double V3, double V2, double V1)
@@ -177,7 +185,15 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
     // ====================
     arma::vec V4 = sqrt( pow(V2,2) + pow(V3,2) );
     IONS->V_p.col(0) = V1;
-    IONS->V_p.col(1) = V4;
+    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT)
+    {
+        IONS->V_p.col(1) = V2;
+        IONS->V_p.col(2) = V3;
+    }
+    else
+    {
+        IONS->V_p.col(1) = V4;
+    }
 
     // Assign value to "x":
     // ====================

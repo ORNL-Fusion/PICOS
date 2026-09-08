@@ -4,6 +4,46 @@
 
 using namespace std;
 
+namespace
+{
+bool relativisticElectronEnergyEnabled(const params_TYP &params, const ionSpecies_TYP &species)
+{
+    return params.SW.relativisticElectrons == 1 && species.Z < 0.0;
+}
+
+double relativisticGammaFromSpeed(double speed)
+{
+    const double c = std::max(F_C_DS, double_zero);
+    double beta2 = speed*speed/(c*c);
+    beta2 = std::max(0.0, std::min(beta2, 1.0 - 1.0e-12));
+    return 1.0/sqrt(1.0 - beta2);
+}
+
+double particleKineticEnergy(const params_TYP &params, const ionSpecies_TYP &species, int ii)
+{
+    const double speed2 = dot(species.V_p.row(ii), species.V_p.row(ii));
+    if (!relativisticElectronEnergyEnabled(params, species))
+    {
+        return 0.5*species.M*speed2;
+    }
+    return (relativisticGammaFromSpeed(sqrt(speed2)) - 1.0)*species.M*F_C_DS*F_C_DS;
+}
+
+double particleParallelKineticEnergy(const params_TYP &params, const ionSpecies_TYP &species, int ii)
+{
+    const double speed2 = dot(species.V_p.row(ii), species.V_p.row(ii));
+    if (!relativisticElectronEnergyEnabled(params, species))
+    {
+        return 0.5*species.M*species.V_p(ii,0)*species.V_p(ii,0);
+    }
+    if (speed2 <= double_zero)
+    {
+        return 0.0;
+    }
+    return particleKineticEnergy(params, species, ii)*species.V_p(ii,0)*species.V_p(ii,0)/speed2;
+}
+}
+
 particleBC_TYP::particleBC_TYP() :
 dot_({0, 0, 0, 0, 0, 0}),
 randoms_2pi(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device())),
@@ -16,35 +56,64 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
     {
         for (ionSpecies_TYP &ion : IONS)
         {
-            // Ion mass:
-            // =========
-            const double Ma = ion.M;
-
             // Particle loop:
             // ==================================
             const int iie = ion.NSP;
-            #pragma omp parallel for default(none) shared(params, ion, Ma, iie)
+            #pragma omp parallel for default(none) shared(params, fields, ion, iie)
             for(int ii=0; ii<iie; ii++)
             {
                 // left boundary:
                 if (ion.X_p(ii) <= params.geometry.LX_min)
                 {
+                    if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+                        params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
+                        ion.Z < 0.0)
+                    {
+                        const double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(1) - fields.Phi_m(0));
+                        const double parallelEnergy = particleParallelKineticEnergy(params, ion, ii);
+                        if (parallelEnergy < barrier)
+                        {
+                            ion.X_p(ii) = params.geometry.LX_min + 0.25*params.mesh.DX;
+                            ion.V_p(ii,0) = abs(ion.V_p(ii,0));
+                            ion.f1(ii) = 0;
+                            ion.dE1(ii) = 0.0;
+                            continue;
+                        }
+                    }
+
                     // Particle flag:
                     ion.f1(ii) = 1;
 
                     // Particle kinetic energy:
-                    const double KE = 0.5*Ma*dot(ion.V_p.row(ii), ion.V_p.row(ii));
+                    const double KE = particleKineticEnergy(params, ion, ii);
                     ion.dE1(ii) = KE;
                 }
 
                 // Right boundary:
                 if (ion.X_p(ii) >= params.geometry.LX_max)
                 {
+                    if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+                        params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
+                        ion.Z < 0.0)
+                    {
+                        const int N = params.mesh.NX_IN_SIM;
+                        const double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(N) - fields.Phi_m(N + 1));
+                        const double parallelEnergy = particleParallelKineticEnergy(params, ion, ii);
+                        if (parallelEnergy < barrier)
+                        {
+                            ion.X_p(ii) = params.geometry.LX_max - 0.25*params.mesh.DX;
+                            ion.V_p(ii,0) = -abs(ion.V_p(ii,0));
+                            ion.f2(ii) = 0;
+                            ion.dE2(ii) = 0.0;
+                            continue;
+                        }
+                    }
+
                     // Particle flag:
                     ion.f2(ii) = 1;
 
                     // Particle kinetic energy:
-                    const double KE = 0.5*Ma*dot(ion.V_p.row(ii), ion.V_p.row(ii));
+                    const double KE = particleKineticEnergy(params, ion, ii);
                     ion.dE2(ii) = KE;
 
                 }
@@ -193,10 +262,7 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
         for (ionSpecies_TYP &ion : IONS)
         {
 
-            // Ion mass:
-            const double Ma = ion.M*0.5;
-
-            #pragma omp parallel default(none) shared(params, CS, fields, ion, std::cout, Ma)
+            #pragma omp parallel default(none) shared(params, CS, fields, ion, std::cout)
             {
                 uniform_2Pi &rand_2pi = randoms_2pi[picos::random::thread()];
                 uniform_one &rand_one = randoms_one[picos::random::thread()];
@@ -214,7 +280,7 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
                         // Newly injected flag:
                         // ====================
                         ion.f5(ii)  = 1;
-                        ion.dE5(ii) = Ma*dot(ion.V_p.row(ii), ion.V_p.row(ii));
+                        ion.dE5(ii) = particleKineticEnergy(params, ion, ii);
                         
                         // Reset injection flag:
                         // =====================
@@ -344,7 +410,15 @@ void particleBC_TYP::particleReinjection(const int ii, const params_TYP &params,
 
         // Assign to IONS:
         ION.V_p(ii,0) = v_par;
-        ION.V_p(ii,1) = v_per;
+        if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
+        {
+            ION.V_p(ii,1) = v_y;
+            ION.V_p(ii,2) = v_z;
+        }
+        else
+        {
+            ION.V_p(ii,1) = v_per;
+        }
 
         // cout << "vpar = " << v_par*CS->velocity << endl;
         // cout << "vper = " << v_per*CS->velocity << endl;

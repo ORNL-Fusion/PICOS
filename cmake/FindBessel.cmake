@@ -6,13 +6,17 @@ Provides the following variables:
 
 include (CheckCXXSourceCompiles)
 
+set (_BESSEL_OLD_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+set (CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++17")
 check_cxx_source_compiles ("
-#include <cmake>
+#include <cmath>
 
-void foo() {
-    std::cyl_bessel_j(1,1);
+int main() {
+    volatile double x = std::cyl_bessel_j(1,1.0);
+    return x == 0.0;
 }
 " HAS_BESSEL)
+set (CMAKE_REQUIRED_FLAGS "${_BESSEL_OLD_CMAKE_REQUIRED_FLAGS}")
 
 add_library (Bessel INTERFACE)
 

@@ -56,6 +56,8 @@ protected:
 	// Ghost contributions:
 	void fillGhosts(arma::vec &C) const;
 
+	void fillPeriodicGhosts(arma::vec &C) const;
+
 	void fill4Ghosts(arma::vec &v) const;
 
 	void fillGhost_AllFields(const params_TYP &params, fields_TYP &fields) const;
@@ -79,6 +81,12 @@ protected:
     post_fn post;
     fn method;
 	void calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, const std::array<double, 3> &ZN, const std::array<double, 3> &EM, std::array<double, 3> &F) const;
+
+	static double perpendicularSpeed(const ionSpecies_TYP &ION, int ii, const params_TYP &params);
+
+	static void setPerpendicularSpeed(ionSpecies_TYP &ION, int ii, const params_TYP &params, double vper);
+
+	void advanceParticlesBorisFullOrbit(const params_TYP &params, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const;
 
 	void eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionSpecies_TYP &ION) const;
 
