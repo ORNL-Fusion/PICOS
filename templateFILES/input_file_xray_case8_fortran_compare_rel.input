@@ -1,0 +1,113 @@
+// PICOS input generated from 2020 X-ray benchmark Case8
+// Source case keeps archived RF/B-field parameters but uses PICOS particle and field switches.
+// =============================================================================
+mpisForFields               2
+quietStart                  0
+numberOfParticleSpecies     2
+numberOfTracerSpecies       0
+advanceParticleMethod       1
+
+// Characteristic values:
+// =============================================================================
+CV_ne                       9.0000000000000000e+19
+CV_Te                       1.6000000000000000e+01
+CV_B                        1.3287697181818181e+00
+CV_Tpar                     1.6000000000000000e+01
+CV_Tper                     1.6000000000000000e+01
+
+// Simulation time:
+// =============================================================================
+DTc                         5.0000000000000003e-02
+simulationTime              2.0404743987413147e-03
+
+// Switches:
+// =============================================================================
+SW_EfieldSolve              0
+SW_fieldSolveModel          0
+SW_BfieldSolve              0
+SW_Collisions               0
+SW_RFheating                1
+SW_RFheatingIons            0
+SW_RFheatingElectrons       1
+SW_relativisticElectrons    1
+SW_advancePos               1
+SW_linearSolve              0
+
+// Magnetic field initial conditions:
+// =============================================================================
+IC_uniformBfield            0
+IC_BX                       1.3287697181818181e+00
+IC_BY                       0.0
+IC_BZ                       0.0
+IC_BX_NX                    82
+IC_BX_fileName              xray_case8_fortran_compare_rel_B_norm.txt
+IC_phiLeft                  0.0000000000000000e+00
+IC_phiRight                 0.0000000000000000e+00
+Poisson_BCModel             1
+Poisson_sheathCoefficient   3.0000000000000000e+00
+
+// Geometry:
+// =============================================================================
+dp                          3.6957879661702568e+00
+r1                          0.0
+r2                          5.0000000000000003e-02
+LX_min                      -5.0000000000000000e+00
+LX_max                      5.0000000000000000e+00
+
+// Electron initial conditions:
+// =============================================================================
+IC_ne                       9.0000000000000000e+19
+IC_Te                       1.6000000000000000e+01
+IC_Te_NX                    82
+IC_Te_fileName              xray_case8_fortran_compare_rel_one.txt
+
+// Ion RF operator:
+// =============================================================================
+RF_ion_Prf                      3.0000000000000000e+05
+RF_ion_n_harmonic               2
+RF_ion_freq                     6.5000000000000000e+10
+RF_ion_x1                       -4.0000000000000002e-01
+RF_ion_x2                       0.0000000000000000e+00
+RF_ion_t_ON                     0.0
+RF_ion_t_OFF                    2.0404743987413147e-03
+RF_ion_kpar                     5.8640000000000000e+03
+RF_ion_kper                     2.9920000000000000e+04
+RF_ion_handedness               -1
+RF_ion_EfieldMode               0
+RF_ion_EfieldAmplitude          1.0000000000000000e+04
+RF_ion_maxEnergyGainFraction    2.5000000000000000e-01
+RF_ion_maxParticleEnergy        5.0000000000000000e+03
+RF_ion_maxVelocityFractionC     2.0000000000000001e-01
+RF_ion_Prf_fileName             xray_case8_fortran_compare_rel_one.txt
+RF_ion_Prf_NS                   82
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      3.0000000000000000e+05
+RF_electron_n_harmonic               2
+RF_electron_freq                     6.5000000000000000e+10
+RF_electron_x1                       -4.0000000000000002e-01
+RF_electron_x2                       0.0000000000000000e+00
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    2.0404743987413147e-03
+RF_electron_kpar                     5.8640000000000000e+03
+RF_electron_kper                     2.9920000000000000e+04
+RF_electron_handedness               -1
+RF_electron_EfieldMode               0
+RF_electron_EfieldAmplitude          1.0000000000000000e+04
+RF_electron_maxEnergyGainFraction    2.5000000000000000e-01
+RF_electron_maxParticleEnergy        5.0000000000000000e+03
+RF_electron_maxVelocityFractionC     2.0000000000000001e-01
+RF_electron_Prf_fileName             xray_case8_fortran_compare_rel_one.txt
+RF_electron_Prf_NS                   82
+
+// Output variables:
+// =============================================================================
+outputCadence               2.0404743987413147e-03
+outputs_variables           {X_p,V_p,a_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
+
+// Data smoothing:
+// =============================================================================
+smoothingParameter          1.0000000000000000e-03
+filtersPerIterationFields   2
+filtersPerIterationIons     2

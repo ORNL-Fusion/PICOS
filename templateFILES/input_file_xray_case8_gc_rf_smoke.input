@@ -1,0 +1,93 @@
+// PICOS input generated from 2020 X-ray benchmark Case8
+// Source case keeps archived RF/B-field parameters but uses PICOS particle and field switches.
+// =============================================================================
+mpisForFields               2
+quietStart                  1
+numberOfParticleSpecies     2
+numberOfTracerSpecies       0
+advanceParticleMethod       1
+
+// Characteristic values:
+// =============================================================================
+CV_ne                       9.0000000000000000e+19
+CV_Te                       1.6000000000000000e+01
+CV_B                        1.3287697181818181e+00
+CV_Tpar                     1.6000000000000000e+01
+CV_Tper                     1.6000000000000000e+01
+
+// Simulation time:
+// =============================================================================
+DTc                         5.0000000000000003e-02
+simulationTime              2.0404743987413147e-03
+
+// Switches:
+// =============================================================================
+SW_EfieldSolve              0
+SW_fieldSolveModel          0
+SW_BfieldSolve              0
+SW_Collisions               0
+SW_RFheating                1
+SW_RFheatingIons            0
+SW_RFheatingElectrons       1
+SW_relativisticElectrons    1
+SW_advancePos               1
+SW_linearSolve              0
+
+// Magnetic field initial conditions:
+// =============================================================================
+IC_uniformBfield            0
+IC_BX                       1.3287697181818181e+00
+IC_BY                       0.0
+IC_BZ                       0.0
+IC_BX_NX                    82
+IC_BX_fileName              xray_case8_gc_rf_smoke_B_norm.txt
+IC_phiLeft                  0.0000000000000000e+00
+IC_phiRight                 0.0000000000000000e+00
+Poisson_BCModel             1
+Poisson_sheathCoefficient   3.0000000000000000e+00
+
+// Geometry:
+// =============================================================================
+dp                          3.6957879661702568e+00
+r1                          0.0
+r2                          5.0000000000000003e-02
+LX_min                      -5.0000000000000000e+00
+LX_max                      5.0000000000000000e+00
+
+// Electron initial conditions:
+// =============================================================================
+IC_ne                       9.0000000000000000e+19
+IC_Te                       1.6000000000000000e+01
+IC_Te_NX                    82
+IC_Te_fileName              xray_case8_gc_rf_smoke_one.txt
+
+// RF operator:
+// =============================================================================
+RF_Prf                      1.0000000000000000e+00
+RF_n_harmonic               2
+RF_freq                     6.5000000000000000e+10
+RF_x1                       -4.0000000000000002e-01
+RF_x2                       0.0000000000000000e+00
+RF_t_ON                     0.0
+RF_t_OFF                    2.0404743987413147e-03
+RF_kpar                     5.8640000000000000e+03
+RF_kper                     2.9920000000000000e+04
+RF_handedness               -1
+RF_EfieldMode               1
+RF_EfieldAmplitude          1.0000000000000000e+04
+RF_maxEnergyGainFraction    2.5000000000000000e-01
+RF_maxParticleEnergy        5.0000000000000000e+03
+RF_maxVelocityFractionC     2.0000000000000001e-01
+RF_Prf_fileName             xray_case8_gc_rf_smoke_one.txt
+RF_Prf_NS                   82
+
+// Output variables:
+// =============================================================================
+outputCadence               1.0202371993706574e-03
+outputs_variables           {X_p,V_p,a_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
+
+// Data smoothing:
+// =============================================================================
+smoothingParameter          1.0000000000000000e-03
+filtersPerIterationFields   2
+filtersPerIterationIons     2

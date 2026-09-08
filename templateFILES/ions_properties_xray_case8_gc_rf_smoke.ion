@@ -1,0 +1,60 @@
+// PICOS species generated from 2020 X-ray benchmark Case8
+// =============================================================================
+// Species 1: deuterium ions
+// =============================================================================
+SPECIES1                      1
+NPC1                          2
+pctSupPartOutput1             2.5000000000000000e+01
+Z1                            1
+M1                            2.0000000000000000e+00
+
+IC_type_1                     1
+IC_Tper_1                     1.6000000000000000e+01
+IC_Tper_fileName_1            xray_case8_gc_rf_smoke_one.txt
+IC_Tper_NX_1                  82
+IC_Tpar_1                     1.6000000000000000e+01
+IC_Tpar_fileName_1            xray_case8_gc_rf_smoke_one.txt
+IC_Tpar_NX_1                  82
+IC_densityFraction_1          1.0
+IC_densityFraction_fileName_1 xray_case8_gc_rf_smoke_one.txt
+IC_densityFraction_NX_1       82
+
+BC_type_1                     3
+BC_T_1                        1.6000000000000000e+01
+BC_E_1                        0.0
+BC_eta_1                      0.7853981633974483
+BC_mean_x_1                   0.0000000000000000e+00
+BC_sigma_x_1                  1.0000000000000000e+00
+BC_G_1                        0.0
+BC_G_fileName_1               xray_case8_gc_rf_smoke_one.txt
+BC_G_NS_1                     82
+
+// =============================================================================
+// Species 2: kinetic electrons
+// =============================================================================
+SPECIES2                      1
+NPC2                          8
+pctSupPartOutput2             2.5000000000000000e+01
+Z2                            -1
+M2                            5.485799090441e-4
+
+IC_type_2                     1
+IC_Tper_2                     1.6000000000000000e+01
+IC_Tper_fileName_2            xray_case8_gc_rf_smoke_one.txt
+IC_Tper_NX_2                  82
+IC_Tpar_2                     1.6000000000000000e+01
+IC_Tpar_fileName_2            xray_case8_gc_rf_smoke_one.txt
+IC_Tpar_NX_2                  82
+IC_densityFraction_2          1.0
+IC_densityFraction_fileName_2 xray_case8_gc_rf_smoke_one.txt
+IC_densityFraction_NX_2       82
+
+BC_type_2                     3
+BC_T_2                        1.6000000000000000e+01
+BC_E_2                        0.0
+BC_eta_2                      0.7853981633974483
+BC_mean_x_2                   0.0000000000000000e+00
+BC_sigma_x_2                  1.0000000000000000e+00
+BC_G_2                        0.0
+BC_G_fileName_2               xray_case8_gc_rf_smoke_one.txt
+BC_G_NS_2                     82
