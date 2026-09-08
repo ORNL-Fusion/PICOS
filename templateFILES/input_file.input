@@ -1,4 +1,10 @@
 // Input data:
+// Model notes:
+// - Purpose: generic baseline template for the original hybrid/guiding-center PICOS workflow.
+// - Particles: 1D-2V guiding-center kinetic ions with fluid electron pressure in the field solve.
+// - Field: SW_fieldSolveModel=0 uses the Ohm-law/hybrid electric-field model when SW_EfieldSolve=1.
+// Field solver model legend:
+// - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
 // =============================================================================
 mpisForFields               2
 quietStart                  1
@@ -44,6 +50,8 @@ IC_phiLeft                  0.0
 IC_phiRight                 0.0
 Poisson_BCModel             0
 Poisson_sheathCoefficient   3.0
+ReformulatedPoisson_lambda  -1.0
+ReformulatedPoisson_quasiNeutral 0
 
 // Geometry:
 // =============================================================================

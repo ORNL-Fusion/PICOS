@@ -1,11 +1,11 @@
 // PICOS input generated from 2020 X-ray benchmark Case8
-// Source case keeps archived RF/B-field parameters but uses PICOS particle and field switches.
+// Source case keeps archived B-field/profile parameters but uses the reformulated Poisson field solve.
 // Model notes:
-// - Purpose: nonrelativistic PICOS++ vs Fortran Case8 RF/ECH comparison.
+// - Purpose: reformulated-Poisson smoke using the Case8 geometry and profiles.
 // - Particles: 1D-2V guiding-center D+ ions plus kinetic electrons.
-// - Field: SW_EfieldSolve=0 disables the electrostatic field update in this benchmark deck.
-// - Heating: electron RF/ECH is enabled; ion RF heating is disabled.
-// - Relativity: SW_relativisticElectrons=0 keeps the RF/electron update nonrelativistic.
+// - Field: SW_EfieldSolve=1 and SW_fieldSolveModel=2 advance the PDF reformulated Poisson E-field equation.
+// - Heating: RF/ECH is disabled here to isolate the electrostatic field model.
+// - Relativity: SW_relativisticElectrons=0 keeps the particles nonrelativistic for this field-solver smoke.
 // Field solver model legend:
 // - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
 // =============================================================================
@@ -26,17 +26,17 @@ CV_Tper                     1.6000000000000000e+01
 // Simulation time:
 // =============================================================================
 DTc                         5.0000000000000003e-02
-simulationTime              2.0404743987413147e-03
+simulationTime              1.0E-12
 
 // Switches:
 // =============================================================================
-SW_EfieldSolve              0
-SW_fieldSolveModel          0
+SW_EfieldSolve              1
+SW_fieldSolveModel          2
 SW_BfieldSolve              0
 SW_Collisions               0
-SW_RFheating                1
+SW_RFheating                0
 SW_RFheatingIons            0
-SW_RFheatingElectrons       1
+SW_RFheatingElectrons       0
 SW_relativisticElectrons    0
 SW_advancePos               1
 SW_linearSolve              0
@@ -73,7 +73,7 @@ IC_Te_fileName              xray_case8_fortran_compare_nonrel_one.txt
 
 // Ion RF operator:
 // =============================================================================
-RF_ion_Prf                      3.0000000000000000e+05
+RF_ion_Prf                      0.0
 RF_ion_n_harmonic               2
 RF_ion_freq                     6.5000000000000000e+10
 RF_ion_x1                       -4.0000000000000002e-01
@@ -84,7 +84,7 @@ RF_ion_kpar                     5.8640000000000000e+03
 RF_ion_kper                     2.9920000000000000e+04
 RF_ion_handedness               -1
 RF_ion_EfieldMode               0
-RF_ion_EfieldAmplitude          1.0000000000000000e+04
+RF_ion_EfieldAmplitude          0.0
 RF_ion_maxEnergyGainFraction    2.5000000000000000e-01
 RF_ion_maxParticleEnergy        5.0000000000000000e+03
 RF_ion_maxVelocityFractionC     2.0000000000000001e-01
@@ -93,7 +93,7 @@ RF_ion_Prf_NS                   82
 
 // Electron RF/ECH operator:
 // =============================================================================
-RF_electron_Prf                      3.0000000000000000e+05
+RF_electron_Prf                      0.0
 RF_electron_n_harmonic               2
 RF_electron_freq                     6.5000000000000000e+10
 RF_electron_x1                       -4.0000000000000002e-01
@@ -104,7 +104,7 @@ RF_electron_kpar                     5.8640000000000000e+03
 RF_electron_kper                     2.9920000000000000e+04
 RF_electron_handedness               -1
 RF_electron_EfieldMode               0
-RF_electron_EfieldAmplitude          1.0000000000000000e+04
+RF_electron_EfieldAmplitude          0.0
 RF_electron_maxEnergyGainFraction    2.5000000000000000e-01
 RF_electron_maxParticleEnergy        5.0000000000000000e+03
 RF_electron_maxVelocityFractionC     2.0000000000000001e-01
@@ -113,7 +113,7 @@ RF_electron_Prf_NS                   82
 
 // Output variables:
 // =============================================================================
-outputCadence               2.0404743987413147e-03
+outputCadence               1.0E-12
 outputs_variables           {X_p,V_p,a_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
 
 // Data smoothing:

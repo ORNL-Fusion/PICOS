@@ -65,7 +65,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
                 // left boundary:
                 if (ion.X_p(ii) <= params.geometry.LX_min)
                 {
-                    if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+                    if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
                         params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
                         ion.Z < 0.0)
                     {
@@ -92,7 +92,7 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
                 // Right boundary:
                 if (ion.X_p(ii) >= params.geometry.LX_max)
                 {
-                    if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+                    if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
                         params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
                         ion.Z < 0.0)
                     {

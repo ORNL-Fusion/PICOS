@@ -263,6 +263,12 @@ void init_TYP::readInputFile(params_TYP * params)
     // -------------------------------------------------------------------------
     params->SW.EfieldSolve   = stoi( parametersStringMap["SW_EfieldSolve"] );
     params->SW.fieldSolveModel = getInt("SW_fieldSolveModel", FIELD_SOLVE_OHM);
+    if (!isKineticElectrostaticFieldSolve(params->SW.fieldSolveModel) &&
+        params->SW.fieldSolveModel != FIELD_SOLVE_OHM)
+    {
+        cout << "ERROR: unsupported SW_fieldSolveModel " << params->SW.fieldSolveModel << endl;
+        MPI_Abort(MPI_COMM_WORLD,-104);
+    }
     params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
     params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
     params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
@@ -282,6 +288,8 @@ void init_TYP::readInputFile(params_TYP * params)
     params->em_IC.phiRight      = getDouble("IC_phiRight", 0.0);
     params->em_IC.poissonBCModel = getInt("Poisson_BCModel", POISSON_BC_DIRICHLET);
     params->em_IC.sheathCoefficient = getDouble("Poisson_sheathCoefficient", 3.0);
+    params->em_IC.reformulatedPoissonLambda = getDouble("ReformulatedPoisson_lambda", -1.0);
+    params->em_IC.reformulatedPoissonQuasiNeutral = getInt("ReformulatedPoisson_quasiNeutral", 0);
 
     // Geometry:
     // -------------------------------------------------------------------------

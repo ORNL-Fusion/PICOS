@@ -1,8 +1,8 @@
 // Input data:
 // Model notes:
-// - Purpose: fully kinetic ion/electron electrostatic template using the standard charge-density Poisson solve.
+// - Purpose: fully kinetic ion/electron electrostatic template using the reformulated Poisson equation.
 // - Particles: 1D-2V guiding-center D+ ions plus kinetic electrons.
-// - Field: SW_fieldSolveModel=1 solves d2(phi)/dx2 from kinetic charge density and advances E_x=-grad(phi).
+// - Field: SW_fieldSolveModel=2 advances E_x from d(S_i-S_e)/dx and reconstructs Phi_m for diagnostics.
 // - Heating: RF/ECH parameters are split into RF_ion_* and RF_electron_* blocks.
 // Field solver model legend:
 // - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
@@ -29,7 +29,7 @@ simulationTime              2.0E-4
 // Switches:
 // =============================================================================
 SW_EfieldSolve              1
-SW_fieldSolveModel          1
+SW_fieldSolveModel          2
 SW_BfieldSolve              0
 SW_Collisions               0
 SW_RFheating                1

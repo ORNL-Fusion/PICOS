@@ -1,5 +1,13 @@
 // PICOS input generated from 2020 X-ray benchmark Case8
 // Source case keeps archived RF/B-field parameters but uses PICOS particle and field switches.
+// Model notes:
+// - Purpose: short guiding-center RF smoke test for the species-split RF/ECH input syntax.
+// - Particles: 1D-2V guiding-center D+ ions plus kinetic electrons.
+// - Field: SW_EfieldSolve=0 disables the electrostatic field update for a fast RF-only smoke.
+// - Heating: electron RF/ECH is enabled with fixed E-field mode; ion RF heating is disabled.
+// - Relativity: SW_relativisticElectrons=1 exercises the relativistic electron limiter path.
+// Field solver model legend:
+// - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
 // =============================================================================
 mpisForFields               2
 quietStart                  1
@@ -18,7 +26,7 @@ CV_Tper                     1.6000000000000000e+01
 // Simulation time:
 // =============================================================================
 DTc                         5.0000000000000003e-02
-simulationTime              2.0404743987413147e-03
+simulationTime              1.0E-12
 
 // Switches:
 // =============================================================================
@@ -45,6 +53,8 @@ IC_phiLeft                  0.0000000000000000e+00
 IC_phiRight                 0.0000000000000000e+00
 Poisson_BCModel             1
 Poisson_sheathCoefficient   3.0000000000000000e+00
+ReformulatedPoisson_lambda  -1.0
+ReformulatedPoisson_quasiNeutral 0
 
 // Geometry:
 // =============================================================================
@@ -61,29 +71,49 @@ IC_Te                       1.6000000000000000e+01
 IC_Te_NX                    82
 IC_Te_fileName              xray_case8_gc_rf_smoke_one.txt
 
-// RF operator:
+// Ion RF operator:
 // =============================================================================
-RF_Prf                      1.0000000000000000e+00
-RF_n_harmonic               2
-RF_freq                     6.5000000000000000e+10
-RF_x1                       -4.0000000000000002e-01
-RF_x2                       0.0000000000000000e+00
-RF_t_ON                     0.0
-RF_t_OFF                    2.0404743987413147e-03
-RF_kpar                     5.8640000000000000e+03
-RF_kper                     2.9920000000000000e+04
-RF_handedness               -1
-RF_EfieldMode               1
-RF_EfieldAmplitude          1.0000000000000000e+04
-RF_maxEnergyGainFraction    2.5000000000000000e-01
-RF_maxParticleEnergy        5.0000000000000000e+03
-RF_maxVelocityFractionC     2.0000000000000001e-01
-RF_Prf_fileName             xray_case8_gc_rf_smoke_one.txt
-RF_Prf_NS                   82
+RF_ion_Prf                      0.0
+RF_ion_n_harmonic               2
+RF_ion_freq                     6.5000000000000000e+10
+RF_ion_x1                       -4.0000000000000002e-01
+RF_ion_x2                       0.0000000000000000e+00
+RF_ion_t_ON                     0.0
+RF_ion_t_OFF                    2.0404743987413147e-03
+RF_ion_kpar                     5.8640000000000000e+03
+RF_ion_kper                     2.9920000000000000e+04
+RF_ion_handedness               -1
+RF_ion_EfieldMode               1
+RF_ion_EfieldAmplitude          0.0
+RF_ion_maxEnergyGainFraction    2.5000000000000000e-01
+RF_ion_maxParticleEnergy        5.0000000000000000e+03
+RF_ion_maxVelocityFractionC     2.0000000000000001e-01
+RF_ion_Prf_fileName             xray_case8_gc_rf_smoke_one.txt
+RF_ion_Prf_NS                   82
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      1.0000000000000000e+00
+RF_electron_n_harmonic               2
+RF_electron_freq                     6.5000000000000000e+10
+RF_electron_x1                       -4.0000000000000002e-01
+RF_electron_x2                       0.0000000000000000e+00
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    2.0404743987413147e-03
+RF_electron_kpar                     5.8640000000000000e+03
+RF_electron_kper                     2.9920000000000000e+04
+RF_electron_handedness               -1
+RF_electron_EfieldMode               1
+RF_electron_EfieldAmplitude          1.0000000000000000e+04
+RF_electron_maxEnergyGainFraction    2.5000000000000000e-01
+RF_electron_maxParticleEnergy        5.0000000000000000e+03
+RF_electron_maxVelocityFractionC     2.0000000000000001e-01
+RF_electron_Prf_fileName             xray_case8_gc_rf_smoke_one.txt
+RF_electron_Prf_NS                   82
 
 // Output variables:
 // =============================================================================
-outputCadence               1.0202371993706574e-03
+outputCadence               1.0E-12
 outputs_variables           {X_p,V_p,a_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
 
 // Data smoothing:

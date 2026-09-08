@@ -24,6 +24,7 @@ using namespace std;
 #define PARTICLES_TAG 200
 #define FIELD_SOLVE_OHM 0
 #define FIELD_SOLVE_POISSON 1
+#define FIELD_SOLVE_REFORMULATED_POISSON 2
 #define POISSON_BC_DIRICHLET 0
 #define POISSON_BC_PERIODIC 1
 #define POISSON_BC_SHEATH 2
@@ -35,6 +36,11 @@ using namespace std;
 
 #define float_zero 1E-7
 #define double_zero 1E-15
+
+inline bool isKineticElectrostaticFieldSolve(int model)
+{
+	return (model == FIELD_SOLVE_POISSON) || (model == FIELD_SOLVE_REFORMULATED_POISSON);
+}
 
 // Physical constants
 // =============================================================================
@@ -398,6 +404,8 @@ struct em_IC_TYP
 	double phiRight;
 	int poissonBCModel;
 	double sheathCoefficient;
+	double reformulatedPoissonLambda;
+	int reformulatedPoissonQuasiNeutral;
 	string EX_fileName;
 	int EX_NX;
 	arma::vec Ex_profile;
@@ -417,6 +425,8 @@ struct em_IC_TYP
 		phiRight = 0;
 		poissonBCModel = POISSON_BC_DIRICHLET;
 		sheathCoefficient = 3.0;
+		reformulatedPoissonLambda = -1.0;
+		reformulatedPoissonQuasiNeutral = 0;
 		EX_NX  = 0;
 	}
 };

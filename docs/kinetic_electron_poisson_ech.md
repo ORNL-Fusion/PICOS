@@ -10,6 +10,7 @@ Use these input flags in `inputFiles/input_file*.input`:
 SW_EfieldSolve              1
 SW_fieldSolveModel          0   // original quasi-neutral Ohm-law hybrid solve
 SW_fieldSolveModel          1   // electrostatic Poisson solve from kinetic charge density
+SW_fieldSolveModel          2   // reformulated Poisson electric-field update from kinetic stress moments
 ```
 
 `SW_fieldSolveModel` is optional. If it is absent, PICOS uses the original Ohm-law model.
@@ -33,6 +34,25 @@ Poisson_sheathCoefficient   3.0
 ```
 
 For `Poisson_BCModel=2`, low parallel-energy kinetic electrons reflect from the sheath barrier instead of immediately being counted as boundary losses.
+
+For the reformulated Poisson model from `/Users/78k/Downloads/Reformulated Poissons equation.pdf`, add:
+
+```text
+ReformulatedPoisson_lambda       -1.0   // physical meters if positive; -1 uses the code's normalized Poisson scale
+ReformulatedPoisson_quasiNeutral 0      // 1 uses E = div(S_i-S_e)/(n_i+n_e/epsilon)
+```
+
+The implemented 1D form is:
+
+```text
+dE_x/dt + omega_p^2 E_x = d(S_i-S_e)/dx / lambda^2
+omega_p^2 = (n_i + n_e/epsilon) / lambda^2
+epsilon = m_e / m_i
+```
+
+`S_i-S_e` is computed from the kinetic particle moments on the mesh. PICOS stores `P11_m` as a mass-weighted parallel second moment, so the solver uses `P11_m/M` for each self-consistent positive/negative species before taking the 1D divergence. The updated electric field is advanced implicitly in the local plasma-frequency term, and `Phi_m` is reconstructed from `E_x = -d(phi)/dx` for output and sheath diagnostics.
+
+The ready-to-edit template is `templateFILES/input_file_reformulated_poisson.input`.
 
 ## Kinetic Electrons
 
@@ -217,16 +237,34 @@ python3 scripts/create_picos_xray_case.py --case Case11 --tag xray_case11_gc_dir
 
 Use `--field-solve none` for direct comparison to the archived X-ray cases because those namelists use `iPotential = .false.`. High-density Case8/Case11 are not good Poisson smoke tests unless the mesh is Debye-resolved; the current coarse smoke had `lambda_D/DX = 2.5e-5` and Poisson noise drove unphysical velocities.
 
+Cleaned Case8 input/template deck set:
+
+```text
+input_file_xray_case8_fortran_compare_nonrel.input     full Case8 ECH comparison, field solve off, nonrelativistic electrons
+input_file_xray_case8_fortran_compare_rel.input        full Case8 ECH comparison, field solve off, relativistic electrons
+input_file_xray_case8_gc_rf_smoke.input                short RF/ECH smoke, species-split RF_electron_* keys, field solve off
+input_file_xray_case8_reformulated_poisson.input       short reformulated-Poisson smoke, RF off, SW_fieldSolveModel=2
+```
+
+The same named `ions_properties_*.ion` files and profile files are kept under `picosFILES/inputFiles` for local runs and mirrored under `templateFILES` for the branch.
+
 Short direct RF smoke deck:
 
 ```bash
 python3 scripts/create_picos_xray_case.py --case Case8 --tag xray_case8_gc_rf_smoke \
-  --physical-time 2.0e-10 --nx 80 --ion-particles-per-cell 2 --electron-particles-per-cell 8 \
+  --physical-time 1.0e-12 --nx 80 --ion-particles-per-cell 2 --electron-particles-per-cell 8 \
   --output-saves 2 --collisions 0 --field-solve none --advance-particle-method 1 \
   --rf-heat-ions 0 --rf-heat-electrons 1 --relativistic-electrons 1
 
 cd picosFILES
 HDF5_USE_FILE_LOCKING=FALSE OMP_NUM_THREADS=1 mpirun -np 4 ../build/picosFILES/src/xpicos 1-D "$PWD/outputFiles" xray_case8_gc_rf_smoke
+```
+
+Run the reformulated-Poisson smoke deck:
+
+```bash
+cd picosFILES
+HDF5_USE_FILE_LOCKING=FALSE OMP_NUM_THREADS=1 mpirun -np 4 ../build/picosFILES/src/xpicos 1-D "$PWD/outputFiles" xray_case8_reformulated_poisson
 ```
 
 Summarize PICOS particle output without `h5py`:

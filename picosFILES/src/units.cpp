@@ -184,19 +184,30 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
     // =================
 	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
-        if (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+        if (isKineticElectrostaticFieldSolve(params->SW.fieldSolveModel))
         {
             const double electronDebyeLength = sqrt(F_EPSILON*F_KB*params->CV.Te/(params->CV.ne*F_E*F_E));
 
-            cout << endl << "* * * * * * * * * * * * CHECKING KINETIC-POISSON SPATIAL SCALES * * * * * * * * * * * * * * * * * *" << endl;
+            cout << endl << "* * * * * * * * * * * * CHECKING KINETIC ELECTROSTATIC SPATIAL SCALES * * * * * * * * * * * * * * * * * *" << endl;
             cout << "Electron Debye length to grid size ratio: " << scientific << electronDebyeLength/params->mesh.DX << fixed << endl;
+            if (params->SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+            {
+                if (params->em_IC.reformulatedPoissonLambda > 0.0)
+                {
+                    cout << "Reformulated Poisson lambda to grid size ratio: " << scientific << params->em_IC.reformulatedPoissonLambda/params->mesh.DX << fixed << endl;
+                }
+                else
+                {
+                    cout << "Reformulated Poisson lambda: default normalized value will be used." << endl;
+                }
+            }
 
             if (params->mesh.DX > electronDebyeLength)
             {
                 cout << "WARNING: DX is larger than the electron Debye length; electrostatic kinetic PIC results may be under-resolved." << endl;
             }
 
-            cout << "* * * * * * * * * * * * KINETIC-POISSON SPATIAL SCALES CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
+            cout << "* * * * * * * * * * * * KINETIC ELECTROSTATIC SPATIAL SCALES CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
         }
         else
         {
@@ -210,7 +221,7 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
 
 	// Check that DX is larger than the electron skin depth, otherwise, abort simulation:
         // ==================================================================================
-	if ((params->SW.fieldSolveModel != FIELD_SOLVE_POISSON) && (params->mesh.DX <= FS->electronSkinDepth))
+	if ((params->SW.fieldSolveModel == FIELD_SOLVE_OHM) && (params->mesh.DX <= FS->electronSkinDepth))
     {
         cout << "ERROR: Grid size violates assumptions of hybrid model for the plasma -- lenght scales smaller than the electron skind depth can not be resolved." << endl;
         cout << "ABORTING SIMULATION..." << endl;
@@ -434,6 +445,10 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->em_IC.Ex_profile /= CS->eField;
 	params->em_IC.phiLeft    /= (CS->eField*CS->length);
 	params->em_IC.phiRight   /= (CS->eField*CS->length);
+	if (params->em_IC.reformulatedPoissonLambda > 0.0)
+	{
+		params->em_IC.reformulatedPoissonLambda /= CS->length;
+	}
 
 	// Geometry:
 	// ---------

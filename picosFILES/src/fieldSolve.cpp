@@ -32,6 +32,13 @@ fields_solver_TYP::fields_solver_TYP(const params_TYP * params, CS_TYP * CS)
     // Electrostatic potential and charge density:
     Phi_m.zeros(NX_T);
     chargeDensity.zeros(NX_T);
+
+    // Reformulated Poisson work arrays:
+    ionDensity.zeros(NX_T);
+    electronDensity.zeros(NX_T);
+    stressDifference.zeros(NX_T);
+    divStressDifference.zeros(NX_T);
+    plasmaFrequencySquared.zeros(NX_T);
 }
 
 // Fill ghost cells:
@@ -143,7 +150,11 @@ void fields_solver_TYP::MPI_SendVec(const params_TYP * params, arma::vec * v)
 // ============================================================================================
 void fields_solver_TYP::advanceEfield(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons)
 {
-	if (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+	if (params->SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+	{
+		advanceEfieldReformulatedPoisson(params, fields, CS, IONS);
+	}
+	else if (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON)
 	{
 		advanceEfieldPoisson(params, fields, CS, IONS);
 	}
@@ -406,6 +417,200 @@ void fields_solver_TYP::advanceEfieldPoisson(const params_TYP * params, fields_T
 	}
 
 	// Send E and Phi to PARTICLE ranks for pusher and sheath diagnostics.
+	MPI_SendVec(params,&fields->EX_m);
+	MPI_SendVec(params,&fields->Phi_m);
+}
+
+void fields_solver_TYP::advanceEfieldReformulatedPoisson(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS)
+{
+	if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
+	{
+		// Indices of subdomain:
+		unsigned int iIndex = params->mpi.iIndex;
+		unsigned int fIndex = params->mpi.fIndex;
+
+		const arma::vec previousEX = fields->EX_m;
+
+		ionDensity.zeros();
+		electronDensity.zeros();
+		stressDifference.zeros();
+		divStressDifference.zeros();
+		plasmaFrequencySquared.zeros();
+
+		double referenceIonMass = 0.0;
+		double referenceElectronMass = 0.0;
+
+		for(int ss=0; ss<params->numberOfParticleSpecies; ss++)
+		{
+			const ionSpecies_TYP &ion = IONS->at(ss);
+			const double absZ = fabs(ion.Z);
+			if (absZ <= double_zero || ion.M <= double_zero)
+			{
+				continue;
+			}
+
+			if (ion.Z > 0.0 && referenceIonMass <= double_zero)
+			{
+				referenceIonMass = ion.M;
+			}
+			if (ion.Z < 0.0 && referenceElectronMass <= double_zero)
+			{
+				referenceElectronMass = ion.M;
+			}
+
+			const arma::vec density = absZ*ion.n_m.subvec(iIndex, fIndex)/(CS->density*CS->volume);
+			const arma::vec parallelSecondMoment = absZ*ion.P11_m.subvec(iIndex, fIndex)/(ion.M*CS->density*CS->volume);
+
+			if (ion.Z > 0.0)
+			{
+				ionDensity.subvec(iIndex, fIndex) += density;
+				stressDifference.subvec(iIndex, fIndex) += parallelSecondMoment;
+			}
+			else if (ion.Z < 0.0)
+			{
+				electronDensity.subvec(iIndex, fIndex) += density;
+				stressDifference.subvec(iIndex, fIndex) -= parallelSecondMoment;
+			}
+		}
+
+		MPI_Allgathervec(params, &ionDensity);
+		MPI_Allgathervec(params, &electronDensity);
+		MPI_Allgathervec(params, &stressDifference);
+
+		if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+		{
+			fillPeriodicGhosts(&ionDensity);
+			fillPeriodicGhosts(&electronDensity);
+			fillPeriodicGhosts(&stressDifference);
+		}
+		else
+		{
+			fillGhosts(&ionDensity);
+			fillGhosts(&electronDensity);
+			fillGhosts(&stressDifference);
+		}
+
+		for (int jj=0; jj<params->filtersPerIterationFields; jj++)
+		{
+			if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+			{
+				smoothPeriodic(&ionDensity, params->smoothingParameter);
+				smoothPeriodic(&electronDensity, params->smoothingParameter);
+				smoothPeriodic(&stressDifference, params->smoothingParameter);
+			}
+			else
+			{
+				smooth(&ionDensity, params->smoothingParameter);
+				smooth(&electronDensity, params->smoothingParameter);
+				smooth(&stressDifference, params->smoothingParameter);
+			}
+		}
+
+		for (int ii=1; ii<=params->mesh.NX_IN_SIM; ii++)
+		{
+			divStressDifference(ii) = (stressDifference(ii + 1) - stressDifference(ii - 1))/(2.0*dx);
+		}
+
+		if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+		{
+			divStressDifference(0) = divStressDifference(params->mesh.NX_IN_SIM);
+			divStressDifference(params->mesh.NX_IN_SIM + 1) = divStressDifference(1);
+		}
+		else
+		{
+			fillGhosts(&divStressDifference);
+		}
+
+		if (referenceIonMass <= double_zero || referenceElectronMass <= double_zero)
+		{
+			cout << "Reformulated Poisson requires at least one positive-Z and one negative-Z self-consistent species." << endl;
+			MPI_Abort(params->mpi.MPI_TOPO, -110);
+		}
+
+		const double epsilon = max(referenceElectronMass/referenceIonMass, double_zero);
+		const double lambda = (params->em_IC.reformulatedPoissonLambda > 0.0) ?
+			params->em_IC.reformulatedPoissonLambda : sqrt(max(F_EPSILON_DS, double_zero));
+		const double lambda2 = lambda*lambda;
+		const bool quasiNeutral = (params->em_IC.reformulatedPoissonQuasiNeutral != 0) || (lambda2 <= double_zero);
+
+		fields->EX_m.zeros();
+		fields->Phi_m.zeros();
+
+		for (int ii=1; ii<=params->mesh.NX_IN_SIM; ii++)
+		{
+			const double densityDenominator = max(ionDensity(ii) + electronDensity(ii)/epsilon, double_zero);
+
+			if (quasiNeutral)
+			{
+				fields->EX_m(ii) = divStressDifference(ii)/densityDenominator;
+			}
+			else
+			{
+				plasmaFrequencySquared(ii) = densityDenominator/lambda2;
+				const double rhs = divStressDifference(ii)/lambda2;
+				fields->EX_m(ii) = (previousEX(ii) + params->DT*rhs)/(1.0 + params->DT*plasmaFrequencySquared(ii));
+			}
+		}
+
+		if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+		{
+			fields->EX_m(0) = fields->EX_m(params->mesh.NX_IN_SIM);
+			fields->EX_m(params->mesh.NX_IN_SIM + 1) = fields->EX_m(1);
+		}
+		else
+		{
+			fillGhosts(&fields->EX_m);
+		}
+
+		for (int jj=0; jj<params->filtersPerIterationFields; jj++)
+		{
+			if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+			{
+				smoothPeriodic(&fields->EX_m, params->smoothingParameter);
+			}
+			else
+			{
+				smooth(&fields->EX_m, params->smoothingParameter);
+			}
+		}
+
+		if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+		{
+			fields->EX_m.subvec(1,params->mesh.NX_IN_SIM) -= mean(fields->EX_m.subvec(1,params->mesh.NX_IN_SIM));
+			fields->EX_m(0) = fields->EX_m(params->mesh.NX_IN_SIM);
+			fields->EX_m(params->mesh.NX_IN_SIM + 1) = fields->EX_m(1);
+		}
+
+		if (params->em_IC.poissonBCModel == POISSON_BC_PERIODIC)
+		{
+			fields->Phi_m(1) = 0.0;
+			for (int ii=2; ii<=params->mesh.NX_IN_SIM; ii++)
+			{
+				fields->Phi_m(ii) = fields->Phi_m(ii - 1) - 0.5*(fields->EX_m(ii) + fields->EX_m(ii - 1))*dx;
+			}
+			fields->Phi_m.subvec(1,params->mesh.NX_IN_SIM) -= mean(fields->Phi_m.subvec(1,params->mesh.NX_IN_SIM));
+			fields->Phi_m(0) = fields->Phi_m(params->mesh.NX_IN_SIM);
+			fields->Phi_m(params->mesh.NX_IN_SIM + 1) = fields->Phi_m(1);
+		}
+		else
+		{
+			fields->Phi_m(0) = poissonBoundaryPotential(params, false);
+			for (int ii=1; ii<=params->mesh.NX_IN_SIM + 1; ii++)
+			{
+				fields->Phi_m(ii) = fields->Phi_m(ii - 1) - 0.5*(fields->EX_m(ii) + fields->EX_m(ii - 1))*dx;
+			}
+		}
+
+		#ifdef CHECKS_ON
+		if(!fields->EX_m.is_finite() || !fields->Phi_m.is_finite())
+		{
+			cout << "Non finite values in reformulated electrostatic Poisson field solve" << endl;
+			MPI_Abort(params->mpi.MPI_TOPO, -110);
+		}
+		#endif
+	}
+
+	// Send E and reconstructed Phi to PARTICLE ranks for pusher and sheath diagnostics.
 	MPI_SendVec(params,&fields->EX_m);
 	MPI_SendVec(params,&fields->Phi_m);
 }

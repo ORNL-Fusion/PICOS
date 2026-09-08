@@ -139,7 +139,7 @@ void PIC_TYP::MPI_Recv_AllFields(const params_TYP &params, fields_TYP &fields) c
 {
 	// Send field data from FIELDS ranks and recieve fields data at PARTICLE ranks
 	MPI_Recvvec(params,fields.EX_m);
-	if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+	if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel))
 	{
 		MPI_Recvvec(params,fields.Phi_m);
 	}
@@ -170,7 +170,7 @@ void PIC_TYP::fillPeriodicGhosts(arma::vec &C) const
 
 void PIC_TYP::fillGhost_AllFields(const params_TYP &params, fields_TYP &fields) const
 {
-	if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+	if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
 	    params.em_IC.poissonBCModel == POISSON_BC_PERIODIC)
 	{
 		fillPeriodicGhosts(fields.EX_m);
@@ -179,7 +179,7 @@ void PIC_TYP::fillGhost_AllFields(const params_TYP &params, fields_TYP &fields) 
 	else
 	{
 		fillGhosts(fields.EX_m);
-		if (params.SW.fieldSolveModel == FIELD_SOLVE_POISSON)
+		if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel))
 		{
 			fillGhosts(fields.Phi_m);
 		}
@@ -800,13 +800,18 @@ void PIC_TYP::extrapolateMoments_AllSpecies(const params_TYP &params, CS_TYP &CS
 			calculateDerivedIonMoments(params, CS, ion);
         }
 
-		// 0th moment at various time levels are sent to fields processes:
+		// Moments needed by field solves are sent to fields processes:
         // =============================================================
 		// Ion density:
         MPI_SendVec(params, ion.n_m);
         MPI_SendVec(params, ion.n_m_);
         MPI_SendVec(params, ion.n_m__);
         MPI_SendVec(params, ion.n_m___);
+
+        if (params.SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+        {
+            MPI_SendVec(params, ion.P11_m);
+        }
 	}
 }
 

@@ -46,6 +46,13 @@ class fields_solver_TYP
     arma::vec Phi_m;
     arma::vec chargeDensity;
 
+    // Reformulated Poisson fields:
+    arma::vec ionDensity;
+    arma::vec electronDensity;
+    arma::vec stressDifference;
+    arma::vec divStressDifference;
+    arma::vec plasmaFrequencySquared;
+
   	// Grid cell increment
   	double dx;
 
@@ -69,6 +76,8 @@ class fields_solver_TYP
     void advanceEfieldOhmLaw(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons);
 
     void advanceEfieldPoisson(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
+
+    void advanceEfieldReformulatedPoisson(const params_TYP * params, fields_TYP * fields, CS_TYP * CS, vector<ionSpecies_TYP> * IONS);
 
     void solveDirichletPoisson(const params_TYP * params, const arma::vec * rho, arma::vec * phi) const;
 

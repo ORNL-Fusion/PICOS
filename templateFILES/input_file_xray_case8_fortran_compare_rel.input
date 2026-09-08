@@ -1,5 +1,13 @@
 // PICOS input generated from 2020 X-ray benchmark Case8
 // Source case keeps archived RF/B-field parameters but uses PICOS particle and field switches.
+// Model notes:
+// - Purpose: relativistic-electron PICOS++ vs Fortran Case8 RF/ECH comparison.
+// - Particles: 1D-2V guiding-center D+ ions plus kinetic electrons.
+// - Field: SW_EfieldSolve=0 disables the electrostatic field update in this benchmark deck.
+// - Heating: electron RF/ECH is enabled; ion RF heating is disabled.
+// - Relativity: SW_relativisticElectrons=1 enables the relativistic electron/RF energy limits.
+// Field solver model legend:
+// - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
 // =============================================================================
 mpisForFields               2
 quietStart                  0
@@ -45,6 +53,8 @@ IC_phiLeft                  0.0000000000000000e+00
 IC_phiRight                 0.0000000000000000e+00
 Poisson_BCModel             1
 Poisson_sheathCoefficient   3.0000000000000000e+00
+ReformulatedPoisson_lambda  -1.0
+ReformulatedPoisson_quasiNeutral 0
 
 // Geometry:
 // =============================================================================

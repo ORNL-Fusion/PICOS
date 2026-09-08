@@ -1,4 +1,6 @@
 // PICOS species generated from 2020 X-ray benchmark Case8
+// Used by input_file_xray_case8_gc_rf_smoke.input.
+// Species are 1D-2V guiding-center D+ ions and kinetic electrons for a short species-split RF smoke test.
 // =============================================================================
 // Species 1: deuterium ions
 // =============================================================================

@@ -1,4 +1,6 @@
 // PICOS species generated from 2020 X-ray benchmark Case8
+// Used by input_file_xray_case8_fortran_compare_rel.input.
+// Species are 1D-2V guiding-center D+ ions and kinetic electrons for the relativistic RF/ECH comparison.
 // =============================================================================
 // Species 1: deuterium ions
 // =============================================================================
