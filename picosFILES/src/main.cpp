@@ -221,10 +221,7 @@ int main(int argc, char* argv[])
         // =====================================================================
         if (params.SW.RFheating == 1)
         {
-            if (params.currentTime >= params.RF.t_ON*CS.time && params.currentTime <= params.RF.t_OFF*CS.time)
-            {
-                RF_operator.ApplyRfHeating_AllSpecies(&params,&CS,&fields,&IONS);
-            }
+            RF_operator.ApplyRfHeating_AllSpecies(&params,&CS,&fields,&IONS);
         }
 
         // if (params.mpi.IS_PARTICLES_ROOT)

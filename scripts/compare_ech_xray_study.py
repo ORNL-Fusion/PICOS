@@ -337,7 +337,7 @@ def main() -> int:
     csv_path = out_dir / "ech_xray_case_summary.csv"
     fieldnames = sorted({key for row in rows for key in row.keys()})
     with csv_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

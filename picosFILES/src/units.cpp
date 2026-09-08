@@ -470,6 +470,22 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
     params->RF.eFieldAmplitude /= CS->eField;
     params->RF.maxParticleEnergy *= F_E/CS->energy;
     params->RF.maxVelocityFractionC *= F_C_DS;
+    auto normalizeRFSpecies = [CS](RF_SPECIES_TYP& rf)
+    {
+        rf.Prf  /= CS->energy/CS->time;
+        rf.freq *= CS->time;
+        rf.x1   /= CS->length;
+        rf.x2   /= CS->length;
+        rf.t_ON  /= CS->time;
+        rf.t_OFF /= CS->time;
+        rf.kpar *= CS->length;
+        rf.kper *= CS->length;
+        rf.eFieldAmplitude /= CS->eField;
+        rf.maxParticleEnergy *= F_E/CS->energy;
+        rf.maxVelocityFractionC *= F_C_DS;
+    };
+    normalizeRFSpecies(params->RF.ions);
+    normalizeRFSpecies(params->RF.electrons);
 
 	// Normalizing IONS:
     // =========================================================================

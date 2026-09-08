@@ -552,12 +552,10 @@ struct CS_TYP
 	}
 };
 
-// Define structure to hold RF operator parameters and global values:
+// Define structure to hold one RF operator parameter block:
 // =============================================================================
-struct RF_TYP
+struct RF_SPECIES_TYP
 {
-	// RF parameters:
-	// =============
 	double Prf;
 	int n_harmonic;
 	double freq;
@@ -593,6 +591,84 @@ struct RF_TYP
 	// Global RF electric field:
 	// =========================
 	double Erf;
+
+	// Constructor:
+	// ============
+	RF_SPECIES_TYP()
+	{
+		Prf  = 0;
+		n_harmonic = 1;
+		freq = 0;
+		x1   = 0;
+		x2   = 0;
+		t_ON = 0;
+		t_OFF = 0;
+		t_ON = 0;
+		t_OFF = 0;
+		kpar = 0;
+		kper = 0;
+		Prf_NS = 0;
+		handedness = 0;
+		heatIons = 1;
+		heatElectrons = 1;
+		eFieldMode = RF_EFIELD_POWER_BALANCE;
+		eFieldAmplitude = 0;
+		maxEnergyGainFraction = 0;
+		maxParticleEnergy = 0;
+		maxVelocityFractionC = 0;
+		E3   = 0;
+		uE3  = 0;
+		Erf  = 0;
+	}
+};
+
+// Define structure to hold RF operator parameters and global values:
+// =============================================================================
+struct RF_TYP
+{
+	// Legacy/global RF parameters. These are used as defaults for the
+	// species-specific blocks when RF_ion_* or RF_electron_* keys are omitted.
+	// =============================================================================
+	double Prf;
+	int n_harmonic;
+	double freq;
+	double x1;
+	double x2;
+	double t_ON;
+	double t_OFF;
+	double kpar;
+	double kper;
+	int handedness;
+	int heatIons;
+	int heatElectrons;
+	int eFieldMode;
+	double eFieldAmplitude;
+	double maxEnergyGainFraction;
+	double maxParticleEnergy;
+	double maxVelocityFractionC;
+
+	// Name and storage time-dependent RF power trace:
+	// ========================================
+	string Prf_fileName;
+	int Prf_NS;
+	arma::vec Prf_profile;
+
+	// Total RF power accumulated over all species:
+	// ============================================
+	double E3;
+
+	// Power accumulated over all species per unit electric field:
+	// ==========================================================
+	double uE3;
+
+	// Global RF electric field:
+	// =========================
+	double Erf;
+
+	// Species-specific RF/ECH controls:
+	// =================================
+	RF_SPECIES_TYP ions;
+	RF_SPECIES_TYP electrons;
 
 	// Constructor:
 	// ============

@@ -109,27 +109,69 @@ SW_RFheating                1
 SW_RFheatingIons            0
 SW_RFheatingElectrons       1
 SW_relativisticElectrons    1
-RF_n_harmonic                1
-RF_freq                      e*B/(2*pi*m_e)
-RF_handedness                -1
+RF_electron_n_harmonic      1
+RF_electron_freq            e*B/(2*pi*m_e)
+RF_electron_handedness      -1
 ```
 
 `SW_RFheating` is the master RF switch. `SW_RFheatingIons` gates RF kicks for positive-charge species, and `SW_RFheatingElectrons` gates RF kicks for negative-charge species. Set both to `1` for a mixed ion/electron RF test, or set only one to isolate the heating channel.
 
+RF/ECH settings are species-specific. Use `RF_ion_*` for positive-charge species and `RF_electron_*` for negative-charge species:
+
+```text
+RF_ion_Prf                      50E3
+RF_ion_n_harmonic               1
+RF_ion_freq                     8.385E6
+RF_ion_x1                       4.0
+RF_ion_x2                       6.5
+RF_ion_t_ON                     12000
+RF_ion_t_OFF                    20000
+RF_ion_kpar                     20
+RF_ion_kper                     100
+RF_ion_handedness               -1
+RF_ion_EfieldMode               0
+RF_ion_EfieldAmplitude          0.0
+RF_ion_maxEnergyGainFraction    0.0
+RF_ion_maxParticleEnergy        0.0
+RF_ion_maxVelocityFractionC     0.0
+RF_ion_Prf_fileName             Prf_profile.txt
+RF_ion_Prf_NS                   200
+
+RF_electron_Prf                      3.0E5
+RF_electron_n_harmonic               2
+RF_electron_freq                     6.5E10
+RF_electron_x1                       -0.4
+RF_electron_x2                       0.0
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    2.0E-3
+RF_electron_kpar                     5.864E3
+RF_electron_kper                     2.992E4
+RF_electron_handedness               -1
+RF_electron_EfieldMode               0
+RF_electron_EfieldAmplitude          1.0E4
+RF_electron_maxEnergyGainFraction    0.25
+RF_electron_maxParticleEnergy        5000
+RF_electron_maxVelocityFractionC     0.2
+RF_electron_Prf_fileName             Prf_profile.txt
+RF_electron_Prf_NS                   200
+```
+
+Legacy `RF_*` keys are still accepted. When present, they are used as defaults for both species unless a species-specific key overrides them.
+
 The operator now keeps electron mass as floating point and skips RF kicks safely when no particles are resonant during a time step. It also supports fixed archived RF electric field amplitude:
 
 ```text
-RF_EfieldMode               0   // original absorbed-power balance
-RF_EfieldMode               1   // fixed RF_EfieldAmplitude [V/m]
-RF_EfieldAmplitude          10000
+RF_electron_EfieldMode       0   // absorbed-power balance using RF_electron_Prf
+RF_electron_EfieldMode       1   // fixed RF_electron_EfieldAmplitude [V/m]
+RF_electron_EfieldAmplitude  10000
 ```
 
 For kinetic-electron prototype runs, use the optional nonrelativistic guard rails:
 
 ```text
-RF_maxEnergyGainFraction    0.25
-RF_maxParticleEnergy        5000      // eV; 0 disables
-RF_maxVelocityFractionC     0.2       // fraction of c; 0 disables
+RF_electron_maxEnergyGainFraction    0.25
+RF_electron_maxParticleEnergy        5000      // eV; 0 disables
+RF_electron_maxVelocityFractionC     0.2       // fraction of c; 0 disables
 ```
 
 These are especially useful with archived `Ew` inputs before a fully validated ECH operator is available.

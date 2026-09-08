@@ -8,6 +8,24 @@
 
 namespace
 {
+RF_SPECIES_TYP& rfConfigForSpecies(params_TYP * params, const ionSpecies_TYP & species)
+{
+    if (species.Z < 0.0)
+    {
+        return params->RF.electrons;
+    }
+    return params->RF.ions;
+}
+
+const RF_SPECIES_TYP& rfConfigForSpecies(const params_TYP * params, const ionSpecies_TYP & species)
+{
+    if (species.Z < 0.0)
+    {
+        return params->RF.electrons;
+    }
+    return params->RF.ions;
+}
+
 bool rfHeatingEnabledForSpecies(const params_TYP * params, const ionSpecies_TYP & species)
 {
     if (species.Z > 0.0)
@@ -19,6 +37,16 @@ bool rfHeatingEnabledForSpecies(const params_TYP * params, const ionSpecies_TYP 
         return params->RF.heatElectrons == 1;
     }
     return false;
+}
+
+bool rfHeatingActiveForSpecies(const params_TYP * params, const CS_TYP * CS, const ionSpecies_TYP & species)
+{
+    if (!rfHeatingEnabledForSpecies(params, species))
+    {
+        return false;
+    }
+    const RF_SPECIES_TYP& rf = rfConfigForSpecies(params, species);
+    return params->currentTime >= rf.t_ON*CS->time && params->currentTime <= rf.t_OFF*CS->time;
 }
 
 bool relativisticElectronsEnabledForSpecies(const params_TYP * params, const ionSpecies_TYP & species)
@@ -123,9 +151,10 @@ void RF_Operator_TYP::calculateResNum(int ii, params_TYP * params, CS_TYP * CS, 
     double wcp   = abs(Q)*Bp/(gamma*Ma);
 
     // RF paramters:
-    int n       = params->RF.n_harmonic;
-    double kpar = params->RF.kpar;
-    double f    = params->RF.freq;
+    const RF_SPECIES_TYP& rf = rfConfigForSpecies(params, *IONS);
+    int n       = rf.n_harmonic;
+    double kpar = rf.kpar;
+    double f    = rf.freq;
     double wrf  = 2*M_PI*f;
 
     // Cyclotron resonance number:
@@ -136,7 +165,7 @@ void RF_Operator_TYP::calculateResNum_AllSpecies(params_TYP * params, CS_TYP * C
 {
         for (int ss=0; ss<IONS->size();ss++)
         {
-            if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+            if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
             {
                 IONS->at(ss).f3.zeros();
                 IONS->at(ss).dE3.zeros();
@@ -164,7 +193,7 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
 {
     for (int ss=0; ss<IONS->size();ss++)
     {
-        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
         {
             continue;
         }
@@ -176,8 +205,9 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
         {
             // Parameters needed to check resonance condition:
             double xp = IONS->at(ss).X_p(ii);
-            double x1 = params->RF.x1;
-            double x2 = params->RF.x2;
+            const RF_SPECIES_TYP& rf = rfConfigForSpecies(params, IONS->at(ss));
+            double x1 = rf.x1;
+            double x2 = rf.x2;
             double resNum  = IONS->at(ss).resNum(ii);
             double resNum_ = IONS->at(ss).resNum_(ii);
 
@@ -205,9 +235,10 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     double Z  = IONS->Z;
 
     // RF paramters:
-    int n         = params->RF.n_harmonic;
-    double kper   = params->RF.kper;
-    double kpar   = params->RF.kpar;
+    const RF_SPECIES_TYP& rf = rfConfigForSpecies(params, *IONS);
+    int n         = rf.n_harmonic;
+    double kper   = rf.kper;
+    double kpar   = rf.kpar;
     double tau_rf = 0;
     double rL     = 0;
     double flr    = 0;
@@ -291,7 +322,7 @@ void RF_Operator_TYP::calculateRfTerms_AllSpecies(params_TYP * params, CS_TYP * 
 {
     for (int ss=0; ss<IONS->size();ss++)
     {
-        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
         {
             continue;
         }
@@ -313,20 +344,22 @@ void RF_Operator_TYP::calculateRfTerms_AllSpecies(params_TYP * params, CS_TYP * 
 
 void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-    double uEdot3 = 0;
+    double ionUEdot3 = 0;
+    double electronUEdot3 = 0;
     double DT = params->DT;
 
     for (int ss=0; ss<IONS->size();ss++)
     {
-        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
         {
             continue;
         }
 
+        double& speciesUEdot3 = (IONS->at(ss).Z < 0.0) ? electronUEdot3 : ionUEdot3;
         double NCP = IONS->at(ss).NCP;
         int NSP    = IONS->at(ss).NSP;
 
-        #pragma omp parallel default(none) shared(uEdot3, params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,NCP,DT)
+        #pragma omp parallel default(none) shared(speciesUEdot3, params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,NCP,DT)
         {
             // Private variables:
             double uEdot3_private = 0;
@@ -348,37 +381,25 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
             } // omp for
 
             #pragma omp critical
-            uEdot3 += uEdot3_private;
+            speciesUEdot3 += uEdot3_private;
 
         } // omp parallel
 
     } // Species
 
     // Reduce over all MPI process
-    MPI_AllreduceDouble(params,&uEdot3);
+    MPI_AllreduceDouble(params,&ionUEdot3);
+    MPI_AllreduceDouble(params,&electronUEdot3);
 
     // Assign to output:
-    params->RF.uE3 = uEdot3;
+    params->RF.ions.uE3 = ionUEdot3;
+    params->RF.electrons.uE3 = electronUEdot3;
+    params->RF.uE3 = ionUEdot3 + electronUEdot3;
 
 }
 
 void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-    // Calculate electric field:
-    double E_rf = params->RF.eFieldAmplitude;
-    if (params->RF.eFieldMode == RF_EFIELD_POWER_BALANCE)
-    {
-        E_rf = sqrt(params->RF.Prf/params->RF.uE3);
-    }
-    params->RF.Erf = E_rf;
-
-    /*
-    if (params->mpi.IS_PARTICLES_ROOT)
-    {
-        cout << "E_RF = " << E_rf*CS->eField << endl;
-    }
-    */
-
     // Seed the random number generator:
     std::default_random_engine generator(params->mpi.MPI_DOMAIN_NUMBER+1);
 
@@ -387,16 +408,28 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
     for (int ss=0; ss<IONS->size();ss++)
     {
-        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
         {
             continue;
         }
 
+        RF_SPECIES_TYP& rf = rfConfigForSpecies(params, IONS->at(ss));
+        double E_rf = rf.eFieldAmplitude;
+        if (rf.eFieldMode == RF_EFIELD_POWER_BALANCE)
+        {
+            E_rf = sqrt(rf.Prf/rf.uE3);
+        }
+        rf.Erf = E_rf;
+        params->RF.Erf = E_rf;
+
         const bool relativistic = relativisticElectronsEnabledForSpecies(params, IONS->at(ss));
         int NSP = IONS->at(ss).NSP;
         double Ma  = IONS->at(ss).M;
+        double maxEnergyGainFraction = rf.maxEnergyGainFraction;
+        double maxParticleEnergy = rf.maxParticleEnergy;
+        double maxVelocityFractionC = rf.maxVelocityFractionC;
 
-        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution) firstprivate(generator, relativistic)
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution, maxEnergyGainFraction, maxParticleEnergy, maxVelocityFractionC) firstprivate(generator, relativistic)
         {
             #pragma omp for
             for(int ii=0; ii<NSP; ii++)
@@ -427,10 +460,10 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
                     // Monte-Carlo operaton in kinetic energy:
                     double dKE_per = mean_dKE_per + Rm*sqrt(2*KE_per*mean_dKE_per);
-                    if (params->RF.maxEnergyGainFraction > 0.0)
+                    if (maxEnergyGainFraction > 0.0)
                     {
                         const double referenceEnergy = std::max(KE_per, params->f_IC.Te);
-                        const double maxPositiveKick = params->RF.maxEnergyGainFraction*referenceEnergy;
+                        const double maxPositiveKick = maxEnergyGainFraction*referenceEnergy;
                         dKE_per = std::min(dKE_per, maxPositiveKick);
                     }
                     dKE_per = std::max(dKE_per, -0.95*KE_per);
@@ -447,13 +480,13 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                             targetTotalKE = targetPerpKE;
                         }
 
-                        if (params->RF.maxParticleEnergy > 0.0)
+                        if (maxParticleEnergy > 0.0)
                         {
-                            targetTotalKE = std::min(targetTotalKE, params->RF.maxParticleEnergy);
+                            targetTotalKE = std::min(targetTotalKE, maxParticleEnergy);
                         }
-                        if (params->RF.maxVelocityFractionC > 0.0)
+                        if (maxVelocityFractionC > 0.0)
                         {
-                            const double maxSpeed = std::min(params->RF.maxVelocityFractionC, F_C_DS*(1.0 - 1.0e-9));
+                            const double maxSpeed = std::min(maxVelocityFractionC, F_C_DS*(1.0 - 1.0e-9));
                             const double maxSpeedEnergy = kineticEnergyFromSpeed(Ma, maxSpeed, true);
                             targetTotalKE = std::min(targetTotalKE, maxSpeedEnergy);
                         }
@@ -489,13 +522,13 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
                         double totalKE = 0.5*Ma*(vpar*vpar + vper*vper);
                         double cappedKE = totalKE;
-                        if (params->RF.maxParticleEnergy > 0.0)
+                        if (maxParticleEnergy > 0.0)
                         {
-                            cappedKE = std::min(cappedKE, params->RF.maxParticleEnergy);
+                            cappedKE = std::min(cappedKE, maxParticleEnergy);
                         }
-                        if (params->RF.maxVelocityFractionC > 0.0)
+                        if (maxVelocityFractionC > 0.0)
                         {
-                            const double maxSpeedEnergy = 0.5*Ma*params->RF.maxVelocityFractionC*params->RF.maxVelocityFractionC;
+                            const double maxSpeedEnergy = 0.5*Ma*maxVelocityFractionC*maxVelocityFractionC;
                             cappedKE = std::min(cappedKE, maxSpeedEnergy);
                         }
                         if (cappedKE < totalKE && totalKE > double_zero)
@@ -544,20 +577,22 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
 void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-    double Edot3 = 0;
+    double ionEdot3 = 0;
+    double electronEdot3 = 0;
     double DT = params->DT;
 
     for (int ss=0; ss<IONS->size();ss++)
     {
-        if (!rfHeatingEnabledForSpecies(params, IONS->at(ss)))
+        if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
         {
             continue;
         }
 
+        double& speciesEdot3 = (IONS->at(ss).Z < 0.0) ? electronEdot3 : ionEdot3;
         double NCP = IONS->at(ss).NCP;
         int NSP    = IONS->at(ss).NSP;
 
-        #pragma omp parallel default(none) shared(Edot3, params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,NCP,DT)
+        #pragma omp parallel default(none) shared(speciesEdot3, params, IONS, ss, CS, fields, std::cout) firstprivate(NSP,NCP,DT)
         {
             // Private variables:
             double Edot3_private = 0;
@@ -584,7 +619,7 @@ void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_
 
             #pragma omp critical
             {
-                Edot3 += Edot3_private;
+                speciesEdot3 += Edot3_private;
             }
 
         } // omp parallel
@@ -592,10 +627,13 @@ void RF_Operator_TYP::calculateAbsorbedPower_AllSpecies(params_TYP * params, CS_
     } // Species
 
     // Reduce over all MPI process
-    MPI_AllreduceDouble(params,&Edot3);
+    MPI_AllreduceDouble(params,&ionEdot3);
+    MPI_AllreduceDouble(params,&electronEdot3);
 
     // Assign to output:
-    params->RF.E3 = Edot3;
+    params->RF.ions.E3 = ionEdot3;
+    params->RF.electrons.E3 = electronEdot3;
+    params->RF.E3 = ionEdot3 + electronEdot3;
 
     /*
     if (params->mpi.IS_PARTICLES_ROOT)
@@ -622,16 +660,19 @@ void RF_Operator_TYP::ApplyRfHeating_AllSpecies(params_TYP * params, CS_TYP * CS
         // Calculate RF power per unit electric field over all species:
         calculatePowerPerUnitErf_AllSpecies(params,CS,fields,IONS);
 
-        if (params->RF.eFieldMode == RF_EFIELD_POWER_BALANCE &&
-            ((params->RF.uE3 <= double_zero) || !std::isfinite(params->RF.uE3)))
+        for (ionSpecies_TYP &ion : *IONS)
         {
-            for (ionSpecies_TYP &ion : *IONS)
+            if (!rfHeatingActiveForSpecies(params, CS, ion))
+            {
+                continue;
+            }
+            const RF_SPECIES_TYP& rf = rfConfigForSpecies(params, ion);
+            if (rf.eFieldMode == RF_EFIELD_POWER_BALANCE &&
+                ((rf.uE3 <= double_zero) || !std::isfinite(rf.uE3)))
             {
                 ion.f3.zeros();
                 ion.dE3.zeros();
             }
-            params->RF.E3 = 0.0;
-            return;
         }
 
         // Apply RF heating to all allSpecies:

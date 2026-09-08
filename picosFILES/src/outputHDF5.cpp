@@ -342,6 +342,105 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(group_rf, name, &cpp_type_value);
         name.clear();
 
+        auto saveRfBlock = [this, &name, &int_value, &cpp_type_value](Group * parent, const string& groupName, const RF_SPECIES_TYP& rf)
+        {
+            Group * group_species_rf = new Group( parent->createGroup( groupName ) );
+
+            name = "Prf";
+            cpp_type_value = rf.Prf;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "n_harmonic";
+            int_value = rf.n_harmonic;
+            saveToHDF5(group_species_rf, name, &int_value);
+            name.clear();
+
+            name = "freq";
+            cpp_type_value = rf.freq;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "x1";
+            cpp_type_value = rf.x1;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "x2";
+            cpp_type_value = rf.x2;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "t_ON";
+            cpp_type_value = rf.t_ON;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "t_OFF";
+            cpp_type_value = rf.t_OFF;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "kpar";
+            cpp_type_value = rf.kpar;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "kper";
+            cpp_type_value = rf.kper;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "handedness";
+            int_value = rf.handedness;
+            saveToHDF5(group_species_rf, name, &int_value);
+            name.clear();
+
+            name = "eFieldMode";
+            int_value = rf.eFieldMode;
+            saveToHDF5(group_species_rf, name, &int_value);
+            name.clear();
+
+            name = "eFieldAmplitude";
+            cpp_type_value = rf.eFieldAmplitude;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "maxEnergyGainFraction";
+            cpp_type_value = rf.maxEnergyGainFraction;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "maxParticleEnergy";
+            cpp_type_value = rf.maxParticleEnergy;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "maxVelocityFractionC";
+            cpp_type_value = rf.maxVelocityFractionC;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "uE3";
+            cpp_type_value = rf.uE3;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "E3";
+            cpp_type_value = rf.E3;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            name = "Erf";
+            cpp_type_value = rf.Erf;
+            saveToHDF5(group_species_rf, name, &cpp_type_value);
+            name.clear();
+
+            delete group_species_rf;
+        };
+        saveRfBlock(group_rf, "ion", params->RF.ions);
+        saveRfBlock(group_rf, "electron", params->RF.electrons);
+
         delete group_rf;
 
         // Fundamental scales group

@@ -60,25 +60,45 @@ IC_Te                       5
 IC_Te_NX                    200
 IC_Te_fileName              ProtoMPEX_Te_norm_PICOS_c.txt
 
-// RF operator:
+// Ion RF operator:
 // =============================================================================
-RF_Prf                      10
-RF_n_harmonic               1
-RF_freq                     5.6E8
-RF_x1                       -0.025
-RF_x2                       0.025
-RF_t_ON                     0
-RF_t_OFF                    2.0E-4
-RF_kpar                     0
-RF_kper                     50
-RF_handedness               -1
-RF_EfieldMode               1
-RF_EfieldAmplitude          1000
-RF_maxEnergyGainFraction    0.25
-RF_maxParticleEnergy        5000
-RF_maxVelocityFractionC     0.2
-RF_Prf_fileName             Prf_profile.txt
-RF_Prf_NS                   200
+RF_ion_Prf                      0
+RF_ion_n_harmonic               1
+RF_ion_freq                     5.6E8
+RF_ion_x1                       -0.025
+RF_ion_x2                       0.025
+RF_ion_t_ON                     0
+RF_ion_t_OFF                    2.0E-4
+RF_ion_kpar                     0
+RF_ion_kper                     50
+RF_ion_handedness               -1
+RF_ion_EfieldMode               1
+RF_ion_EfieldAmplitude          0
+RF_ion_maxEnergyGainFraction    0.25
+RF_ion_maxParticleEnergy        5000
+RF_ion_maxVelocityFractionC     0.2
+RF_ion_Prf_fileName             Prf_profile.txt
+RF_ion_Prf_NS                   200
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      10
+RF_electron_n_harmonic               1
+RF_electron_freq                     5.6E8
+RF_electron_x1                       -0.025
+RF_electron_x2                       0.025
+RF_electron_t_ON                     0
+RF_electron_t_OFF                    2.0E-4
+RF_electron_kpar                     0
+RF_electron_kper                     50
+RF_electron_handedness               -1
+RF_electron_EfieldMode               1
+RF_electron_EfieldAmplitude          1000
+RF_electron_maxEnergyGainFraction    0.25
+RF_electron_maxParticleEnergy        5000
+RF_electron_maxVelocityFractionC     0.2
+RF_electron_Prf_fileName             Prf_profile.txt
+RF_electron_Prf_NS                   200
 
 // Output variables:
 // =============================================================================

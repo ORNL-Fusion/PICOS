@@ -179,25 +179,45 @@ IC_Te                       {float(metadata['Te0']):.16e}
 IC_Te_NX                    {profile_points}
 IC_Te_fileName              {one_file}
 
-// RF operator:
+// Ion RF operator:
 // =============================================================================
-RF_Prf                      {args.rf_power:.16e}
-RF_n_harmonic               {int(metadata['n_harmonic'])}
-RF_freq                     {float(metadata['f_RF']):.16e}
-RF_x1                       {float(metadata['zRes1']):.16e}
-RF_x2                       {float(metadata['zRes2']):.16e}
-RF_t_ON                     0.0
-RF_t_OFF                    {simulation_time_gyro:.16e}
-RF_kpar                     {float(metadata['kpar']):.16e}
-RF_kper                     {float(metadata['kper']):.16e}
-RF_handedness               -1
-RF_EfieldMode               {args.rf_efield_mode}
-RF_EfieldAmplitude          {float(metadata['Ew']):.16e}
-RF_maxEnergyGainFraction    {args.rf_max_energy_gain_fraction:.16e}
-RF_maxParticleEnergy        {args.rf_max_particle_energy:.16e}
-RF_maxVelocityFractionC     {args.rf_max_velocity_fraction_c:.16e}
-RF_Prf_fileName             {one_file}
-RF_Prf_NS                   {profile_points}
+RF_ion_Prf                      {args.rf_power:.16e}
+RF_ion_n_harmonic               {int(metadata['n_harmonic'])}
+RF_ion_freq                     {float(metadata['f_RF']):.16e}
+RF_ion_x1                       {float(metadata['zRes1']):.16e}
+RF_ion_x2                       {float(metadata['zRes2']):.16e}
+RF_ion_t_ON                     0.0
+RF_ion_t_OFF                    {simulation_time_gyro:.16e}
+RF_ion_kpar                     {float(metadata['kpar']):.16e}
+RF_ion_kper                     {float(metadata['kper']):.16e}
+RF_ion_handedness               -1
+RF_ion_EfieldMode               {args.rf_efield_mode}
+RF_ion_EfieldAmplitude          {float(metadata['Ew']):.16e}
+RF_ion_maxEnergyGainFraction    {args.rf_max_energy_gain_fraction:.16e}
+RF_ion_maxParticleEnergy        {args.rf_max_particle_energy:.16e}
+RF_ion_maxVelocityFractionC     {args.rf_max_velocity_fraction_c:.16e}
+RF_ion_Prf_fileName             {one_file}
+RF_ion_Prf_NS                   {profile_points}
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      {args.rf_power:.16e}
+RF_electron_n_harmonic               {int(metadata['n_harmonic'])}
+RF_electron_freq                     {float(metadata['f_RF']):.16e}
+RF_electron_x1                       {float(metadata['zRes1']):.16e}
+RF_electron_x2                       {float(metadata['zRes2']):.16e}
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    {simulation_time_gyro:.16e}
+RF_electron_kpar                     {float(metadata['kpar']):.16e}
+RF_electron_kper                     {float(metadata['kper']):.16e}
+RF_electron_handedness               -1
+RF_electron_EfieldMode               {args.rf_efield_mode}
+RF_electron_EfieldAmplitude          {float(metadata['Ew']):.16e}
+RF_electron_maxEnergyGainFraction    {args.rf_max_energy_gain_fraction:.16e}
+RF_electron_maxParticleEnergy        {args.rf_max_particle_energy:.16e}
+RF_electron_maxVelocityFractionC     {args.rf_max_velocity_fraction_c:.16e}
+RF_electron_Prf_fileName             {one_file}
+RF_electron_Prf_NS                   {profile_points}
 
 // Output variables:
 // =============================================================================

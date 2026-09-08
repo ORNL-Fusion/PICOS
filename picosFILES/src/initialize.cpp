@@ -299,27 +299,51 @@ void init_TYP::readInputFile(params_TYP * params)
     params->f_IC.Te_NX       = getInt("IC_Te_NX", params->em_IC.BX_NX);
     params->f_IC.Te_fileName = getString("IC_Te_fileName", "ProtoMPEX_Te_norm_PICOS_c.txt");
 
-    // RF parameters
+    // RF parameters. Legacy RF_* keys are defaults for species-specific
+    // RF_ion_* and RF_electron_* blocks.
     // -------------------------------------------------------------------------
-    params->RF.Prf        = stod( parametersStringMap["RF_Prf"] );
-    params->RF.n_harmonic = stoi( parametersStringMap["RF_n_harmonic"] );
-    params->RF.freq       = stod( parametersStringMap["RF_freq"]);
-    params->RF.x1         = stod( parametersStringMap["RF_x1"]  );
-    params->RF.x2         = stod( parametersStringMap["RF_x2"]  );
-    params->RF.t_ON       = stod( parametersStringMap["RF_t_ON"]  );
-    params->RF.t_OFF      = stod( parametersStringMap["RF_t_OFF"]  );
-    params->RF.kpar       = stod( parametersStringMap["RF_kpar"]);
-    params->RF.kper       = stod( parametersStringMap["RF_kper"]);
-    params->RF.handedness = stoi( parametersStringMap["RF_handedness"]);
+    params->RF.Prf        = getDouble("RF_Prf", getDouble("RF_electron_Prf", getDouble("RF_ion_Prf", 0.0)));
+    params->RF.n_harmonic = getInt("RF_n_harmonic", getInt("RF_electron_n_harmonic", getInt("RF_ion_n_harmonic", 1)));
+    params->RF.freq       = getDouble("RF_freq", getDouble("RF_electron_freq", getDouble("RF_ion_freq", 0.0)));
+    params->RF.x1         = getDouble("RF_x1", getDouble("RF_electron_x1", getDouble("RF_ion_x1", 0.0)));
+    params->RF.x2         = getDouble("RF_x2", getDouble("RF_electron_x2", getDouble("RF_ion_x2", 0.0)));
+    params->RF.t_ON       = getDouble("RF_t_ON", getDouble("RF_electron_t_ON", getDouble("RF_ion_t_ON", 0.0)));
+    params->RF.t_OFF      = getDouble("RF_t_OFF", getDouble("RF_electron_t_OFF", getDouble("RF_ion_t_OFF", params->simulationTime)));
+    params->RF.kpar       = getDouble("RF_kpar", getDouble("RF_electron_kpar", getDouble("RF_ion_kpar", 0.0)));
+    params->RF.kper       = getDouble("RF_kper", getDouble("RF_electron_kper", getDouble("RF_ion_kper", 0.0)));
+    params->RF.handedness = getInt("RF_handedness", getInt("RF_electron_handedness", getInt("RF_ion_handedness", -1)));
     params->RF.heatIons = getInt("SW_RFheatingIons", 1);
     params->RF.heatElectrons = getInt("SW_RFheatingElectrons", 1);
-    params->RF.eFieldMode = getInt("RF_EfieldMode", RF_EFIELD_POWER_BALANCE);
-    params->RF.eFieldAmplitude = getDouble("RF_EfieldAmplitude", 0.0);
-    params->RF.maxEnergyGainFraction = getDouble("RF_maxEnergyGainFraction", 0.0);
-    params->RF.maxParticleEnergy = getDouble("RF_maxParticleEnergy", 0.0);
-    params->RF.maxVelocityFractionC = getDouble("RF_maxVelocityFractionC", 0.0);
-    params->RF.Prf_NS     = stoi( parametersStringMap["RF_Prf_NS"] );
-    params->RF.Prf_fileName = parametersStringMap["RF_Prf_fileName"];
+    params->RF.eFieldMode = getInt("RF_EfieldMode", getInt("RF_electron_EfieldMode", getInt("RF_ion_EfieldMode", RF_EFIELD_POWER_BALANCE)));
+    params->RF.eFieldAmplitude = getDouble("RF_EfieldAmplitude", getDouble("RF_electron_EfieldAmplitude", getDouble("RF_ion_EfieldAmplitude", 0.0)));
+    params->RF.maxEnergyGainFraction = getDouble("RF_maxEnergyGainFraction", getDouble("RF_electron_maxEnergyGainFraction", getDouble("RF_ion_maxEnergyGainFraction", 0.0)));
+    params->RF.maxParticleEnergy = getDouble("RF_maxParticleEnergy", getDouble("RF_electron_maxParticleEnergy", getDouble("RF_ion_maxParticleEnergy", 0.0)));
+    params->RF.maxVelocityFractionC = getDouble("RF_maxVelocityFractionC", getDouble("RF_electron_maxVelocityFractionC", getDouble("RF_ion_maxVelocityFractionC", 0.0)));
+    params->RF.Prf_NS     = getInt("RF_Prf_NS", getInt("RF_electron_Prf_NS", getInt("RF_ion_Prf_NS", 0)));
+    params->RF.Prf_fileName = getString("RF_Prf_fileName", getString("RF_electron_Prf_fileName", getString("RF_ion_Prf_fileName", "")));
+
+    auto readRFSpecies = [&getDouble, &getInt, &getString, &params](RF_SPECIES_TYP& rf, const string& prefix)
+    {
+        rf.Prf        = getDouble(prefix + "_Prf", params->RF.Prf);
+        rf.n_harmonic = getInt(prefix + "_n_harmonic", params->RF.n_harmonic);
+        rf.freq       = getDouble(prefix + "_freq", params->RF.freq);
+        rf.x1         = getDouble(prefix + "_x1", params->RF.x1);
+        rf.x2         = getDouble(prefix + "_x2", params->RF.x2);
+        rf.t_ON       = getDouble(prefix + "_t_ON", params->RF.t_ON);
+        rf.t_OFF      = getDouble(prefix + "_t_OFF", params->RF.t_OFF);
+        rf.kpar       = getDouble(prefix + "_kpar", params->RF.kpar);
+        rf.kper       = getDouble(prefix + "_kper", params->RF.kper);
+        rf.handedness = getInt(prefix + "_handedness", params->RF.handedness);
+        rf.eFieldMode = getInt(prefix + "_EfieldMode", params->RF.eFieldMode);
+        rf.eFieldAmplitude = getDouble(prefix + "_EfieldAmplitude", params->RF.eFieldAmplitude);
+        rf.maxEnergyGainFraction = getDouble(prefix + "_maxEnergyGainFraction", params->RF.maxEnergyGainFraction);
+        rf.maxParticleEnergy = getDouble(prefix + "_maxParticleEnergy", params->RF.maxParticleEnergy);
+        rf.maxVelocityFractionC = getDouble(prefix + "_maxVelocityFractionC", params->RF.maxVelocityFractionC);
+        rf.Prf_NS = getInt(prefix + "_Prf_NS", params->RF.Prf_NS);
+        rf.Prf_fileName = getString(prefix + "_Prf_fileName", params->RF.Prf_fileName);
+    };
+    readRFSpecies(params->RF.ions, "RF_ion");
+    readRFSpecies(params->RF.electrons, "RF_electron");
 
     // Output variables:
     // -------------------------------------------------------------------------
@@ -702,6 +726,10 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
     // ======================
     params->RF.t_ON  *= params->ionGyroPeriod;
     params->RF.t_OFF *= params->ionGyroPeriod;
+    params->RF.ions.t_ON  *= params->ionGyroPeriod;
+    params->RF.ions.t_OFF *= params->ionGyroPeriod;
+    params->RF.electrons.t_ON  *= params->ionGyroPeriod;
+    params->RF.electrons.t_OFF *= params->ionGyroPeriod;
 
     // Estimate DX and NX:
     // ===================

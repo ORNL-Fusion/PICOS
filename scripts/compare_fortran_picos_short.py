@@ -40,6 +40,14 @@ def parse_picos_input(path: Path) -> dict[str, str]:
     return values
 
 
+def rf_value(values: dict[str, str], species: str, key: str) -> str:
+    species_key = f"RF_{species}_{key}"
+    legacy_key = f"RF_{key}"
+    if species_key in values:
+        return values[species_key]
+    return values[legacy_key]
+
+
 def read_fortran_record_float64(path: Path) -> np.ndarray:
     payload_size = path.stat().st_size
     with path.open("rb") as handle:
@@ -200,13 +208,13 @@ params%IC_Ep      = 0.0,
 params%IC_Tp      = {float(values["CV_Te"]):.16e},
 params%IC_xip     = 0.707,
 
-params%f_RF       = {float(values["RF_freq"]):.16e},
-params%zRes1      = {float(values["RF_x1"]):.16e},
-params%zRes2      = {float(values["RF_x2"]):.16e},
-params%kper       = {float(values["RF_kper"]):.16e},
-params%kpar       = {float(values["RF_kpar"]):.16e},
+params%f_RF       = {float(rf_value(values, "electron", "freq")):.16e},
+params%zRes1      = {float(rf_value(values, "electron", "x1")):.16e},
+params%zRes2      = {float(rf_value(values, "electron", "x2")):.16e},
+params%kper       = {float(rf_value(values, "electron", "kper")):.16e},
+params%kpar       = {float(rf_value(values, "electron", "kpar")):.16e},
 params%Prf        = {args.rf_power:.16e},
-params%n_harmonic = {int(values["RF_n_harmonic"])},
+params%n_harmonic = {int(rf_value(values, "electron", "n_harmonic"))},
 
 params%s1   = 0.0,
 params%s2   = 1.3,
@@ -225,6 +233,53 @@ def replace_picos_key(text: str, key: str, value: str) -> str:
     if not pattern.search(text):
         raise KeyError(f"Missing PICOS input key {key}")
     return pattern.sub(rf"\g<1>{value}", text)
+
+
+def species_rf_block(values: dict[str, str], one_file: str, simulation_time: float, rf_power: float) -> str:
+    def value(key: str) -> str:
+        return rf_value(values, "electron", key)
+
+    return f"""// Ion RF operator:
+// =============================================================================
+RF_ion_Prf                      {rf_power:.16e}
+RF_ion_n_harmonic               {value("n_harmonic")}
+RF_ion_freq                     {value("freq")}
+RF_ion_x1                       {value("x1")}
+RF_ion_x2                       {value("x2")}
+RF_ion_t_ON                     0.0
+RF_ion_t_OFF                    {simulation_time:.16e}
+RF_ion_kpar                     {value("kpar")}
+RF_ion_kper                     {value("kper")}
+RF_ion_handedness               {value("handedness")}
+RF_ion_EfieldMode               0
+RF_ion_EfieldAmplitude          {value("EfieldAmplitude")}
+RF_ion_maxEnergyGainFraction    {value("maxEnergyGainFraction")}
+RF_ion_maxParticleEnergy        {value("maxParticleEnergy")}
+RF_ion_maxVelocityFractionC     {value("maxVelocityFractionC")}
+RF_ion_Prf_fileName             {one_file}
+RF_ion_Prf_NS                   {values["IC_Te_NX"]}
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      {rf_power:.16e}
+RF_electron_n_harmonic               {value("n_harmonic")}
+RF_electron_freq                     {value("freq")}
+RF_electron_x1                       {value("x1")}
+RF_electron_x2                       {value("x2")}
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    {simulation_time:.16e}
+RF_electron_kpar                     {value("kpar")}
+RF_electron_kper                     {value("kper")}
+RF_electron_handedness               {value("handedness")}
+RF_electron_EfieldMode               0
+RF_electron_EfieldAmplitude          {value("EfieldAmplitude")}
+RF_electron_maxEnergyGainFraction    {value("maxEnergyGainFraction")}
+RF_electron_maxParticleEnergy        {value("maxParticleEnergy")}
+RF_electron_maxVelocityFractionC     {value("maxVelocityFractionC")}
+RF_electron_Prf_fileName             {one_file}
+RF_electron_Prf_NS                   {values["IC_Te_NX"]}
+
+"""
 
 
 def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -> None:
@@ -259,13 +314,15 @@ def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int
         "SW_RFheatingElectrons": "1",
         "SW_relativisticElectrons": str(relativistic),
         "IC_BX_fileName": b_file,
-        "RF_Prf": f"{args.rf_power:.16e}",
-        "RF_t_OFF": f"{simulation_time:.16e}",
-        "RF_EfieldMode": "0",
-        "RF_Prf_fileName": one_file,
         "outputCadence": f"{simulation_time:.16e}",
     }.items():
         input_text = replace_picos_key(input_text, key, value)
+    input_text = re.sub(
+        r"// RF operator:\n// =+\n.*?\n(?=// Output variables:)",
+        species_rf_block(source_values, one_file, simulation_time, args.rf_power),
+        input_text,
+        flags=re.S,
+    )
     (input_dir / f"input_file_{tag}.input").write_text(input_text)
 
     ions_text = source_ions.read_text().replace(source_tag, tag)
@@ -375,7 +432,7 @@ def write_report(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
 
     fieldnames = list(rows[0].keys())
     with csv_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
