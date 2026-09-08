@@ -855,8 +855,8 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 
 		// Assemble moments:
 		// =================
-                const int iie = ION.NSP;
-        #pragma omp parallel for
+		const int iie = ION.NSP;
+		#pragma omp for
 		for(int ii=0; ii<iie; ii++)
 		{
 			// Nearest grid point:

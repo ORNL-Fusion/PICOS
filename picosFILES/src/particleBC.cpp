@@ -268,7 +268,7 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
                 uniform_one &rand_one = randoms_one[picos::random::thread()];
 
                 const int iie=ion.NSP;
-                #pragma omp parallel for
+                #pragma omp for
                 for(int ii=0; ii<iie; ii++)
                 {
                     if ( ion.f1(ii) == 1 || ion.f2(ii) == 1 )

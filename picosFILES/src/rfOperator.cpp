@@ -417,7 +417,13 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
         double E_rf = rf.eFieldAmplitude;
         if (rf.eFieldMode == RF_EFIELD_POWER_BALANCE)
         {
-            E_rf = sqrt(rf.Prf/rf.uE3);
+            if ((rf.uE3 <= double_zero) || !std::isfinite(rf.uE3))
+            {
+                rf.Erf = 0.0;
+                params->RF.Erf = 0.0;
+                continue;
+            }
+            E_rf = sqrt(std::max(0.0, rf.Prf/rf.uE3));
         }
         rf.Erf = E_rf;
         params->RF.Erf = E_rf;

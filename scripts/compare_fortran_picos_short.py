@@ -300,8 +300,8 @@ def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int
         raise FileNotFoundError(f"Local fallback source deck {source_tag} is missing")
 
     source_values = parse_picos_input(source_input)
-    source_simulation_time = float(source_values["simulationTime"])
-    simulation_time = source_simulation_time * (args.physical_time / 2.0e-10)
+    source_reference_time = float(rf_value(source_values, "electron", "t_OFF"))
+    simulation_time = source_reference_time * (args.physical_time / 2.0e-10)
 
     b_file = f"{tag}_B_norm.txt"
     one_file = f"{tag}_one.txt"
