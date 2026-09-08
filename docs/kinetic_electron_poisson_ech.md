@@ -89,6 +89,19 @@ The solved potential can be written to HDF5 by adding `Phi_m` to `outputs_variab
 
 The particle moment deposition now folds boundary ghost-cell shape-function contributions back into the physical mesh. Periodic species fold left/right support to the opposite side; nonperiodic species fold support into the nearest wall cell. This keeps deposited density/charge conserved for particles whose shape function straddles a boundary.
 
+## Moment Deposition Convention
+
+For the recommended `advanceParticleMethod 1` guiding-center model, `V_p` stores `(v_parallel, v_perp)`, where `v_perp` is the perpendicular speed magnitude. Particles are sampled from the reduced 1D-2V guiding-center distribution, so the cylindrical velocity-space Jacobian is already represented by the particle ensemble. Mesh moments are therefore direct particle-weight sums:
+
+```text
+n       = sum_p w_p
+n u     = sum_p w_p v_parallel
+P_11    = sum_p w_p m v_parallel^2
+P_perp  = sum_p w_p m v_perp^2 / 2
+```
+
+Do not divide mesh density, flux, or pressure deposition by `v_perp`. A `1/v_perp` factor is only relevant when reconstructing a full distribution function from a histogram in `(v_parallel, v_perp)`; in that diagnostic case the bin normalization must include the cylindrical measure `2*pi*v_perp*dv_parallel*dv_perp`.
+
 ## Electron Time-Step Resolution
 
 When a kinetic electron species is present, the time-step selection now considers:
@@ -219,6 +232,30 @@ validation/xray_study/ech_xray_summary.md
 validation/xray_study/ech_xray_final_energy_hist.png
 validation/xray_study/ech_xray_energy_vs_z.png
 ```
+
+## ECH/ICH HDF5 Analysis
+
+Use the repo-local HDF5 analysis scripts instead of editing hard-coded `myDir` paths in the older ProtoLite MATLAB/Python files:
+
+```bash
+PYTHONPYCACHEPREFIX=/private/tmp/picos_pycache MPLCONFIGDIR=/private/tmp/picos_mpl \
+  python scripts/analyze_picos_ech_ich.py xray_case8_reformulated_poisson \
+  --out-dir validation/ech_ich_analysis/xray_case8_reformulated_poisson \
+  --velocity-hist
+```
+
+The script accepts a run tag, a run directory, or a direct `HDF5` directory. It reads `/rf/ion` and `/rf/electron` metadata from `main.h5`, labels positive-`Z` species as ICH-channel species and negative-`Z` species as ECH-channel species, and writes:
+
+```text
+ech_ich_summary.csv
+ech_ich_analysis.md
+ech_ich_profiles.png
+ech_ich_time_traces.png
+force_balance_spp_*.png
+velocity_space_spp_*_step*.png
+```
+
+The velocity-space diagnostic writes the reduced guiding-center distribution and the full gyrotropic distribution using `f = g/(2*pi*v_perp)`. This is only a diagnostic reconstruction; it is not used in PIC mesh moment deposition.
 
 Current archived-data reference:
 

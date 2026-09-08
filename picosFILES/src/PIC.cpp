@@ -222,8 +222,7 @@ void PIC_TYP::smooth(arma::vec &v, double as) const
 }
 
 // Constructor:
-PIC_TYP::PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons) :
-randoms(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device()))
+PIC_TYP::PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons)
 {
 	// Get latest mesh-defined values from FIELDS ranks:
 	// =================================================
@@ -847,8 +846,6 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 
 	#pragma omp parallel default(none) shared(params, ION, B0, Ma)
 	{
-        uniform_random &randuni = randoms[picos::random::thread()];
-
 		// Create private moments:
 		// ======================
 		arma::vec n   = zeros(params.mesh.NX_IN_SIM + 4);
@@ -868,15 +865,7 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 			// Particle velocity:
 			const double vpar = ION.V_p(ii,0);
 			const double vper = perpendicularSpeed(ION, ii, params);
-			double perpMoment = 0.5*vper*vper;
-			if (params.advanceParticleMethod != PARTICLE_PUSH_BORIS_FULL_ORBIT)
-			{
-				const double vy = vper*cos(randuni());
-				perpMoment = vy*vy;
-			}
-
-			// Particle-defined magnetic field:
-			const double B = ION.BX_p(ii);
+			const double perpMoment = 0.5*vper*vper;
 
 			// Compression factor:
 			//double c = B/B0;
@@ -912,7 +901,7 @@ void PIC_TYP::eim(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, ionS
 			P11(ix)   += wc*acmvpar2;
 			P11(ix+1) += wr*acmvpar2;
 
-			// Stress tensor P22:
+			// Gyro-averaged perpendicular stress, P_perp = m*n*<v_perp^2>/2.
             const double acmvy2 = ac*Ma*perpMoment;
 			P22(ix-1) += wl*acmvy2;
 			P22(ix)   += wc*acmvy2;

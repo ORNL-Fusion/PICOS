@@ -11,3 +11,19 @@ PICOS++ tags: `xray_case8_fortran_compare_nonrel`, `xray_case8_fortran_compare_r
 
 PICOS++ nonrel mean-energy delta from Fortran: `5.01533 eV`.
 PICOS++ relativistic mean-energy delta from Fortran: `6.38825 eV`.
+
+Validation plots:
+
+- `ech_operator_energy_hist.png`
+- `ech_operator_energy_cdf.png`
+- `ech_operator_energy_vs_z.png`
+- `ech_operator_energy_vs_pitch.png`
+- `ech_operator_velocity_space.png`
+- `ech_operator_energy_metrics.png`
+
+Interpretation:
+
+- PICOS++ nonrel mean energy is `5.01533 eV` higher than Fortran.
+- PICOS++ nonrel P99 energy is `-46.0827 eV` different from Fortran.
+- Fortran produces a hotter extreme tail here: max energy `241.598 eV` versus PICOS++ nonrel `119.612 eV`.
+- The comparison is stochastic and not particle-by-particle matched; it validates ensemble behavior of the ECH operator.

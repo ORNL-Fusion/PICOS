@@ -28,6 +28,15 @@ M_E = 9.1093837015e-31
 C_LIGHT = 299792458.0
 
 
+def ensure_plotting():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
 def parse_picos_input(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw_line in path.read_text().splitlines():
@@ -385,21 +394,34 @@ def generate_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -
     subprocess.check_call(cmd, cwd=args.picos_root)
 
 
-def read_fortran_output(args: argparse.Namespace) -> dict[str, np.ndarray]:
+def _velocity_projections(energy_eV: np.ndarray, pitch: np.ndarray, te_eV: float) -> tuple[np.ndarray, np.ndarray]:
+    speed = np.sqrt(np.clip(2.0 * E_CHARGE * energy_eV / M_E, 0.0, None))
+    pitch = np.clip(pitch, -1.0, 1.0)
+    v_ref = math.sqrt(2.0 * E_CHARGE * te_eV / M_E)
+    vpar = speed * pitch
+    vperp = speed * np.sqrt(np.maximum(0.0, 1.0 - pitch * pitch))
+    return vpar / v_ref, vperp / v_ref
+
+
+def read_fortran_output(args: argparse.Namespace, te_eV: float) -> dict[str, np.ndarray]:
     output_dir = args.linear_root / "OutputFiles" / args.fortran_case_name / args.fortran_descriptor
     energy = read_fortran_record_float64(output_dir / "kep.out")
     z = read_fortran_record_float64(output_dir / "zp.out")
     pitch = read_fortran_record_float64(output_dir / "xip.out")
     energy_eV = energy.reshape((args.particles, -1), order="F")[:, -1]
+    pitch_final = pitch.reshape((args.particles, -1), order="F")[:, -1]
+    vpar_vt, vperp_vt = _velocity_projections(energy_eV, pitch_final, te_eV)
     return {
         "energy_eV": energy_eV,
         "z_m": z.reshape((args.particles, -1), order="F")[:, -1],
-        "pitch": pitch.reshape((args.particles, -1), order="F")[:, -1],
+        "pitch": pitch_final,
         "speed_over_c": np.sqrt(np.clip(2.0 * E_CHARGE * energy_eV / M_E, 0.0, None)) / C_LIGHT,
+        "vpar_over_vt": vpar_vt,
+        "vperp_over_vt": vperp_vt,
     }
 
 
-def read_picos_output(args: argparse.Namespace, tag: str, relativistic: bool) -> dict[str, np.ndarray]:
+def read_picos_output(args: argparse.Namespace, tag: str, relativistic: bool, te_eV: float) -> dict[str, np.ndarray]:
     hdf_dir = args.picos_root / "picosFILES" / "outputFiles" / tag / "HDF5"
     velocities = []
     positions = []
@@ -416,15 +438,163 @@ def read_picos_output(args: argparse.Namespace, tag: str, relativistic: bool) ->
     x = np.concatenate(positions)
     speed = np.sqrt(np.sum(v * v, axis=0))
     pitch = np.divide(v[0], speed, out=np.zeros_like(speed), where=speed > 0.0)
+    v_ref = math.sqrt(2.0 * E_CHARGE * te_eV / M_E)
+    if v.shape[0] > 2:
+        vperp = np.sqrt(np.sum(v[1:, :] * v[1:, :], axis=0))
+    else:
+        vperp = np.abs(v[1])
     return {
         "energy_eV": kinetic_energy_eV(speed, relativistic=relativistic),
         "z_m": x,
         "pitch": pitch,
         "speed_over_c": speed / C_LIGHT,
+        "vpar_over_vt": v[0] / v_ref,
+        "vperp_over_vt": vperp / v_ref,
     }
 
 
-def write_report(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
+def finite_values(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    return values[np.isfinite(values)]
+
+
+def empirical_cdf(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    selected = np.sort(finite_values(values))
+    if selected.size == 0:
+        return selected, selected
+    cdf = np.arange(1, selected.size + 1, dtype=float) / float(selected.size)
+    return selected, cdf
+
+
+def _plot_style(name: str) -> tuple[str, str]:
+    styles = {
+        "fortran_nonrel": ("k", "Fortran nonrel"),
+        "picos_nonrel": ("tab:blue", "PICOS++ nonrel"),
+        "picos_rel": ("tab:red", "PICOS++ rel"),
+    }
+    return styles.get(name, ("tab:gray", name))
+
+
+def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[str, np.ndarray]], te_eV: float) -> list[Path]:
+    plt = ensure_plotting()
+    out_dir = args.picos_root / "validation" / "fortran_picos_compare"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+
+    all_energy = np.concatenate([finite_values(data["energy_eV"]) for data in datasets.values()])
+    energy_hi = float(np.max(all_energy)) if all_energy.size else 1.0
+    energy_hi = max(50.0, 1.1 * energy_hi)
+    bins = np.linspace(0.0, energy_hi, 80)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for name, data in datasets.items():
+        color, label = _plot_style(name)
+        selected = finite_values(data["energy_eV"])
+        ax.hist(selected, bins=bins, density=True, histtype="step", lw=2.0, color=color, label=label)
+    ax.axvline(10.0 * te_eV, color="0.35", ls="--", lw=1.0, label="10 Te")
+    ax.set_xlabel("final electron kinetic energy [eV]")
+    ax.set_ylabel("PDF")
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    path = out_dir / "ech_operator_energy_hist.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for name, data in datasets.items():
+        color, label = _plot_style(name)
+        x, y = empirical_cdf(data["energy_eV"])
+        ax.plot(x, y, lw=2.0, color=color, label=label)
+    ax.axvline(10.0 * te_eV, color="0.35", ls="--", lw=1.0, label="10 Te")
+    ax.set_xlabel("final electron kinetic energy [eV]")
+    ax.set_ylabel("cumulative fraction")
+    ax.grid(True, alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    path = out_dir / "ech_operator_energy_cdf.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharey=True)
+    for ax, (name, data) in zip(axes, datasets.items()):
+        color, label = _plot_style(name)
+        ax.scatter(data["z_m"], data["energy_eV"], s=12, alpha=0.55, color=color, edgecolors="none")
+        ax.set_title(label)
+        ax.set_xlabel("z [m]")
+        ax.set_ylim(0.0, energy_hi)
+        ax.grid(True, alpha=0.25)
+    axes[0].set_ylabel("final electron kinetic energy [eV]")
+    fig.tight_layout()
+    path = out_dir / "ech_operator_energy_vs_z.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharey=True)
+    for ax, (name, data) in zip(axes, datasets.items()):
+        color, label = _plot_style(name)
+        ax.scatter(data["pitch"], data["energy_eV"], s=12, alpha=0.55, color=color, edgecolors="none")
+        ax.set_title(label)
+        ax.set_xlabel("pitch = v_parallel / |v|")
+        ax.set_xlim(-1.0, 1.0)
+        ax.set_ylim(0.0, energy_hi)
+        ax.grid(True, alpha=0.25)
+    axes[0].set_ylabel("final electron kinetic energy [eV]")
+    fig.tight_layout()
+    path = out_dir / "ech_operator_energy_vs_pitch.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharex=True, sharey=True)
+    for ax, (name, data) in zip(axes, datasets.items()):
+        color, label = _plot_style(name)
+        ax.scatter(data["vpar_over_vt"], data["vperp_over_vt"], s=12, alpha=0.55, color=color, edgecolors="none")
+        ax.set_title(label)
+        ax.set_xlabel("v_parallel / v_Te")
+        ax.grid(True, alpha=0.25)
+    axes[0].set_ylabel("v_perp / v_Te")
+    limit = 1.05 * max(
+        np.nanpercentile(np.abs(np.concatenate([data["vpar_over_vt"] for data in datasets.values()])), 99.5),
+        np.nanpercentile(np.concatenate([data["vperp_over_vt"] for data in datasets.values()]), 99.5),
+        1.0,
+    )
+    for ax in axes:
+        ax.set_xlim(-limit, limit)
+        ax.set_ylim(0.0, limit)
+    fig.tight_layout()
+    path = out_dir / "ech_operator_velocity_space.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    metrics = ["energy_mean_eV", "energy_p95_eV", "energy_p99_eV", "energy_max_eV"]
+    metric_labels = ["mean", "p95", "p99", "max"]
+    rows = [summarize_run(name, data, te_eV) for name, data in datasets.items()]
+    x = np.arange(len(metrics))
+    width = 0.25
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for offset, row in zip((-width, 0.0, width), rows):
+        color, label = _plot_style(row["run"])
+        ax.bar(x + offset, [row[m] for m in metrics], width=width, color=color, alpha=0.85, label=label)
+    ax.set_xticks(x, metric_labels)
+    ax.set_ylabel("final electron kinetic energy [eV]")
+    ax.grid(True, axis="y", alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    path = out_dir / "ech_operator_energy_metrics.png"
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    paths.append(path)
+
+    return paths
+
+
+def write_report(args: argparse.Namespace, rows: list[dict[str, Any]], plot_paths: list[Path] | None = None) -> None:
     out_dir = args.picos_root / "validation" / "fortran_picos_compare"
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / "fortran_picos_short_compare.csv"
@@ -460,6 +630,26 @@ def write_report(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
     if "fortran_nonrel" in by_run and "picos_rel" in by_run:
         delta = by_run["picos_rel"]["energy_mean_eV"] - by_run["fortran_nonrel"]["energy_mean_eV"]
         lines.append(f"PICOS++ relativistic mean-energy delta from Fortran: `{delta:.6g} eV`.")
+
+    if plot_paths:
+        lines.extend(["", "Validation plots:", ""])
+        for path in plot_paths:
+            lines.append(f"- `{path.name}`")
+
+    if "fortran_nonrel" in by_run and "picos_nonrel" in by_run:
+        f = by_run["fortran_nonrel"]
+        p = by_run["picos_nonrel"]
+        lines.extend(
+            [
+                "",
+                "Interpretation:",
+                "",
+                f"- PICOS++ nonrel mean energy is `{p['energy_mean_eV'] - f['energy_mean_eV']:.6g} eV` higher than Fortran.",
+                f"- PICOS++ nonrel P99 energy is `{p['energy_p99_eV'] - f['energy_p99_eV']:.6g} eV` different from Fortran.",
+                f"- Fortran produces a hotter extreme tail here: max energy `{f['energy_max_eV']:.6g} eV` versus PICOS++ nonrel `{p['energy_max_eV']:.6g} eV`.",
+                "- The comparison is stochastic and not particle-by-particle matched; it validates ensemble behavior of the ECH operator.",
+            ]
+        )
 
     md_path.write_text("\n".join(lines) + "\n")
     print(md_path)
@@ -516,12 +706,17 @@ def main() -> int:
 
     if args.compare:
         te_eV = float(parse_picos_input(args.picos_root / "picosFILES" / "inputFiles" / f"input_file_{args.picos_tag_nonrel}.input")["CV_Te"])
+        datasets = {
+            "fortran_nonrel": read_fortran_output(args, te_eV),
+            "picos_nonrel": read_picos_output(args, args.picos_tag_nonrel, relativistic=False, te_eV=te_eV),
+            "picos_rel": read_picos_output(args, args.picos_tag_rel, relativistic=True, te_eV=te_eV),
+        }
         rows = [
-            summarize_run("fortran_nonrel", read_fortran_output(args), te_eV),
-            summarize_run("picos_nonrel", read_picos_output(args, args.picos_tag_nonrel, relativistic=False), te_eV),
-            summarize_run("picos_rel", read_picos_output(args, args.picos_tag_rel, relativistic=True), te_eV),
+            summarize_run(name, data, te_eV)
+            for name, data in datasets.items()
         ]
-        write_report(args, rows)
+        plot_paths = write_validation_plots(args, datasets, te_eV)
+        write_report(args, rows, plot_paths=plot_paths)
 
     return 0
 

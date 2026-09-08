@@ -6,7 +6,6 @@
 #include <cmath>
 #include <vector>
 #include <array>
-#include <numbers>
 
 /*
 #ifdef __linux__
@@ -26,8 +25,6 @@
 // Parallelization libraries:
 #include "mpi_main.h"
 
-#include "parallel_random.hpp"
-
 using namespace std;
 using namespace arma;
 
@@ -35,11 +32,6 @@ class PIC_TYP
 {
 
 protected:
-    typedef uniform_real_distribution<double> uniform;
-    typedef picos::random::instance<double, uniform, 0.0, 2*numbers::pi_v<double>> uniform_random;
-    mutable std::random_device device;
-    mutable std::vector<uniform_random> randoms;
-
 	// MPI methods:
 	//void MPI_AllreduceVec(const params_TYP * params, arma::vec * v);
 
