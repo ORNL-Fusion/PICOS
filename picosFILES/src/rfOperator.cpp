@@ -211,13 +211,19 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
             double resNum  = IONS->at(ss).resNum(ii);
             double resNum_ = IONS->at(ss).resNum_(ii);
 
-            // Check resonance condition:
-            // true: argument negative
-            // false: otherwise (positive or zero)
-            bool dresNum_sign = signbit(resNum*resNum_);
+            bool isResonant = false;
+            if (rf.resonanceMode == RF_RESONANCE_FORTRAN_WINDOW)
+            {
+                isResonant = resNum < 0.0;
+            }
+            else
+            {
+                // true: argument negative; false: otherwise (positive or zero)
+                isResonant = signbit(resNum*resNum_);
+            }
 
             // Flag particles in resonance:
-            if ( dresNum_sign & (xp > x1) & (xp < x2) )
+            if (isResonant && (xp > x1) && (xp < x2))
             {
                 IONS->at(ss).f3(ii) = 1;
             }
@@ -506,27 +512,21 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                     }
                     else
                     {
-                        // Final perpendicular kinetic energy:
-                        KE_per += dKE_per;
+                        const double KE_par = std::max(0.0, KE_total_before - KE_per);
+                        double targetPerpKE = KE_per + dKE_per;
+                        double targetParKE = KE_par + doppler*dKE_per;
 
-                        if (KE_per < 0)
+                        if (targetPerpKE < 0)
                         {
                             cout << "KE_per is negative" << endl;
-                            KE_per = 0.0;
+                            targetPerpKE = 0.0;
+                        }
+                        if (targetParKE < 0)
+                        {
+                            targetParKE = 0.0;
                         }
 
-                        // Convert back to velocities:
-                        if (abs(vpar) > double_zero)
-                        {
-                            vpar += (doppler/vpar)*(dKE_per/Ma);
-                        }
-                        else
-                        {
-                            vpar += eps*sqrt(2.0*abs(doppler*dKE_per)/Ma);
-                        }
-                        vper = sqrt(2*KE_per/Ma);
-
-                        double totalKE = 0.5*Ma*(vpar*vpar + vper*vper);
+                        double totalKE = targetPerpKE + targetParKE;
                         double cappedKE = totalKE;
                         if (maxParticleEnergy > 0.0)
                         {
@@ -539,11 +539,15 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                         }
                         if (cappedKE < totalKE && totalKE > double_zero)
                         {
-                            const double scale = sqrt(cappedKE/totalKE);
-                            vpar *= scale;
-                            vper *= scale;
+                            const double scaleEnergy = cappedKE/totalKE;
+                            targetPerpKE *= scaleEnergy;
+                            targetParKE *= scaleEnergy;
+                            totalKE = cappedKE;
                             dKE = cappedKE - KE_total_before;
                         }
+
+                        vpar = eps*sqrt(2.0*targetParKE/Ma);
+                        vper = sqrt(2.0*targetPerpKE/Ma);
                     }
 
                     // Output data:

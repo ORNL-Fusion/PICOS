@@ -121,6 +121,7 @@ def build_input_text(
 // =============================================================================
 mpisForFields               {args.mpis_for_fields}
 quietStart                  {args.quiet_start}
+IC_velocityDistributionModel {args.velocity_distribution_model}
 numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       {args.advance_particle_method}
@@ -312,6 +313,7 @@ def main() -> int:
     parser.add_argument("--nx", type=int, default=200)
     parser.add_argument("--mpis-for-fields", type=int, default=2)
     parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--velocity-distribution-model", type=int, choices=[0, 1], default=0)
     parser.add_argument("--physical-time", type=float, default=None, help="Simulation time in seconds. Default uses archived Nsteps*dt.")
     parser.add_argument("--output-saves", type=int, default=5)
     parser.add_argument("--dtc", type=float, default=0.05)

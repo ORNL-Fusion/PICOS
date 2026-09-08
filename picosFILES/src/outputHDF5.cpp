@@ -295,6 +295,10 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(outputFile, name, &params->SW.relativisticElectrons);
         name.clear();
 
+        name = "velocityDistributionModel";
+        saveToHDF5(outputFile, name, &params->velocityDistributionModel);
+        name.clear();
+
         name = "numOfMPIs";
         saveToHDF5(outputFile, name, &params->mpi.NUMBER_MPI_DOMAINS);
         name.clear();
@@ -398,6 +402,11 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
 
             name = "eFieldMode";
             int_value = rf.eFieldMode;
+            saveToHDF5(group_species_rf, name, &int_value);
+            name.clear();
+
+            name = "resonanceMode";
+            int_value = rf.resonanceMode;
             saveToHDF5(group_species_rf, name, &int_value);
             name.clear();
 
@@ -717,6 +726,37 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
 		{
 			saveIonsVariables(params, IONS, electrons, CS, group_iteration);
+
+			if (params->SW.RFheating == 1)
+			{
+				Group * group_rf = new Group( group_iteration->createGroup( "rf" ) );
+				auto saveRfBlock = [this, &name, &cpp_type_value, CS](Group * parent, const string& groupName, const RF_SPECIES_TYP& rf)
+				{
+					Group * group_species_rf = new Group( parent->createGroup( groupName ) );
+
+					name = "Erf";
+					cpp_type_value = rf.Erf*CS->eField;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "uE3";
+					cpp_type_value = rf.uE3*CS->energy/CS->time;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "E3";
+					cpp_type_value = rf.E3*CS->energy/CS->time;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					delete group_species_rf;
+				};
+
+				saveRfBlock(group_rf, "ion", params->RF.ions);
+				saveRfBlock(group_rf, "electron", params->RF.electrons);
+
+				delete group_rf;
+			}
 		}
 		else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
 		{

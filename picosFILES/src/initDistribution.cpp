@@ -21,6 +21,10 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
 
 	arma::vec V2 = IONS->VTper*sqrt( -log(1.0 - R) ) % cos(phi);
 	arma::vec V3 = IONS->VTper*sqrt( -log(1.0 - R) ) % sin(phi);
+    if (params->velocityDistributionModel == VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP)
+    {
+        V3 = V2;
+    }
     arma::vec V4 = sqrt( pow(V2,2) + pow(V3,2) );
 
 	//arma_rng::set_seed_random();

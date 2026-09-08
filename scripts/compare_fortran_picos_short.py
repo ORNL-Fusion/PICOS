@@ -110,6 +110,16 @@ def read_hdf5_dataset(path: Path, dataset: str) -> np.ndarray:
     return data.reshape(shape)
 
 
+def read_hdf5_scalar_optional(path: Path, dataset: str) -> float:
+    try:
+        data = read_hdf5_dataset(path, dataset)
+    except Exception:
+        return math.nan
+    if data.size == 0:
+        return math.nan
+    return float(np.ravel(data)[0])
+
+
 def picos_components(velocity: np.ndarray) -> np.ndarray:
     if velocity.ndim != 2:
         raise ValueError(f"Expected 2D V_p dataset, got shape {velocity.shape}")
@@ -131,7 +141,24 @@ def kinetic_energy_eV(speed: np.ndarray, relativistic: bool) -> np.ndarray:
 def stats(values: np.ndarray, te_eV: float) -> dict[str, float]:
     selected = values[np.isfinite(values)]
     if selected.size == 0:
-        return {key: math.nan for key in ("count", "mean", "std", "p50", "p90", "p95", "p99", "max", "frac_gt_10Te")}
+        return {
+            key: math.nan
+            for key in (
+                "count",
+                "mean",
+                "std",
+                "p50",
+                "p90",
+                "p95",
+                "p99",
+                "p995",
+                "p999",
+                "max",
+                "frac_gt_5Te",
+                "frac_gt_10Te",
+                "frac_gt_15Te",
+            )
+        }
     return {
         "count": float(selected.size),
         "mean": float(np.mean(selected)),
@@ -140,8 +167,12 @@ def stats(values: np.ndarray, te_eV: float) -> dict[str, float]:
         "p90": float(np.percentile(selected, 90)),
         "p95": float(np.percentile(selected, 95)),
         "p99": float(np.percentile(selected, 99)),
+        "p995": float(np.percentile(selected, 99.5)),
+        "p999": float(np.percentile(selected, 99.9)),
         "max": float(np.max(selected)),
+        "frac_gt_5Te": float(np.mean(selected > 5.0 * te_eV)),
         "frac_gt_10Te": float(np.mean(selected > 10.0 * te_eV)),
+        "frac_gt_15Te": float(np.mean(selected > 15.0 * te_eV)),
     }
 
 
@@ -244,13 +275,23 @@ def replace_picos_key(text: str, key: str, value: str) -> str:
     return pattern.sub(rf"\g<1>{value}", text)
 
 
+def replace_or_insert_picos_key(text: str, key: str, value: str, after_key: str) -> str:
+    try:
+        return replace_picos_key(text, key, value)
+    except KeyError:
+        pattern = re.compile(rf"^({re.escape(after_key)}\s+\S+.*)$", re.MULTILINE)
+        if not pattern.search(text):
+            raise KeyError(f"Missing PICOS input key {after_key}")
+        return pattern.sub(rf"\g<1>\n{key} {value}", text, count=1)
+
+
 def species_rf_block(values: dict[str, str], one_file: str, simulation_time: float, rf_power: float) -> str:
     def value(key: str) -> str:
         return rf_value(values, "electron", key)
 
     return f"""// Ion RF operator:
 // =============================================================================
-RF_ion_Prf                      {rf_power:.16e}
+RF_ion_Prf                      0.0
 RF_ion_n_harmonic               {value("n_harmonic")}
 RF_ion_freq                     {value("freq")}
 RF_ion_x1                       {value("x1")}
@@ -261,10 +302,11 @@ RF_ion_kpar                     {value("kpar")}
 RF_ion_kper                     {value("kper")}
 RF_ion_handedness               {value("handedness")}
 RF_ion_EfieldMode               0
+RF_ion_resonanceMode            1
 RF_ion_EfieldAmplitude          {value("EfieldAmplitude")}
-RF_ion_maxEnergyGainFraction    {value("maxEnergyGainFraction")}
-RF_ion_maxParticleEnergy        {value("maxParticleEnergy")}
-RF_ion_maxVelocityFractionC     {value("maxVelocityFractionC")}
+RF_ion_maxEnergyGainFraction    0.0
+RF_ion_maxParticleEnergy        0.0
+RF_ion_maxVelocityFractionC     0.0
 RF_ion_Prf_fileName             {one_file}
 RF_ion_Prf_NS                   {values["IC_Te_NX"]}
 
@@ -281,10 +323,11 @@ RF_electron_kpar                     {value("kpar")}
 RF_electron_kper                     {value("kper")}
 RF_electron_handedness               {value("handedness")}
 RF_electron_EfieldMode               0
+RF_electron_resonanceMode            1
 RF_electron_EfieldAmplitude          {value("EfieldAmplitude")}
-RF_electron_maxEnergyGainFraction    {value("maxEnergyGainFraction")}
-RF_electron_maxParticleEnergy        {value("maxParticleEnergy")}
-RF_electron_maxVelocityFractionC     {value("maxVelocityFractionC")}
+RF_electron_maxEnergyGainFraction    0.0
+RF_electron_maxParticleEnergy        0.0
+RF_electron_maxVelocityFractionC     0.0
 RF_electron_Prf_fileName             {one_file}
 RF_electron_Prf_NS                   {values["IC_Te_NX"]}
 
@@ -311,7 +354,7 @@ def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int
     input_text = source_input.read_text()
     input_text = input_text.replace(source_tag, tag)
     for key, value in {
-        "quietStart": "0",
+        "quietStart": "1",
         "advanceParticleMethod": "1",
         "simulationTime": f"{simulation_time:.16e}",
         "SW_EfieldSolve": "0",
@@ -326,18 +369,24 @@ def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int
         "outputCadence": f"{simulation_time:.16e}",
     }.items():
         input_text = replace_picos_key(input_text, key, value)
-    input_text = re.sub(
-        r"// RF operator:\n// =+\n.*?\n(?=// Output variables:)",
+    input_text = replace_or_insert_picos_key(input_text, "IC_velocityDistributionModel", "1", "quietStart")
+    input_text, rf_count = re.subn(
+        r"// (?:Ion RF operator|RF operator):\n// =+\n.*?\n(?=// Output variables:)",
         species_rf_block(source_values, one_file, simulation_time, args.rf_power),
         input_text,
         flags=re.S,
     )
+    if rf_count != 1:
+        raise RuntimeError(f"Expected to replace one RF block in {source_input}, replaced {rf_count}")
     (input_dir / f"input_file_{tag}.input").write_text(input_text)
+
+    electron_particles_per_cell = max(1, int(round(args.particles / args.nx)))
+    ion_particles_per_cell = max(1, int(round(electron_particles_per_cell / 4.0)))
 
     ions_text = source_ions.read_text().replace(source_tag, tag)
     for key, value in {
-        "NPC1": "2",
-        "NPC2": "8",
+        "NPC1": str(ion_particles_per_cell),
+        "NPC2": str(electron_particles_per_cell),
         "pctSupPartOutput1": "1.0000000000000000e+02",
         "pctSupPartOutput2": "1.0000000000000000e+02",
     }.items():
@@ -351,6 +400,9 @@ def generate_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -
         clone_local_picos_deck(args, tag, relativistic)
         return
 
+    electron_particles_per_cell = max(1, int(round(args.particles / args.nx)))
+    ion_particles_per_cell = max(1, int(round(electron_particles_per_cell / 4.0)))
+
     cmd = [
         "python3",
         "scripts/create_picos_xray_case.py",
@@ -362,10 +414,6 @@ def generate_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -
         f"{args.physical_time:.16e}",
         "--nx",
         str(args.nx),
-        "--ion-particles-per-cell",
-        "2",
-        "--electron-particles-per-cell",
-        "8",
         "--output-saves",
         "1",
         "--collisions",
@@ -377,7 +425,9 @@ def generate_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -
         "--advance-particle-method",
         "1",
         "--quiet-start",
-        "0",
+        "1",
+        "--velocity-distribution-model",
+        "1",
         "--rf-heat-ions",
         "0",
         "--rf-heat-electrons",
@@ -388,10 +438,35 @@ def generate_picos_deck(args: argparse.Namespace, tag: str, relativistic: int) -
         "0",
         "--rf-power",
         f"{args.rf_power:.16e}",
+        "--rf-max-energy-gain-fraction",
+        "0.0",
+        "--rf-max-particle-energy",
+        "0.0",
+        "--rf-max-velocity-fraction-c",
+        "0.0",
+        "--ion-particles-per-cell",
+        str(ion_particles_per_cell),
+        "--electron-particles-per-cell",
+        str(electron_particles_per_cell),
         "--output-particle-percent",
         "100",
     ]
     subprocess.check_call(cmd, cwd=args.picos_root)
+
+    input_dir = args.picos_root / "picosFILES" / "inputFiles"
+    input_path = input_dir / f"input_file_{tag}.input"
+    values = parse_picos_input(input_path)
+    simulation_time = float(values["simulationTime"])
+    one_file = values["IC_Te_fileName"]
+    input_text, rf_count = re.subn(
+        r"// Ion RF operator:\n// =+\n.*?\n(?=// Output variables:)",
+        species_rf_block(values, one_file, simulation_time, args.rf_power),
+        input_path.read_text(),
+        flags=re.S,
+    )
+    if rf_count != 1:
+        raise RuntimeError(f"Expected to replace one RF block in {input_path}, replaced {rf_count}")
+    input_path.write_text(input_text)
 
 
 def _velocity_projections(energy_eV: np.ndarray, pitch: np.ndarray, te_eV: float) -> tuple[np.ndarray, np.ndarray]:
@@ -411,6 +486,13 @@ def read_fortran_output(args: argparse.Namespace, te_eV: float) -> dict[str, np.
     energy_eV = energy.reshape((args.particles, -1), order="F")[:, -1]
     pitch_final = pitch.reshape((args.particles, -1), order="F")[:, -1]
     vpar_vt, vperp_vt = _velocity_projections(energy_eV, pitch_final, te_eV)
+    try:
+        rf_event_rate = read_fortran_record_float64(output_dir / "pcount3.out")[-1]
+        rf_absorbed_power = read_fortran_record_float64(output_dir / "ecount3.out")[-1]
+    except Exception:
+        rf_event_rate = math.nan
+        rf_absorbed_power = math.nan
+
     return {
         "energy_eV": energy_eV,
         "z_m": z.reshape((args.particles, -1), order="F")[:, -1],
@@ -418,6 +500,10 @@ def read_fortran_output(args: argparse.Namespace, te_eV: float) -> dict[str, np.
         "speed_over_c": np.sqrt(np.clip(2.0 * E_CHARGE * energy_eV / M_E, 0.0, None)) / C_LIGHT,
         "vpar_over_vt": vpar_vt,
         "vperp_over_vt": vperp_vt,
+        "rf_event_rate": rf_event_rate,
+        "rf_absorbed_power_W": rf_absorbed_power,
+        "rf_Erf_Vm": math.nan,
+        "rf_uE3_W_per_E2": math.nan,
     }
 
 
@@ -433,6 +519,8 @@ def read_picos_output(args: argparse.Namespace, tag: str, relativistic: bool, te
 
     if not velocities:
         raise FileNotFoundError(f"No PICOS particle files found in {hdf_dir}")
+
+    first_file = sorted(hdf_dir.glob("PARTICLES_FILE_*.h5"))[0]
 
     v = np.concatenate(velocities, axis=1)
     x = np.concatenate(positions)
@@ -450,6 +538,10 @@ def read_picos_output(args: argparse.Namespace, tag: str, relativistic: bool, te
         "speed_over_c": speed / C_LIGHT,
         "vpar_over_vt": v[0] / v_ref,
         "vperp_over_vt": vperp / v_ref,
+        "rf_event_rate": math.nan,
+        "rf_absorbed_power_W": read_hdf5_scalar_optional(first_file, "/1/rf/electron/E3"),
+        "rf_Erf_Vm": read_hdf5_scalar_optional(first_file, "/1/rf/electron/Erf"),
+        "rf_uE3_W_per_E2": read_hdf5_scalar_optional(first_file, "/1/rf/electron/uE3"),
     }
 
 
@@ -572,8 +664,8 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     plt.close(fig)
     paths.append(path)
 
-    metrics = ["energy_mean_eV", "energy_p95_eV", "energy_p99_eV", "energy_max_eV"]
-    metric_labels = ["mean", "p95", "p99", "max"]
+    metrics = ["energy_mean_eV", "energy_p95_eV", "energy_p99_eV", "energy_p995_eV", "energy_p999_eV"]
+    metric_labels = ["mean", "p95", "p99", "p99.5", "p99.9"]
     rows = [summarize_run(name, data, te_eV) for name, data in datasets.items()]
     x = np.arange(len(metrics))
     width = 0.25
@@ -636,20 +728,50 @@ def write_report(args: argparse.Namespace, rows: list[dict[str, Any]], plot_path
         for path in plot_paths:
             lines.append(f"- `{path.name}`")
 
+    lines.extend(["", "Tail diagnostics:", ""])
+    lines.append("| run | P99.5 [eV] | P99.9 [eV] | max E [eV] | frac E>5Te | frac E>10Te | frac E>15Te |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    for row in rows:
+        lines.append(
+            f"| {row['run']} | {row['energy_p995_eV']:.4g} | {row['energy_p999_eV']:.4g} | "
+            f"{row['energy_max_eV']:.4g} | {row['energy_frac_gt_5Te']:.6g} | "
+            f"{row['energy_frac_gt_10Te']:.6g} | {row['energy_frac_gt_15Te']:.6g} |"
+        )
+
     if "fortran_nonrel" in by_run and "picos_nonrel" in by_run:
         f = by_run["fortran_nonrel"]
         p = by_run["picos_nonrel"]
+        max_delta = p["energy_max_eV"] - f["energy_max_eV"]
         lines.extend(
             [
                 "",
                 "Interpretation:",
                 "",
-                f"- PICOS++ nonrel mean energy is `{p['energy_mean_eV'] - f['energy_mean_eV']:.6g} eV` higher than Fortran.",
+                f"- PICOS++ nonrel mean energy differs from Fortran by `{p['energy_mean_eV'] - f['energy_mean_eV']:.6g} eV`.",
                 f"- PICOS++ nonrel P99 energy is `{p['energy_p99_eV'] - f['energy_p99_eV']:.6g} eV` different from Fortran.",
-                f"- Fortran produces a hotter extreme tail here: max energy `{f['energy_max_eV']:.6g} eV` versus PICOS++ nonrel `{p['energy_max_eV']:.6g} eV`.",
+                f"- The single-particle maximum differs by `{max_delta:.6g} eV`; because this is stochastic, use P99/P99.5/P99.9 and threshold fractions for tail validation.",
                 "- The comparison is stochastic and not particle-by-particle matched; it validates ensemble behavior of the ECH operator.",
             ]
         )
+
+    lines.extend(["", "RF diagnostics:", ""])
+    lines.append("| run | RF event rate [1/s] | absorbed RF power [W] | Erf [V/m] | uE3 [W/(V/m)^2] |")
+    lines.append("|---|---:|---:|---:|---:|")
+    for row in rows:
+        lines.append(
+            f"| {row['run']} | {row['rf_event_rate']:.6g} | {row['rf_absorbed_power_W']:.6g} | "
+            f"{row['rf_Erf_Vm']:.6g} | {row['rf_uE3_W_per_E2']:.6g} |"
+        )
+
+    checks = validation_checks(rows)
+    lines.extend(["", "Validation checks:", ""])
+    lines.append("| check | status | value | limit |")
+    lines.append("|---|---|---:|---:|")
+    for check in checks:
+        status = "PASS" if check["passed"] else "FAIL"
+        lines.append(f"| {check['name']} | {status} | {check['value']:.6g} | {check['limit']:.6g} |")
+    lines.append("")
+    lines.append(f"Overall validation status: `{'PASS' if all(check['passed'] for check in checks) else 'FAIL'}`.")
 
     md_path.write_text("\n".join(lines) + "\n")
     print(md_path)
@@ -669,14 +791,168 @@ def summarize_run(name: str, arrays: dict[str, np.ndarray], te_eV: float) -> dic
         "energy_p90_eV": energy["p90"],
         "energy_p95_eV": energy["p95"],
         "energy_p99_eV": energy["p99"],
+        "energy_p995_eV": energy["p995"],
+        "energy_p999_eV": energy["p999"],
         "energy_max_eV": energy["max"],
+        "energy_frac_gt_5Te": energy["frac_gt_5Te"],
         "energy_frac_gt_10Te": energy["frac_gt_10Te"],
+        "energy_frac_gt_15Te": energy["frac_gt_15Te"],
         "z_mean_m": z["mean"],
         "z_std_m": z["std"],
         "pitch_mean": pitch["mean"],
         "pitch_std": pitch["std"],
         "max_speed_over_c": float(np.max(arrays["speed_over_c"])) if "speed_over_c" in arrays else math.nan,
+        "rf_event_rate": float(arrays.get("rf_event_rate", math.nan)),
+        "rf_absorbed_power_W": float(arrays.get("rf_absorbed_power_W", math.nan)),
+        "rf_Erf_Vm": float(arrays.get("rf_Erf_Vm", math.nan)),
+        "rf_uE3_W_per_E2": float(arrays.get("rf_uE3_W_per_E2", math.nan)),
     }
+
+
+def _relative_delta(value: float, reference: float) -> float:
+    if not math.isfinite(value) or not math.isfinite(reference):
+        return math.inf
+    denominator = max(abs(reference), 1.0e-12)
+    return abs(value - reference) / denominator
+
+
+def _positive_ratio(value: float, reference: float) -> float:
+    if not math.isfinite(value) or not math.isfinite(reference) or value <= 0.0 or reference <= 0.0:
+        return math.inf
+    return max(value/reference, reference/value)
+
+
+def validation_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_run = {row["run"]: row for row in rows}
+    fortran = by_run["fortran_nonrel"]
+    picos_nonrel = by_run["picos_nonrel"]
+    picos_rel = by_run["picos_rel"]
+
+    checks = [
+        {
+            "name": "nonrel particle count",
+            "value": abs(picos_nonrel["count"] - fortran["count"]),
+            "limit": 0.0,
+        },
+        {
+            "name": "rel particle count",
+            "value": abs(picos_rel["count"] - fortran["count"]),
+            "limit": 0.0,
+        },
+        {
+            "name": "nonrel mean-energy relative delta",
+            "value": _relative_delta(picos_nonrel["energy_mean_eV"], fortran["energy_mean_eV"]),
+            "limit": 0.05,
+        },
+        {
+            "name": "rel mean-energy relative delta",
+            "value": _relative_delta(picos_rel["energy_mean_eV"], fortran["energy_mean_eV"]),
+            "limit": 0.05,
+        },
+        {
+            "name": "nonrel P95-energy relative delta",
+            "value": _relative_delta(picos_nonrel["energy_p95_eV"], fortran["energy_p95_eV"]),
+            "limit": 0.25,
+        },
+        {
+            "name": "rel P95-energy relative delta",
+            "value": _relative_delta(picos_rel["energy_p95_eV"], fortran["energy_p95_eV"]),
+            "limit": 0.25,
+        },
+        {
+            "name": "nonrel P99-energy relative delta",
+            "value": _relative_delta(picos_nonrel["energy_p99_eV"], fortran["energy_p99_eV"]),
+            "limit": 0.35,
+        },
+        {
+            "name": "rel P99-energy relative delta",
+            "value": _relative_delta(picos_rel["energy_p99_eV"], fortran["energy_p99_eV"]),
+            "limit": 0.35,
+        },
+        {
+            "name": "nonrel P99.5-energy relative delta",
+            "value": _relative_delta(picos_nonrel["energy_p995_eV"], fortran["energy_p995_eV"]),
+            "limit": 0.45,
+        },
+        {
+            "name": "rel P99.5-energy relative delta",
+            "value": _relative_delta(picos_rel["energy_p995_eV"], fortran["energy_p995_eV"]),
+            "limit": 0.45,
+        },
+        {
+            "name": "nonrel P99.9-energy relative delta",
+            "value": _relative_delta(picos_nonrel["energy_p999_eV"], fortran["energy_p999_eV"]),
+            "limit": 0.60,
+        },
+        {
+            "name": "rel P99.9-energy relative delta",
+            "value": _relative_delta(picos_rel["energy_p999_eV"], fortran["energy_p999_eV"]),
+            "limit": 0.60,
+        },
+        {
+            "name": "nonrel fraction above 5Te relative delta",
+            "value": _relative_delta(picos_nonrel["energy_frac_gt_5Te"], fortran["energy_frac_gt_5Te"]),
+            "limit": 0.35,
+        },
+        {
+            "name": "rel fraction above 5Te relative delta",
+            "value": _relative_delta(picos_rel["energy_frac_gt_5Te"], fortran["energy_frac_gt_5Te"]),
+            "limit": 0.35,
+        },
+        {
+            "name": "nonrel fraction above 10Te relative delta",
+            "value": _relative_delta(picos_nonrel["energy_frac_gt_10Te"], fortran["energy_frac_gt_10Te"]),
+            "limit": 0.75,
+        },
+        {
+            "name": "rel fraction above 10Te relative delta",
+            "value": _relative_delta(picos_rel["energy_frac_gt_10Te"], fortran["energy_frac_gt_10Te"]),
+            "limit": 0.75,
+        },
+        {
+            "name": "nonrel z-mean absolute delta",
+            "value": abs(picos_nonrel["z_mean_m"] - fortran["z_mean_m"]),
+            "limit": 0.25,
+        },
+        {
+            "name": "rel z-mean absolute delta",
+            "value": abs(picos_rel["z_mean_m"] - fortran["z_mean_m"]),
+            "limit": 0.25,
+        },
+        {
+            "name": "nonrel pitch-mean absolute delta",
+            "value": abs(picos_nonrel["pitch_mean"] - fortran["pitch_mean"]),
+            "limit": 0.05,
+        },
+        {
+            "name": "rel pitch-mean absolute delta",
+            "value": abs(picos_rel["pitch_mean"] - fortran["pitch_mean"]),
+            "limit": 0.05,
+        },
+        {
+            "name": "nonrel RF absorbed power ratio",
+            "value": _positive_ratio(picos_nonrel["rf_absorbed_power_W"], abs(fortran["rf_absorbed_power_W"])),
+            "limit": 25.0,
+        },
+        {
+            "name": "rel RF absorbed power ratio",
+            "value": _positive_ratio(picos_rel["rf_absorbed_power_W"], abs(fortran["rf_absorbed_power_W"])),
+            "limit": 25.0,
+        },
+        {
+            "name": "nonrel RF electric field positive",
+            "value": 0.0 if math.isfinite(picos_nonrel["rf_Erf_Vm"]) and picos_nonrel["rf_Erf_Vm"] > 0.0 else math.inf,
+            "limit": 0.0,
+        },
+        {
+            "name": "rel RF electric field positive",
+            "value": 0.0 if math.isfinite(picos_rel["rf_Erf_Vm"]) and picos_rel["rf_Erf_Vm"] > 0.0 else math.inf,
+            "limit": 0.0,
+        },
+    ]
+    for check in checks:
+        check["passed"] = math.isfinite(check["value"]) and check["value"] <= check["limit"]
+    return checks
 
 
 def main() -> int:
@@ -689,11 +965,12 @@ def main() -> int:
     parser.add_argument("--picos-tag-rel", default="xray_case8_fortran_compare_rel")
     parser.add_argument("--physical-time", type=float, default=2.0e-10)
     parser.add_argument("--steps", type=int, default=2141)
-    parser.add_argument("--particles", type=int, default=640)
+    parser.add_argument("--particles", type=int, default=6400)
     parser.add_argument("--nx", type=int, default=80)
     parser.add_argument("--rf-power", type=float, default=3.0e5)
     parser.add_argument("--setup", action="store_true")
     parser.add_argument("--compare", action="store_true")
+    parser.add_argument("--assert-validation", action="store_true", help="Return nonzero if quantitative validation checks fail.")
     args = parser.parse_args()
 
     args.picos_root = args.picos_root.resolve()
@@ -717,6 +994,8 @@ def main() -> int:
         ]
         plot_paths = write_validation_plots(args, datasets, te_eV)
         write_report(args, rows, plot_paths=plot_paths)
+        if args.assert_validation and not all(check["passed"] for check in validation_checks(rows)):
+            return 1
 
     return 0
 

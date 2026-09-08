@@ -33,6 +33,10 @@ using namespace std;
 #define PARTICLE_PUSH_BORIS_FULL_ORBIT 3
 #define RF_EFIELD_POWER_BALANCE 0
 #define RF_EFIELD_FIXED 1
+#define RF_RESONANCE_SIGN_CROSSING 0
+#define RF_RESONANCE_FORTRAN_WINDOW 1
+#define VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN 0
+#define VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP 1
 
 #define float_zero 1E-7
 #define double_zero 1E-15
@@ -579,6 +583,7 @@ struct RF_SPECIES_TYP
 	int heatIons;
 	int heatElectrons;
 	int eFieldMode;
+	int resonanceMode;
 	double eFieldAmplitude;
 	double maxEnergyGainFraction;
 	double maxParticleEnergy;
@@ -622,6 +627,7 @@ struct RF_SPECIES_TYP
 		heatIons = 1;
 		heatElectrons = 1;
 		eFieldMode = RF_EFIELD_POWER_BALANCE;
+		resonanceMode = RF_RESONANCE_SIGN_CROSSING;
 		eFieldAmplitude = 0;
 		maxEnergyGainFraction = 0;
 		maxParticleEnergy = 0;
@@ -652,6 +658,7 @@ struct RF_TYP
 	int heatIons;
 	int heatElectrons;
 	int eFieldMode;
+	int resonanceMode;
 	double eFieldAmplitude;
 	double maxEnergyGainFraction;
 	double maxParticleEnergy;
@@ -696,6 +703,7 @@ struct RF_TYP
 		heatIons = 1;
 		heatElectrons = 1;
 		eFieldMode = RF_EFIELD_POWER_BALANCE;
+		resonanceMode = RF_RESONANCE_SIGN_CROSSING;
 		eFieldAmplitude = 0;
 		maxEnergyGainFraction = 0;
 		maxParticleEnergy = 0;
@@ -725,6 +733,7 @@ struct params_TYP
 
 	// Flag for using a quiet start
 	bool quietStart;
+	int velocityDistributionModel;
 
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation

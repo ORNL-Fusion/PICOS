@@ -66,6 +66,15 @@ M2                          0.000548579909
 
 `M2` is the electron mass in atomic mass units. The code still uses the historical `IONS` container name, but the species handling now permits negative-charge kinetic species.
 
+Velocity initialization is controlled by:
+
+```text
+IC_velocityDistributionModel 0   // independent Maxwellian components; normal PICOS default
+IC_velocityDistributionModel 1   // Fortran-compatible correlated perpendicular loader for benchmark comparisons
+```
+
+Use model `0` for normal physics runs. Use model `1` only for reproducing the current LinearFokkerPlanck ECH benchmark, because that Fortran loader uses the same random draw for both perpendicular Cartesian components. Without this compatibility mode, PICOS correctly starts from an independent Maxwellian and underpopulates the Fortran high-energy tail before RF heating is even applied.
+
 Use `advanceParticleMethod 1` for the guiding-center baseline. In this mode ions and electrons are kinetic particles, but `V_p` keeps the historical two-column `v_parallel, v_perp` storage. Use `advanceParticleMethod 3` only when explicitly testing the optional 1D-3V Boris/full-orbit prototype; in that mode `V_p` is written as three velocity components.
 
 ## Poisson Mapping
@@ -163,6 +172,7 @@ RF_ion_kpar                     20
 RF_ion_kper                     100
 RF_ion_handedness               -1
 RF_ion_EfieldMode               0
+RF_ion_resonanceMode            0
 RF_ion_EfieldAmplitude          0.0
 RF_ion_maxEnergyGainFraction    0.0
 RF_ion_maxParticleEnergy        0.0
@@ -181,6 +191,7 @@ RF_electron_kpar                     5.864E3
 RF_electron_kper                     2.992E4
 RF_electron_handedness               -1
 RF_electron_EfieldMode               0
+RF_electron_resonanceMode            0
 RF_electron_EfieldAmplitude          1.0E4
 RF_electron_maxEnergyGainFraction    0.25
 RF_electron_maxParticleEnergy        5000
@@ -199,6 +210,15 @@ RF_electron_EfieldMode       1   // fixed RF_electron_EfieldAmplitude [V/m]
 RF_electron_EfieldAmplitude  10000
 ```
 
+Resonance mode is also explicit:
+
+```text
+RF_electron_resonanceMode   0   // default sign-crossing resonance detector
+RF_electron_resonanceMode   1   // Fortran-window compatibility mode for LinearFokkerPlanck comparison
+```
+
+Use mode `0` for normal PICOS runs. Use mode `1` only when reproducing the current LinearFokkerPlanck comparison deck, whose RF flagging behaves like a negative-resonance/window test.
+
 For kinetic-electron prototype runs, use the optional nonrelativistic guard rails:
 
 ```text
@@ -210,6 +230,33 @@ RF_electron_maxVelocityFractionC     0.2       // fraction of c; 0 disables
 These are especially useful with archived `Ew` inputs before a fully validated ECH operator is available.
 
 ## X-ray/ECH Benchmark
+
+Run the automated Fortran/PICOS++ ECH validation:
+
+```bash
+python3 scripts/compare_fortran_picos_short.py --setup
+cd /Users/78k/Desktop/picos_kinetic_electron_eval/LinearFokkerPlanck_Axisymmetric
+OMP_NUM_THREADS=1 OMP_PROC_BIND=false \
+  REPO_DIR=/Users/78k/Desktop/picos_kinetic_electron_eval/LinearFokkerPlanck_Axisymmetric \
+  INPUT_FILE=xp_Case8PicosCompare.in \
+  INPUT_FILE_DIR=/Users/78k/Desktop/picos_kinetic_electron_eval/LinearFokkerPlanck_Axisymmetric/InputFiles/xp_Case8PicosCompare.in \
+  ./src/linFP
+cd /Users/78k/Desktop/picos_kinetic_electron_eval/PICOS/picosFILES
+HDF5_USE_FILE_LOCKING=FALSE OMP_NUM_THREADS=1 mpirun -np 4 ../build/picosFILES/src/xpicos 1-D outputFiles xray_case8_fortran_compare_nonrel
+HDF5_USE_FILE_LOCKING=FALSE OMP_NUM_THREADS=1 mpirun -np 4 ../build/picosFILES/src/xpicos 1-D outputFiles xray_case8_fortran_compare_rel
+cd /Users/78k/Desktop/picos_kinetic_electron_eval/PICOS
+python3 scripts/compare_fortran_picos_short.py --compare --assert-validation
+```
+
+The assertion mode checks particle counts, mean/P95/P99/P99.5/P99.9 energy agreement, fractions above `5 Te` and `10 Te`, final mean position/pitch agreement, and nonzero PICOS RF diagnostics. The current default validation uses 6400 electrons. For a less noisy tail check, use the same workflow with `--particles 51200` and unique tags, for example:
+
+```bash
+python3 scripts/compare_fortran_picos_short.py --setup --particles 51200 \
+  --fortran-case-name xp_Case8PicosCompareTail \
+  --fortran-descriptor picos_compare_case8_power_tail \
+  --picos-tag-nonrel xray_case8_fortran_compare_tail_nonrel \
+  --picos-tag-rel xray_case8_fortran_compare_tail_rel
+```
 
 The archived 2020 Proto-MPEX X-ray study lives at:
 

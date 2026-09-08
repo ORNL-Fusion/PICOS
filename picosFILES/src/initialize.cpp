@@ -241,6 +241,13 @@ void init_TYP::readInputFile(params_TYP * params)
     {
         params->quietStart = false;
     }
+    params->velocityDistributionModel = getInt("IC_velocityDistributionModel", VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN);
+    if (params->velocityDistributionModel != VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN &&
+        params->velocityDistributionModel != VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP)
+    {
+        cout << "ERROR: unsupported IC_velocityDistributionModel " << params->velocityDistributionModel << endl;
+        MPI_Abort(MPI_COMM_WORLD,-105);
+    }
 
     params->numberOfParticleSpecies = stoi( parametersStringMap["numberOfParticleSpecies"] );
     params->numberOfTracerSpecies   = stoi( parametersStringMap["numberOfTracerSpecies"] );
@@ -323,6 +330,7 @@ void init_TYP::readInputFile(params_TYP * params)
     params->RF.heatIons = getInt("SW_RFheatingIons", 1);
     params->RF.heatElectrons = getInt("SW_RFheatingElectrons", 1);
     params->RF.eFieldMode = getInt("RF_EfieldMode", getInt("RF_electron_EfieldMode", getInt("RF_ion_EfieldMode", RF_EFIELD_POWER_BALANCE)));
+    params->RF.resonanceMode = getInt("RF_resonanceMode", getInt("RF_electron_resonanceMode", getInt("RF_ion_resonanceMode", RF_RESONANCE_SIGN_CROSSING)));
     params->RF.eFieldAmplitude = getDouble("RF_EfieldAmplitude", getDouble("RF_electron_EfieldAmplitude", getDouble("RF_ion_EfieldAmplitude", 0.0)));
     params->RF.maxEnergyGainFraction = getDouble("RF_maxEnergyGainFraction", getDouble("RF_electron_maxEnergyGainFraction", getDouble("RF_ion_maxEnergyGainFraction", 0.0)));
     params->RF.maxParticleEnergy = getDouble("RF_maxParticleEnergy", getDouble("RF_electron_maxParticleEnergy", getDouble("RF_ion_maxParticleEnergy", 0.0)));
@@ -343,6 +351,7 @@ void init_TYP::readInputFile(params_TYP * params)
         rf.kper       = getDouble(prefix + "_kper", params->RF.kper);
         rf.handedness = getInt(prefix + "_handedness", params->RF.handedness);
         rf.eFieldMode = getInt(prefix + "_EfieldMode", params->RF.eFieldMode);
+        rf.resonanceMode = getInt(prefix + "_resonanceMode", params->RF.resonanceMode);
         rf.eFieldAmplitude = getDouble(prefix + "_EfieldAmplitude", params->RF.eFieldAmplitude);
         rf.maxEnergyGainFraction = getDouble(prefix + "_maxEnergyGainFraction", params->RF.maxEnergyGainFraction);
         rf.maxParticleEnergy = getDouble(prefix + "_maxParticleEnergy", params->RF.maxParticleEnergy);

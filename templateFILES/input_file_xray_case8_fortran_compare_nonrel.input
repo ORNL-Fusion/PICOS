@@ -10,7 +10,8 @@
 // - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
 // =============================================================================
 mpisForFields               2
-quietStart                  0
+quietStart                  1
+IC_velocityDistributionModel 1
 numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       1
@@ -73,7 +74,7 @@ IC_Te_fileName              xray_case8_fortran_compare_nonrel_one.txt
 
 // Ion RF operator:
 // =============================================================================
-RF_ion_Prf                      3.0000000000000000e+05
+RF_ion_Prf                      0.0
 RF_ion_n_harmonic               2
 RF_ion_freq                     6.5000000000000000e+10
 RF_ion_x1                       -4.0000000000000002e-01
@@ -84,10 +85,11 @@ RF_ion_kpar                     5.8640000000000000e+03
 RF_ion_kper                     2.9920000000000000e+04
 RF_ion_handedness               -1
 RF_ion_EfieldMode               0
+RF_ion_resonanceMode            1
 RF_ion_EfieldAmplitude          1.0000000000000000e+04
-RF_ion_maxEnergyGainFraction    2.5000000000000000e-01
-RF_ion_maxParticleEnergy        5.0000000000000000e+03
-RF_ion_maxVelocityFractionC     2.0000000000000001e-01
+RF_ion_maxEnergyGainFraction    0.0
+RF_ion_maxParticleEnergy        0.0
+RF_ion_maxVelocityFractionC     0.0
 RF_ion_Prf_fileName             xray_case8_fortran_compare_nonrel_one.txt
 RF_ion_Prf_NS                   82
 
@@ -104,10 +106,11 @@ RF_electron_kpar                     5.8640000000000000e+03
 RF_electron_kper                     2.9920000000000000e+04
 RF_electron_handedness               -1
 RF_electron_EfieldMode               0
+RF_electron_resonanceMode            1
 RF_electron_EfieldAmplitude          1.0000000000000000e+04
-RF_electron_maxEnergyGainFraction    2.5000000000000000e-01
-RF_electron_maxParticleEnergy        5.0000000000000000e+03
-RF_electron_maxVelocityFractionC     2.0000000000000001e-01
+RF_electron_maxEnergyGainFraction    0.0
+RF_electron_maxParticleEnergy        0.0
+RF_electron_maxVelocityFractionC     0.0
 RF_electron_Prf_fileName             xray_case8_fortran_compare_nonrel_one.txt
 RF_electron_Prf_NS                   82
 
