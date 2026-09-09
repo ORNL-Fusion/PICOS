@@ -38,7 +38,8 @@ private:
                              const double Mb, const double Ma,
                              const double erf_xab, const double erfp_xab,
                              const double xerfp_xab, const double gb,
-                             const double DT, uniform_random &randuni);
+                             const double DT, const int collOperType,
+                             uniform_random &randuni);
     void xi_CollisionOperator(double &xi, const double xab, const double xab2,
                               const double nuab0, const double erf_xab,
                               const double gb, const double DT,
@@ -47,6 +48,14 @@ private:
     // Coordinate transformation:
     void cartesian2Spherical(const double wx, const double wy, double &w, double &xi, double &sinphi) const;
     void Spherical2Cartesian(const double w, const double xi, const double sinphi, double &wx, double &wy) const;
+
+    void collisionTotals(const params_TYP &params, const CS_TYP &CS,
+                         const vector<ionSpecies_TYP> &IONS,
+                         double totals[3]) const;
+    void applyCollisionConservationProjection(const params_TYP &params,
+                                              const CS_TYP &CS,
+                                              vector<ionSpecies_TYP> &IONS,
+                                              const double initialTotals[3]) const;
 
     // Collisional rates based on Maxwellian background species:
     // =============================================================================
@@ -65,8 +74,8 @@ private:
             //From T.S. Chen 1988 Report EQ 57 commonly used for NBI
             return nu*mass_ratio;
         }
-        static_assert(energyOperatorModel != 1 ||
-                      energyOperatorModel != 2,
+        static_assert(energyOperatorModel == 1 ||
+                      energyOperatorModel == 2,
                       "Invalid energy operator model.");
 
         /* References:
@@ -95,6 +104,14 @@ private:
 public:
     coll_operator_TYP() :
     randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
+
+    void setRandomSeed(const int seed)
+    {
+        const std::uint_fast64_t activeSeed = (seed >= 0)
+            ? static_cast<std::uint_fast64_t>(seed)
+            : static_cast<std::uint_fast64_t>(device());
+        randoms = picos::random::instances<short, uniform, 0, 1> (activeSeed);
+    }
 
     void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons);
 

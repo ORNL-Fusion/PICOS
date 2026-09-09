@@ -255,6 +255,13 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
     // =============================
     calculateParticleWeight(params,CS,fields,IONS);
 
+    if (params.SW.pairSource == 1)
+    {
+        applyPairSourceReinjection(params,CS,fields,IONS);
+        getParticleInjectionRates(params,CS,fields,IONS);
+        return;
+    }
+
     // Apply re-injection:
     // ===================
     if (params.mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
@@ -276,28 +283,28 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
                         // Re-inject particle:
                         // ===================
                         particleReinjection(ii, params, CS, fields, ion, rand_2pi, rand_one);
-                        
+
                         // Newly injected flag:
                         // ====================
                         ion.f5(ii)  = 1;
                         ion.dE5(ii) = particleKineticEnergy(params, ion, ii);
-                        
+
                         // Reset injection flag:
                         // =====================
                         ion.f1(ii) = 0;
                         ion.f2(ii) = 0;
-                        
+
                         // Reset Exit energy:
                         // =====================
                         ion.dE1(ii) = 0;
                         ion.dE2(ii) = 0;
-                        
+
                     } // flag guard
                 } // pragma omp for
 
             } // pragma omp parallel
 
-    	} //  Species
+        } //  Species
 
 	} // Particle MPIs
 
@@ -345,6 +352,226 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
         MPI_AllreduceDouble<2> (params,&dot_.N5);
 
     } // Particle MPI
+}
+
+double particleBC_TYP::sampleGaussianSourcePosition(const params_TYP &params, double mean_x, double sigma_x,
+                                                    uniform_2Pi &rand_2pi, uniform_one &rand_one) const
+{
+    const double LX_min = params.geometry.LX_min;
+    const double LX_max = params.geometry.LX_max;
+    if (sigma_x <= double_zero)
+    {
+        return min(max(mean_x, LX_min), LX_max);
+    }
+
+    const double sigma = sigma_x*numbers::sqrt2_v<double>;
+    for (int tries=0; tries<1000; tries++)
+    {
+        const double u = max(rand_one(), double_zero);
+        const double new_x = mean_x + sigma*sqrt(-log(u))*cos(rand_2pi());
+        if (new_x >= LX_min && new_x <= LX_max)
+        {
+            return new_x;
+        }
+    }
+
+    return min(max(mean_x, LX_min), LX_max);
+}
+
+double particleBC_TYP::samplePairSourcePosition(const params_TYP &params, uniform_2Pi &rand_2pi, uniform_one &rand_one) const
+{
+    const pairSource_TYP &source = params.pairSource;
+    if (source.positionMode == PAIR_SOURCE_PROFILE &&
+        source.profile.n_elem > 0 &&
+        source.x_profile.n_elem == source.profile.n_elem)
+    {
+        double total = 0.0;
+        for (arma::uword ii=0; ii<source.profile.n_elem; ii++)
+        {
+            total += max(source.profile(ii), 0.0);
+        }
+
+        if (total > double_zero)
+        {
+            const double threshold = rand_one()*total;
+            double cumulative = 0.0;
+            arma::uword selected = source.profile.n_elem - 1;
+            for (arma::uword ii=0; ii<source.profile.n_elem; ii++)
+            {
+                cumulative += max(source.profile(ii), 0.0);
+                if (cumulative >= threshold)
+                {
+                    selected = ii;
+                    break;
+                }
+            }
+
+            const double dx = (source.x_profile.n_elem > 1) ?
+                              abs(source.x_profile(1) - source.x_profile(0)) :
+                              params.geometry.LX;
+            double x = source.x_profile(selected) + (rand_one() - 0.5)*dx;
+            x = min(max(x, params.geometry.LX_min), params.geometry.LX_max);
+            return x;
+        }
+    }
+
+    return sampleGaussianSourcePosition(params, source.mean_x, source.sigma_x, rand_2pi, rand_one);
+}
+
+void particleBC_TYP::sampleSourceVelocity(int ii, double temperature, double energy, double eta,
+                                          const params_TYP &params, ionSpecies_TYP &ION,
+                                          uniform_2Pi &rand_2pi, uniform_one &rand_one) const
+{
+    const double Ma = ION.M;
+    const double vT = sqrt(max(0.0, 2*F_E_DS*temperature/Ma));
+    const double xip = cos(eta);
+    const double U = sqrt(max(0.0, 2*F_E_DS*energy/Ma));
+    const double Ux = U*xip;
+    const double Uy = U*sqrt(max(0.0, 1 - xip*xip));
+    const double Uz = 0.0;
+
+    const double sigma_v = vT;
+    const double R_1 = sigma_v*sqrt(-log(max(rand_one(), double_zero)));
+    const double t_2 = rand_2pi();
+    const double R_3 = sigma_v*sqrt(-log(max(rand_one(), double_zero)));
+    const double t_4 = rand_2pi();
+
+    const double wx = R_3*cos(t_4);
+    const double wy = R_1*cos(t_2);
+    const double wz = R_1*sin(t_2);
+
+    const double v_par = Ux + wx;
+    const double v_y = Uy + wy;
+    const double v_z = Uz + wz;
+    const double v_per = hypot(v_y, v_z);
+
+    ION.V_p(ii,0) = v_par;
+    if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
+    {
+        ION.V_p(ii,1) = v_y;
+        ION.V_p(ii,2) = v_z;
+    }
+    else
+    {
+        ION.V_p(ii,1) = v_per;
+    }
+}
+
+void particleBC_TYP::injectParticleFromPairSource(int ii, double xBirth, double weight, double temperature,
+                                                  double energy, double eta, const params_TYP &params,
+                                                  ionSpecies_TYP &ION, uniform_2Pi &rand_2pi,
+                                                  uniform_one &rand_one) const
+{
+    ION.X_p(ii) = xBirth;
+    sampleSourceVelocity(ii, temperature, energy, eta, params, ION, rand_2pi, rand_one);
+    ION.a_p(ii) = weight;
+    ION.f5(ii) = 1;
+    ION.dE5(ii) = particleKineticEnergy(params, ION, ii);
+    ION.f1(ii) = 0;
+    ION.f2(ii) = 0;
+    ION.dE1(ii) = 0.0;
+    ION.dE2(ii) = 0.0;
+}
+
+void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS)
+{
+    if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR)
+    {
+        return;
+    }
+
+    const int ionIndex = params.pairSource.ionSpecies;
+    const int electronIndex = params.pairSource.electronSpecies;
+    if (ionIndex < 0 || electronIndex < 0 ||
+        ionIndex >= static_cast<int>(IONS.size()) ||
+        electronIndex >= static_cast<int>(IONS.size()) ||
+        IONS[ionIndex].Z <= 0.0 ||
+        IONS[electronIndex].Z >= 0.0)
+    {
+        if (params.mpi.IS_PARTICLES_ROOT)
+        {
+            cout << "PICOS++ ERROR: SW_pairSource requires valid positive-Z ion and negative-Z electron species indices." << endl;
+        }
+        MPI_Abort(params.mpi.COMM, -111);
+    }
+
+    ionSpecies_TYP &ion = IONS[ionIndex];
+    ionSpecies_TYP &electron = IONS[electronIndex];
+
+    vector<int> ionLost;
+    vector<int> electronLost;
+    ionLost.reserve(static_cast<size_t>(ion.NSP));
+    electronLost.reserve(static_cast<size_t>(electron.NSP));
+
+    for (int ii=0; ii<static_cast<int>(ion.NSP); ii++)
+    {
+        if (ion.f1(ii) == 1 || ion.f2(ii) == 1)
+        {
+            ionLost.push_back(ii);
+        }
+    }
+    for (int ii=0; ii<static_cast<int>(electron.NSP); ii++)
+    {
+        if (electron.f1(ii) == 1 || electron.f2(ii) == 1)
+        {
+            electronLost.push_back(ii);
+        }
+    }
+
+    const int localPairs = min(ionLost.size(), electronLost.size());
+    double globalPairs = static_cast<double>(localPairs);
+    MPI_Allreduce(MPI_IN_PLACE, &globalPairs, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+    const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
+    double ionWeight = ion.p_BC.a_p_new;
+    double electronWeight = electron.p_BC.a_p_new;
+    if (globalPairs > 0.0 && params.pairSource.rate > 0.0)
+    {
+        const double realIonPairsPerStep = params.pairSource.rate*params.DT;
+        ionWeight = min(realIonPairsPerStep/(max(ion.NCP, double_zero)*globalPairs), maxWeight);
+        electronWeight = min(realIonPairsPerStep*fabs(ion.Z)/(max(fabs(electron.Z), double_zero)*max(electron.NCP, double_zero)*globalPairs),
+                             maxWeight);
+    }
+
+    uniform_2Pi &rand_2pi = randoms_2pi[picos::random::thread()];
+    uniform_one &rand_one = randoms_one[picos::random::thread()];
+
+    for (int kk=0; kk<localPairs; kk++)
+    {
+        const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
+        injectParticleFromPairSource(ionLost[kk], xBirth, ionWeight,
+                                     params.pairSource.ionT, params.pairSource.ionE,
+                                     params.pairSource.ionEta, params, ion,
+                                     rand_2pi, rand_one);
+        injectParticleFromPairSource(electronLost[kk], xBirth, electronWeight,
+                                     params.pairSource.electronT, params.pairSource.electronE,
+                                     params.pairSource.electronEta, params, electron,
+                                     rand_2pi, rand_one);
+    }
+
+    for (size_t kk=localPairs; kk<ionLost.size(); kk++)
+    {
+        const int ii = ionLost[kk];
+        particleReinjection(ii, params, CS, fields, ion, rand_2pi, rand_one);
+        ion.f5(ii) = 1;
+        ion.dE5(ii) = particleKineticEnergy(params, ion, ii);
+        ion.f1(ii) = 0;
+        ion.f2(ii) = 0;
+        ion.dE1(ii) = 0.0;
+        ion.dE2(ii) = 0.0;
+    }
+
+    for (size_t kk=localPairs; kk<electronLost.size(); kk++)
+    {
+        const int ii = electronLost[kk];
+        particleReinjection(ii, params, CS, fields, electron, rand_2pi, rand_one);
+        electron.f5(ii) = 1;
+        electron.dE5(ii) = particleKineticEnergy(params, electron, ii);
+        electron.f1(ii) = 0;
+        electron.f2(ii) = 0;
+        electron.dE1(ii) = 0.0;
+        electron.dE2(ii) = 0.0;
+    }
 }
 
 // =============================================================================

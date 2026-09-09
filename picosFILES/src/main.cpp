@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
     // =========================================================================
     // Load data from input file:
     init.readInputFile(&params);
+    coll_operator.setRandomSeed(params.collisionRandomSeed);
 
     // Read "ions_properties.ion" and populate "IONS" vector
     init.readIonPropertiesFile(&params, &IONS);
@@ -155,7 +156,7 @@ int main(int argc, char* argv[])
 
     // Save 1st output:
     // =========================================================================
-    HDF.saveOutputs(&params, &IONS, &electrons, &fields, &CS, 0, 0);
+    HDF.saveOutputs(&params, &IONS, &electrons, &fields, &CS, &particleBC, 0, 0);
 
     // Start timing simulations:
     // =========================================================================
@@ -203,7 +204,7 @@ int main(int argc, char* argv[])
             PIC.interpolateFields_AllSpecies(params,IONS,fields);
 
             // Interpolate electron temperature:
-        	PIC.interpolateElectrons_AllSpecies(params,IONS,electrons);
+            PIC.interpolateElectrons_AllSpecies(params,IONS,electrons);
         }
 
         // Calculate ion moments:
@@ -257,7 +258,7 @@ int main(int argc, char* argv[])
         {
             vector<ionSpecies_TYP> IONS_OUT = IONS;
 
-            HDF.saveOutputs(&params, &IONS_OUT, &electrons, &fields, &CS, outputIterator+1, params.currentTime);
+            HDF.saveOutputs(&params, &IONS_OUT, &electrons, &fields, &CS, &particleBC, outputIterator+1, params.currentTime);
 
             outputIterator++;
         }

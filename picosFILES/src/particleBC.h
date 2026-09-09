@@ -27,9 +27,19 @@ private:
     typedef picos::random::instance<double, uniform, 0.0, 1.0> uniform_one;
     std::random_device device;
     std::vector<uniform_2Pi> randoms_2pi;
-    std::vector<uniform_one> randoms_one;
+	std::vector<uniform_one> randoms_one;
 
-    void particleReinjection(int ii, const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, ionSpecies_TYP &ION, uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	void particleReinjection(int ii, const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, ionSpecies_TYP &ION, uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	void applyPairSourceReinjection(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
+	void injectParticleFromPairSource(int ii, double xBirth, double weight, double temperature, double energy, double eta,
+	                                  const params_TYP &params, ionSpecies_TYP &ION,
+	                                  uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	double samplePairSourcePosition(const params_TYP &params, uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	double sampleGaussianSourcePosition(const params_TYP &params, double mean_x, double sigma_x,
+	                                    uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	void sampleSourceVelocity(int ii, double temperature, double energy, double eta,
+	                          const params_TYP &params, ionSpecies_TYP &ION,
+	                          uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
 
     template <size_t S>
     static void MPI_AllreduceDouble(const params_TYP &params, double *v)

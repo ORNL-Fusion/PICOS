@@ -33,6 +33,9 @@ def ensure_plotting():
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from paper_plot_style import apply_paper_figure_style
+
+    apply_paper_figure_style()
 
     return plt
 
@@ -370,6 +373,9 @@ def clone_local_picos_deck(args: argparse.Namespace, tag: str, relativistic: int
     }.items():
         input_text = replace_picos_key(input_text, key, value)
     input_text = replace_or_insert_picos_key(input_text, "IC_velocityDistributionModel", "1", "quietStart")
+    input_text = replace_or_insert_picos_key(input_text, "IC_randomSeed", "271828", "IC_velocityDistributionModel")
+    input_text = replace_or_insert_picos_key(input_text, "SW_collisionConservationProjection", "0", "CollOperType")
+    input_text = replace_or_insert_picos_key(input_text, "collisionRandomSeed", "314159", "SW_collisionConservationProjection")
     input_text, rf_count = re.subn(
         r"// (?:Ion RF operator|RF operator):\n// =+\n.*?\n(?=// Output variables:)",
         species_rf_block(source_values, one_file, simulation_time, args.rf_power),
@@ -567,9 +573,16 @@ def _plot_style(name: str) -> tuple[str, str]:
     return styles.get(name, ("tab:gray", name))
 
 
+def resolve_output_dir(args: argparse.Namespace) -> Path:
+    out_dir = Path(args.out_dir)
+    if not out_dir.is_absolute():
+        out_dir = args.picos_root / out_dir
+    return out_dir.resolve()
+
+
 def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[str, np.ndarray]], te_eV: float) -> list[Path]:
     plt = ensure_plotting()
-    out_dir = args.picos_root / "validation" / "fortran_picos_compare"
+    out_dir = resolve_output_dir(args)
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
 
@@ -578,7 +591,7 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     energy_hi = max(50.0, 1.1 * energy_hi)
     bins = np.linspace(0.0, energy_hi, 80)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(12, 7), constrained_layout=True)
     for name, data in datasets.items():
         color, label = _plot_style(name)
         selected = finite_values(data["energy_eV"])
@@ -589,13 +602,12 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     ax.set_yscale("log")
     ax.grid(True, alpha=0.25)
     ax.legend()
-    fig.tight_layout()
     path = out_dir / "ech_operator_energy_hist.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(12, 7), constrained_layout=True)
     for name, data in datasets.items():
         color, label = _plot_style(name)
         x, y = empirical_cdf(data["energy_eV"])
@@ -605,13 +617,12 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     ax.set_ylabel("cumulative fraction")
     ax.grid(True, alpha=0.25)
     ax.legend()
-    fig.tight_layout()
     path = out_dir / "ech_operator_energy_cdf.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(20, 7), sharey=True, constrained_layout=True)
     for ax, (name, data) in zip(axes, datasets.items()):
         color, label = _plot_style(name)
         ax.scatter(data["z_m"], data["energy_eV"], s=12, alpha=0.55, color=color, edgecolors="none")
@@ -620,13 +631,12 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
         ax.set_ylim(0.0, energy_hi)
         ax.grid(True, alpha=0.25)
     axes[0].set_ylabel("final electron kinetic energy [eV]")
-    fig.tight_layout()
     path = out_dir / "ech_operator_energy_vs_z.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(20, 7), sharey=True, constrained_layout=True)
     for ax, (name, data) in zip(axes, datasets.items()):
         color, label = _plot_style(name)
         ax.scatter(data["pitch"], data["energy_eV"], s=12, alpha=0.55, color=color, edgecolors="none")
@@ -636,13 +646,12 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
         ax.set_ylim(0.0, energy_hi)
         ax.grid(True, alpha=0.25)
     axes[0].set_ylabel("final electron kinetic energy [eV]")
-    fig.tight_layout()
     path = out_dir / "ech_operator_energy_vs_pitch.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(20, 7), sharex=True, sharey=True, constrained_layout=True)
     for ax, (name, data) in zip(axes, datasets.items()):
         color, label = _plot_style(name)
         ax.scatter(data["vpar_over_vt"], data["vperp_over_vt"], s=12, alpha=0.55, color=color, edgecolors="none")
@@ -658,9 +667,8 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     for ax in axes:
         ax.set_xlim(-limit, limit)
         ax.set_ylim(0.0, limit)
-    fig.tight_layout()
     path = out_dir / "ech_operator_velocity_space.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
@@ -669,7 +677,7 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     rows = [summarize_run(name, data, te_eV) for name, data in datasets.items()]
     x = np.arange(len(metrics))
     width = 0.25
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(13, 7), constrained_layout=True)
     for offset, row in zip((-width, 0.0, width), rows):
         color, label = _plot_style(row["run"])
         ax.bar(x + offset, [row[m] for m in metrics], width=width, color=color, alpha=0.85, label=label)
@@ -677,9 +685,8 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
     ax.set_ylabel("final electron kinetic energy [eV]")
     ax.grid(True, axis="y", alpha=0.25)
     ax.legend()
-    fig.tight_layout()
     path = out_dir / "ech_operator_energy_metrics.png"
-    fig.savefig(path, dpi=200)
+    fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     paths.append(path)
 
@@ -687,7 +694,7 @@ def write_validation_plots(args: argparse.Namespace, datasets: dict[str, dict[st
 
 
 def write_report(args: argparse.Namespace, rows: list[dict[str, Any]], plot_paths: list[Path] | None = None) -> None:
-    out_dir = args.picos_root / "validation" / "fortran_picos_compare"
+    out_dir = resolve_output_dir(args)
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / "fortran_picos_short_compare.csv"
     md_path = out_dir / "fortran_picos_short_compare.md"
@@ -971,6 +978,7 @@ def main() -> int:
     parser.add_argument("--setup", action="store_true")
     parser.add_argument("--compare", action="store_true")
     parser.add_argument("--assert-validation", action="store_true", help="Return nonzero if quantitative validation checks fail.")
+    parser.add_argument("--out-dir", type=Path, default=Path("validation/fortran_picos_compare"), help="Directory for comparison CSV, Markdown, and plots. Relative paths are resolved under the PICOS root.")
     args = parser.parse_args()
 
     args.picos_root = args.picos_root.resolve()

@@ -1,4 +1,5 @@
 #include "outputHDF5.h"
+#include "particleBC.h"
 
 // Function to save a single integer value
 void HDF_TYP::saveToHDF5(H5File * file, string name, int * value)
@@ -71,7 +72,7 @@ void HDF_TYP::saveToHDF5(H5File * file, string name, std::vector<int> * values)
 	unsigned long long int size = (unsigned long long int)values->size();
 
 	int * data;
-   	data = new int[size];
+       data = new int[size];
         std::copy(values->begin(), values->end(), data);
 
 	hsize_t dims[1] = {size};
@@ -92,7 +93,7 @@ void HDF_TYP::saveToHDF5(H5File * file, string name, std::vector<CPP_TYPE> * val
 	unsigned long long int size = (unsigned long long int)values->size();
 
 	CPP_TYPE * data;
-   	data = new CPP_TYPE[size];
+       data = new CPP_TYPE[size];
     std::copy(values->begin(), values->end(), data);
 
 	hsize_t dims[1] = {size};
@@ -650,26 +651,26 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
       // =============================================
       catch( FileIException error )
       {
-            	error.printErrorStack();
+                error.printErrorStack();
       }
 
       // catch failure caused by the DataSet operations:
       // ===============================================
       catch( DataSetIException error )
       {
-            	error.printErrorStack();
+                error.printErrorStack();
       }
 
       // catch failure caused by the DataSpace operations:
       // ================================================
       catch( DataSpaceIException error )
       {
-            	error.printErrorStack();
+                error.printErrorStack();
       }
     } // MPI-0
 }
 
-void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS, const int it, double totalTime)
+void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS, const particleBC_TYP * particleBC, const int it, double totalTime)
 {
 
 	try
@@ -727,8 +728,8 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 		{
 			saveIonsVariables(params, IONS, electrons, CS, group_iteration);
 
-			if (params->SW.RFheating == 1)
-			{
+				if (params->SW.RFheating == 1)
+				{
 				Group * group_rf = new Group( group_iteration->createGroup( "rf" ) );
 				auto saveRfBlock = [this, &name, &cpp_type_value, CS](Group * parent, const string& groupName, const RF_SPECIES_TYP& rf)
 				{
@@ -755,9 +756,26 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 				saveRfBlock(group_rf, "ion", params->RF.ions);
 				saveRfBlock(group_rf, "electron", params->RF.electrons);
 
-				delete group_rf;
+					delete group_rf;
+				}
+
+				Group * group_boundary = new Group( group_iteration->createGroup( "boundary" ) );
+				auto saveBoundaryScalar = [this, &name, &cpp_type_value, CS, group_boundary](const string& fieldName, double value, double scale)
+				{
+					name = fieldName;
+					cpp_type_value = (CPP_TYPE)(value*scale);
+					saveToHDF5(group_boundary, name, &cpp_type_value);
+					name.clear();
+				};
+
+				saveBoundaryScalar("N1", particleBC->dot_.N1, 1.0/CS->time);
+				saveBoundaryScalar("N2", particleBC->dot_.N2, 1.0/CS->time);
+				saveBoundaryScalar("N5", particleBC->dot_.N5, 1.0/CS->time);
+				saveBoundaryScalar("E1", particleBC->dot_.E1, CS->energy/CS->time);
+				saveBoundaryScalar("E2", particleBC->dot_.E2, CS->energy/CS->time);
+				saveBoundaryScalar("E5", particleBC->dot_.E5, CS->energy/CS->time);
+				delete group_boundary;
 			}
-		}
 		else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
 		{
 			saveFieldsVariables(params, fields, CS, group_iteration);

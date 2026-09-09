@@ -122,6 +122,7 @@ def build_input_text(
 mpisForFields               {args.mpis_for_fields}
 quietStart                  {args.quiet_start}
 IC_velocityDistributionModel {args.velocity_distribution_model}
+IC_randomSeed              -1
 numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       {args.advance_particle_method}
@@ -145,9 +146,13 @@ SW_EfieldSolve              {sw_e}
 SW_fieldSolveModel          {field_model}
 SW_BfieldSolve              0
 SW_Collisions               {int(args.collisions)}
+CollOperType                2
+SW_collisionConservationProjection 0
+collisionRandomSeed        -1
 SW_RFheating                {rf_on}
 SW_RFheatingIons            {args.rf_heat_ions}
 SW_RFheatingElectrons       {args.rf_heat_electrons}
+SW_pairSource               0
 SW_relativisticElectrons    {args.relativistic_electrons}
 SW_advancePos               1
 SW_linearSolve              0
@@ -179,6 +184,24 @@ IC_ne                       {float(metadata['ne0']):.16e}
 IC_Te                       {float(metadata['Te0']):.16e}
 IC_Te_NX                    {profile_points}
 IC_Te_fileName              {one_file}
+
+// Coupled electron-ion source:
+// =============================================================================
+pairSource_ionSpecies       1
+pairSource_electronSpecies  2
+pairSource_rate             0.0
+pairSource_mean_x           {float(metadata['BC_zp_mean']):.16e}
+pairSource_sigma_x          {float(metadata['BC_zp_std']):.16e}
+pairSource_Ti_birth         {float(metadata['Ti0']):.16e}
+pairSource_Te_birth         {float(metadata['Te0']):.16e}
+pairSource_Ei_birth         0
+pairSource_Ee_birth         0
+pairSource_eta_i            0
+pairSource_eta_e            0
+pairSource_positionMode     0
+pairSource_fileName         {one_file}
+pairSource_NS               {profile_points}
+pairSource_maxParticleWeight 1000
 
 // Ion RF operator:
 // =============================================================================

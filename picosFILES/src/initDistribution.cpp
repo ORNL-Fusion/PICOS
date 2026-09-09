@@ -1,5 +1,15 @@
 #include "initDistribution.h"
 
+namespace
+{
+std::uint_fast64_t initialConditionSeed(const params_TYP *params, const int speciesIndex)
+{
+    return static_cast<std::uint_fast64_t>(params->initialConditionRandomSeed)
+        + 104729ULL*static_cast<std::uint_fast64_t>(speciesIndex + 1)
+        + 4099ULL*static_cast<std::uint_fast64_t>(params->mpi.MPI_DOMAIN_NUMBER + 1);
+}
+}
+
 initDist_TYP::initDist_TYP(const params_TYP * params)
 {
 
@@ -7,10 +17,17 @@ initDist_TYP::initDist_TYP(const params_TYP * params)
 
 
 //This function creates a Maxwellian velocity distribution for IONS with a homogeneous spatial distribution.
-void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS)
+void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS, const int speciesIndex)
 {
     // Uniformely distribute positions along domain:
-    arma_rng::set_seed_random();
+    if (params->initialConditionRandomSeed >= 0)
+    {
+        arma_rng::set_seed(initialConditionSeed(params, speciesIndex));
+    }
+    else
+    {
+        arma_rng::set_seed_random();
+    }
     IONS->X_p = params->geometry.LX_min + randu<vec>(IONS->NSP)*(params->geometry.LX_max - params->geometry.LX_min);
 
     // Maxwellian distribution for the velocity using Box-Muller:
@@ -104,7 +121,7 @@ double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, d
 }
 
 
-void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS)
+void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS, const int speciesIndex)
 {
     // Initialize ion variables:
     // =========================
@@ -127,7 +144,11 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
 
     // Seed the random number generator:
     // ================================
-    std::default_random_engine generator( (params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000 );
+    std::default_random_engine generator(
+        params->initialConditionRandomSeed >= 0
+        ? initialConditionSeed(params, speciesIndex)
+        : static_cast<std::uint_fast64_t>((params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000)
+    );
 
     // Create uniform random number generator in [0,1]:
     // ================================================

@@ -20,6 +20,8 @@ using namespace H5;
 using namespace std;
 using namespace arma;
 
+class particleBC_TYP;
+
 class HDF_TYP
 {
 
@@ -71,7 +73,7 @@ public:
 
 	HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS);
 
-	void saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS, const int it, double totalTime);
+	void saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP> * IONS, electrons_TYP * electrons, fields_TYP * fields, const CS_TYP * CS, const particleBC_TYP * particleBC, const int it, double totalTime);
 };
 
 #endif

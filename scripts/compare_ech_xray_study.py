@@ -231,11 +231,14 @@ def write_plots(out_dir: Path, rows: list[dict[str, Any]], arrays_by_case: dict[
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from matplotlib.colors import LogNorm
+        from paper_plot_style import apply_paper_figure_style
+
+        apply_paper_figure_style()
     except Exception as exc:  # pragma: no cover - optional plotting dependency
         print(f"Skipping plots because matplotlib is unavailable: {exc}")
         return
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(12, 7), constrained_layout=True)
     for row in rows:
         case = row["case"]
         energy = arrays_by_case[case]["final_energy_eV"]
@@ -249,8 +252,7 @@ def write_plots(out_dir: Path, rows: list[dict[str, Any]], arrays_by_case: dict[
     ax.set_yscale("log")
     ax.grid(True, alpha=0.25)
     ax.legend()
-    fig.tight_layout()
-    fig.savefig(out_dir / "ech_xray_final_energy_hist.png", dpi=200)
+    fig.savefig(out_dir / "ech_xray_final_energy_hist.png", dpi=200, bbox_inches="tight")
     plt.close(fig)
 
     heated_cases = [row["case"] for row in rows if row["heated"]]
@@ -260,15 +262,14 @@ def write_plots(out_dir: Path, rows: list[dict[str, Any]], arrays_by_case: dict[
         z = arrays_by_case[case]["final_z_m"]
         selected = np.isfinite(energy) & np.isfinite(z) & (energy >= 0.0) & (energy <= clip_eV)
         if np.count_nonzero(selected) > 0:
-            fig, ax = plt.subplots(figsize=(8, 5))
+            fig, ax = plt.subplots(figsize=(12, 7), constrained_layout=True)
             upper = min(clip_eV, max(50.0, float(np.percentile(energy[selected], 99.5))))
             image = ax.hist2d(z[selected], energy[selected], bins=(120, 120), range=[[np.min(z[selected]), np.max(z[selected])], [0.0, upper]], norm=LogNorm())
             ax.set_xlabel("z [m]")
             ax.set_ylabel("Final electron energy [eV]")
             ax.set_title(f"{case}: final EEDF versus z")
             fig.colorbar(image[3], ax=ax, label="particles/bin")
-            fig.tight_layout()
-            fig.savefig(out_dir / "ech_xray_energy_vs_z.png", dpi=200)
+            fig.savefig(out_dir / "ech_xray_energy_vs_z.png", dpi=200, bbox_inches="tight")
             plt.close(fig)
 
 

@@ -18,3 +18,13 @@ picosFILES/*.csv
 ARMADILLO
 BOOST_MATH
 build
+build*/
+paper_picospp_kinetic_electron_pop/
+paper_picospp_kinetic_electron_pop.zip
+validation/collision_operator_analytic/
+validation/collision_operator_picos_runs/
+validation/field_source_analytic/
+validation/mpex_scenario14_ex8_wellmin_*/
+validation/mpex_scenario14_genray70_*/
+validation/mpex_scenario14_genray70_k_coupling_notes.md
+validation/mpex_scenario14_triplet_picos_fortran/

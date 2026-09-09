@@ -441,7 +441,7 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
         double maxParticleEnergy = rf.maxParticleEnergy;
         double maxVelocityFractionC = rf.maxVelocityFractionC;
 
-        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution, maxEnergyGainFraction, maxParticleEnergy, maxVelocityFractionC) firstprivate(generator, relativistic)
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution, maxEnergyGainFraction, maxParticleEnergy, maxVelocityFractionC, F_C_DS) firstprivate(generator, relativistic)
         {
             #pragma omp for
             for(int ii=0; ii<NSP; ii++)

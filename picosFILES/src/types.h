@@ -37,6 +37,10 @@ using namespace std;
 #define RF_RESONANCE_FORTRAN_WINDOW 1
 #define VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN 0
 #define VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP 1
+#define COLLISION_OPERATOR_BOOZER 1
+#define COLLISION_OPERATOR_BOOZER_KIM 2
+#define PAIR_SOURCE_GAUSSIAN 0
+#define PAIR_SOURCE_PROFILE 1
 
 #define float_zero 1E-7
 #define double_zero 1E-15
@@ -463,7 +467,9 @@ struct SW_TYP
 	int fieldSolveModel;
 	int BfieldSolve;
 	int Collisions;
+	int collisionConservationProjection;
 	int RFheating;
+	int pairSource;
 	int relativisticElectrons;
 	int linearSolve;
 	int advancePos;
@@ -474,13 +480,56 @@ struct SW_TYP
 		fieldSolveModel = FIELD_SOLVE_OHM;
 		BfieldSolve   = 0;
 		Collisions    = 0;
+		collisionConservationProjection = 0;
 		RFheating     = 0;
+		pairSource    = 0;
 		relativisticElectrons = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
 	}
 
-};
+	};
+
+	//  Define structure to store coupled electron-ion source parameters:
+	// =============================================================================
+	struct pairSource_TYP
+	{
+		int ionSpecies;
+		int electronSpecies;
+		int positionMode;
+		int profile_NS;
+		double rate;
+		double mean_x;
+		double sigma_x;
+		double ionT;
+		double electronT;
+		double ionE;
+		double electronE;
+		double ionEta;
+		double electronEta;
+		double maxParticleWeight;
+		string profile_fileName;
+		arma::vec profile;
+		arma::vec x_profile;
+
+		pairSource_TYP()
+		{
+			ionSpecies = -1;
+			electronSpecies = -1;
+			positionMode = PAIR_SOURCE_GAUSSIAN;
+			profile_NS = 0;
+			rate = 0.0;
+			mean_x = 0.0;
+			sigma_x = 0.0;
+			ionT = 0.0;
+			electronT = 0.0;
+			ionE = 0.0;
+			electronE = 0.0;
+			ionEta = 0.0;
+			electronEta = 0.0;
+			maxParticleWeight = 1000.0;
+		}
+	};
 
 //  Define structure to hold MPI parameters:
 // =============================================================================
@@ -734,6 +783,7 @@ struct params_TYP
 	// Flag for using a quiet start
 	bool quietStart;
 	int velocityDistributionModel;
+	int initialConditionRandomSeed;
 
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation
@@ -778,6 +828,13 @@ struct params_TYP
 
 	// RF operator conditions:
 	RF_TYP RF;
+
+	// Coupled electron-ion source conditions:
+	pairSource_TYP pairSource;
+
+	// Collision operator selection:
+	int collOperType;
+	int collisionRandomSeed;
 
 	int filtersPerIterationFields;
 	int filtersPerIterationIons;

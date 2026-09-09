@@ -472,6 +472,20 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->mesh.DX /= CS->length;
 	params->mesh.LX /= CS->length;
 
+	// Coupled pair source:
+	// --------------------
+	params->pairSource.rate *= CS->time;
+	params->pairSource.mean_x /= CS->length;
+	params->pairSource.sigma_x /= CS->length;
+	params->pairSource.ionT /= CS->temperature;
+	params->pairSource.electronT /= CS->temperature;
+	params->pairSource.ionE /= CS->temperature;
+	params->pairSource.electronE /= CS->temperature;
+	if (!params->pairSource.x_profile.empty())
+	{
+		params->pairSource.x_profile /= CS->length;
+	}
+
     // RF parameters:
     // -------------
     params->RF.Prf  /= CS->energy/CS->time;
@@ -538,7 +552,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
         IONS->at(ii).SkinDepth /= CS->length;
 
 		if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
-    	{
+        {
             IONS->at(ii).X_p = IONS->at(ii).X_p/CS->length;
             IONS->at(ii).V_p = IONS->at(ii).V_p/CS->velocity;
 		}

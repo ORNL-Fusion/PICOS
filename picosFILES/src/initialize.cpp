@@ -52,8 +52,8 @@ map<string,string> init_TYP::readTextFile(string * inputFile)
     {
         MPI_Barrier(MPI_COMM_WORLD);
 
-    	cerr << "PRO++ ERROR: The input file couldn't be opened." << endl;
-    	MPI_Abort(MPI_COMM_WORLD, -101);
+        cerr << "PRO++ ERROR: The input file couldn't be opened." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -101);
     }
 
     // Parse through file:
@@ -242,6 +242,7 @@ void init_TYP::readInputFile(params_TYP * params)
         params->quietStart = false;
     }
     params->velocityDistributionModel = getInt("IC_velocityDistributionModel", VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN);
+    params->initialConditionRandomSeed = getInt("IC_randomSeed", -1);
     if (params->velocityDistributionModel != VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN &&
         params->velocityDistributionModel != VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP)
     {
@@ -276,12 +277,22 @@ void init_TYP::readInputFile(params_TYP * params)
         cout << "ERROR: unsupported SW_fieldSolveModel " << params->SW.fieldSolveModel << endl;
         MPI_Abort(MPI_COMM_WORLD,-104);
     }
-    params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
-    params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
-    params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
-    params->SW.relativisticElectrons = getInt("SW_relativisticElectrons", 0);
-    params->SW.advancePos    = stoi( parametersStringMap["SW_advancePos"] );
-    params->SW.linearSolve   = stoi( parametersStringMap["SW_linearSolve"] );
+	params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
+	params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
+	params->SW.collisionConservationProjection = getInt("SW_collisionConservationProjection", 0);
+	params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
+	params->SW.pairSource    = getInt("SW_pairSource", 0);
+	params->SW.relativisticElectrons = getInt("SW_relativisticElectrons", 0);
+	params->SW.advancePos    = stoi( parametersStringMap["SW_advancePos"] );
+	params->SW.linearSolve   = stoi( parametersStringMap["SW_linearSolve"] );
+	params->collOperType = getInt("CollOperType", COLLISION_OPERATOR_BOOZER_KIM);
+	params->collisionRandomSeed = getInt("collisionRandomSeed", -1);
+	if (params->collOperType != COLLISION_OPERATOR_BOOZER &&
+	    params->collOperType != COLLISION_OPERATOR_BOOZER_KIM)
+	{
+		cout << "ERROR: unsupported CollOperType " << params->collOperType << endl;
+		MPI_Abort(MPI_COMM_WORLD,-105);
+	}
 
     // Magnetic field initial conditions:
     // -------------------------------------------------------------------------
@@ -311,8 +322,32 @@ void init_TYP::readInputFile(params_TYP * params)
     // -------------------------------------------------------------------------
     params->f_IC.ne          = stod( parametersStringMap["IC_ne"] );
     params->f_IC.Te          = stod( parametersStringMap["IC_Te"] )*F_E/F_KB; // Te in eV in input file
-    params->f_IC.Te_NX       = getInt("IC_Te_NX", params->em_IC.BX_NX);
-    params->f_IC.Te_fileName = getString("IC_Te_fileName", "ProtoMPEX_Te_norm_PICOS_c.txt");
+	params->f_IC.Te_NX       = getInt("IC_Te_NX", params->em_IC.BX_NX);
+	params->f_IC.Te_fileName = getString("IC_Te_fileName", "ProtoMPEX_Te_norm_PICOS_c.txt");
+
+	// Coupled electron-ion pair source. Species ids are one-based in input files.
+	// -------------------------------------------------------------------------
+	params->pairSource.ionSpecies = getInt("pairSource_ionSpecies", 1) - 1;
+	params->pairSource.electronSpecies = getInt("pairSource_electronSpecies", 2) - 1;
+	params->pairSource.rate = getDouble("pairSource_rate", 0.0);
+	params->pairSource.mean_x = getDouble("pairSource_mean_x", 0.0);
+	params->pairSource.sigma_x = getDouble("pairSource_sigma_x", 0.0);
+	params->pairSource.ionT = getDouble("pairSource_Ti_birth", params->CV.Tper*F_KB/F_E)*F_E/F_KB;
+	params->pairSource.electronT = getDouble("pairSource_Te_birth", params->CV.Te*F_KB/F_E)*F_E/F_KB;
+	params->pairSource.ionE = getDouble("pairSource_Ei_birth", 0.0)*F_E/F_KB;
+	params->pairSource.electronE = getDouble("pairSource_Ee_birth", 0.0)*F_E/F_KB;
+	params->pairSource.ionEta = getDouble("pairSource_eta_i", 0.0);
+	params->pairSource.electronEta = getDouble("pairSource_eta_e", 0.0);
+	params->pairSource.positionMode = getInt("pairSource_positionMode", PAIR_SOURCE_GAUSSIAN);
+	params->pairSource.profile_fileName = getString("pairSource_fileName", "");
+	params->pairSource.profile_NS = getInt("pairSource_NS", 0);
+	params->pairSource.maxParticleWeight = getDouble("pairSource_maxParticleWeight", 1000.0);
+	if (params->pairSource.positionMode != PAIR_SOURCE_GAUSSIAN &&
+	    params->pairSource.positionMode != PAIR_SOURCE_PROFILE)
+	{
+		cout << "ERROR: unsupported pairSource_positionMode " << params->pairSource.positionMode << endl;
+		MPI_Abort(MPI_COMM_WORLD,-105);
+	}
 
     // RF parameters. Legacy RF_* keys are defaults for species-specific
     // RF_ion_* and RF_electron_* blocks.
@@ -394,8 +429,8 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * LOADING ION PARAMETERS * * * * * * * * * * * * * * * * * *\n";
-    	cout << "+ Number of ion species: " << params->numberOfParticleSpecies << endl;
-    	cout << "+ Number of tracer species: " << params->numberOfTracerSpecies << endl;
+        cout << "+ Number of ion species: " << params->numberOfParticleSpecies << endl;
+        cout << "+ Number of tracer species: " << params->numberOfTracerSpecies << endl;
     }
 
     // Assemble path to "ion_properties.ion":
@@ -403,12 +438,12 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
     string name;
     if(params->argc > 3)
     {
-    	string argv(params->argv[3]);
-    	name = "inputFiles/ions_properties_" + argv + ".ion";
+        string argv(params->argv[3]);
+        name = "inputFiles/ions_properties_" + argv + ".ion";
     }
     else
     {
-    	name = "inputFiles/ions_properties.ion";
+        name = "inputFiles/ions_properties.ion";
     }
 
     // Read data from "ion_properties.ion" into "parametersMap":
@@ -605,10 +640,10 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
 
     // Get Ion initial condition profiles:
     // ==============================
-    for(int ss=0;ss<IONS->size();ss++)
-    {
-        // Assemble  external filenames:
-        // =============================
+	    for(int ss=0;ss<IONS->size();ss++)
+	    {
+	        // Assemble  external filenames:
+	        // =============================
         std::string fileName2 = inputPath + IONS->at(ss).p_IC.Tper_fileName;
         std::string fileName3 = inputPath + IONS->at(ss).p_IC.Tpar_fileName;
         std::string fileName4 = inputPath + IONS->at(ss).p_IC.densityFraction_fileName;
@@ -627,11 +662,23 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
 
         // Axial coordinate:
         // =================
-        int Tper_NX = IONS->at(ss).p_IC.Tper_NX;
-        IONS->at(ss).p_IC.x_profile = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
-    }
+	        int Tper_NX = IONS->at(ss).p_IC.Tper_NX;
+	        IONS->at(ss).p_IC.x_profile = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
+	    }
 
-    // Print to terminal:
+	    if (params->SW.pairSource == 1 &&
+	        params->pairSource.positionMode == PAIR_SOURCE_PROFILE &&
+	        params->pairSource.profile_NS > 0 &&
+	        !params->pairSource.profile_fileName.empty())
+	    {
+	        std::string pairSourceFile = inputPath + params->pairSource.profile_fileName;
+	        params->pairSource.profile.load(pairSourceFile);
+	        params->pairSource.x_profile = linspace(params->geometry.LX_min,
+	                                                params->geometry.LX_max,
+	                                                params->pairSource.profile.n_elem);
+	    }
+
+	    // Print to terminal:
     // ==================
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
@@ -859,8 +906,8 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     {
         cout << "+ Fraction of cell resolved: " << params->dp << endl;
         cout << "+ Number of mesh nodes along x-axis: " << params->mesh.NX_IN_SIM << endl;
-    	cout << "+ Size of simulation domain along the x-axis: " << params->mesh.LX << " m" << endl;
-    	cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
+        cout << "+ Size of simulation domain along the x-axis: " << params->mesh.LX << " m" << endl;
+        cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
     }
 }
 
@@ -1024,11 +1071,11 @@ void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fiel
                 {
                     if (params->quietStart)
                     {
-                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ss));
+                        initDist.uniform_maxwellianDistribution(params, &IONS->at(ss), ss);
                     }
                     else
                     {
-                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ss));
+                        initDist.nonuniform_maxwellianDistribution(params, &IONS->at(ss), ss);
                     }
                     break;
                 }
@@ -1187,7 +1234,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
         yt = BX;
         interp1(xt,yt,xq,yq);
         fields->BX_m = yq;
-    
+
         // dBX profile:
         // ===========
         arma::vec dBX(BX_NX,1);

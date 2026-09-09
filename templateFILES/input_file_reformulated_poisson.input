@@ -2,13 +2,20 @@
 // Model notes:
 // - Purpose: fully kinetic ion/electron electrostatic template using the reformulated Poisson equation.
 // - Particles: 1D-2V guiding-center D+ ions plus kinetic electrons.
+// - IC_randomSeed >= 0 makes initial particle loading reproducible; -1 uses randomized loading.
 // - Field: SW_fieldSolveModel=2 advances E_x from d(S_i-S_e)/dx and reconstructs Phi_m for diagnostics.
 // - Heating: RF/ECH parameters are split into RF_ion_* and RF_electron_* blocks.
+// - Source: SW_pairSource=1 couples D+ and electron births at the same source position.
 // Field solver model legend:
 // - 0 = Ohm-law hybrid, 1 = charge-density Poisson, 2 = reformulated Poisson stress-moment E-field update.
+// Collision operator legend:
+// - CollOperType=1 Boozer energy operator, 2 Boozer-Kim mass-term corrected operator.
+// - SW_collisionConservationProjection=1 applies a closed-system momentum/energy projection after collisions.
+// - collisionRandomSeed >= 0 makes collision Monte-Carlo reproducible; -1 uses std::random_device.
 // =============================================================================
 mpisForFields               2
 quietStart                  1
+IC_randomSeed              -1
 numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       1
@@ -32,9 +39,13 @@ SW_EfieldSolve              1
 SW_fieldSolveModel          2
 SW_BfieldSolve              0
 SW_Collisions               0
+CollOperType                2
+SW_collisionConservationProjection 0
+collisionRandomSeed        -1
 SW_RFheating                1
 SW_RFheatingIons            0
 SW_RFheatingElectrons       1
+SW_pairSource               0
 SW_relativisticElectrons    1
 SW_advancePos               1
 SW_linearSolve              0
@@ -68,6 +79,24 @@ IC_ne                       1.0E14
 IC_Te                       5
 IC_Te_NX                    200
 IC_Te_fileName              ProtoMPEX_Te_norm_PICOS_c.txt
+
+// Coupled electron-ion source:
+// =============================================================================
+pairSource_ionSpecies       1
+pairSource_electronSpecies  2
+pairSource_rate             0.0
+pairSource_mean_x           0.0
+pairSource_sigma_x          0.01
+pairSource_Ti_birth         5
+pairSource_Te_birth         5
+pairSource_Ei_birth         0
+pairSource_Ee_birth         0
+pairSource_eta_i            0
+pairSource_eta_e            0
+pairSource_positionMode     0
+pairSource_fileName         G_profile.txt
+pairSource_NS               200
+pairSource_maxParticleWeight 1000
 
 // Ion RF operator:
 // =============================================================================

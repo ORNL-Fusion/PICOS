@@ -259,12 +259,15 @@ def plot_profiles(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from paper_plot_style import apply_paper_figure_style
+
+    apply_paper_figure_style()
 
     out_dir.mkdir(parents=True, exist_ok=True)
     x_m = run.x_m
     time_slice = _select_time_window(times.size, last)
     n_cols = 2
-    fig, axes = plt.subplots(3, n_cols, figsize=(12, 11), sharex=True)
+    fig, axes = plt.subplots(3, n_cols, figsize=(18, 14), sharex=True, constrained_layout=True)
     axes = axes.ravel()
 
     if "BX_m" in fields:
@@ -300,17 +303,17 @@ def plot_profiles(
     axes[2].set_ylabel("n [m^-3]")
     axes[2].set_title("Density")
     axes[2].grid(True, alpha=0.25)
-    axes[2].legend(fontsize=8)
+    axes[2].legend(fontsize=24)
 
     axes[3].set_ylabel("T [eV]")
     axes[3].set_title("Parallel/perpendicular temperature")
     axes[3].grid(True, alpha=0.25)
-    axes[3].legend(fontsize=8)
+    axes[3].legend(fontsize=24)
 
     axes[4].set_ylabel("u_parallel [m/s]")
     axes[4].set_title("Parallel flow")
     axes[4].grid(True, alpha=0.25)
-    axes[4].legend(fontsize=8)
+    axes[4].legend(fontsize=24)
 
     if "Phi_m" in fields:
         phi = rolling_mean(_nanmean(fields["Phi_m"][:, time_slice], axis=1), smooth, axis=0)
@@ -322,10 +325,9 @@ def plot_profiles(
     for ax in axes[-2:]:
         ax.set_xlabel("x [m]")
 
-    fig.suptitle(f"PICOS ECH/ICH profiles: {_run_label(run)}", fontsize=14)
-    fig.tight_layout()
+    fig.suptitle("PICOS ECH/ICH Profiles", fontsize=42)
     path = out_dir / "ech_ich_profiles.png"
-    fig.savefig(path, dpi=180)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -341,10 +343,13 @@ def plot_time_traces(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from paper_plot_style import apply_paper_figure_style
+
+    apply_paper_figure_style()
 
     x_m = run.x_m
     mask_x = _mesh_mask(x_m, x_window)
-    fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True, constrained_layout=True)
 
     for species in species_list:
         mesh = read_species_mesh_series(run.hdf5_dir, species, ("n_m", "Tpar_m", "Tper_m"), steps=run.steps)
@@ -361,11 +366,10 @@ def plot_time_traces(
     axes[2].set_xlabel("time [s]")
     for ax in axes:
         ax.grid(True, alpha=0.25)
-        ax.legend(fontsize=8)
-    fig.suptitle(f"PICOS ECH/ICH time traces: {_run_label(run)}", fontsize=14)
-    fig.tight_layout()
+        ax.legend(fontsize=24)
+    fig.suptitle("PICOS ECH/ICH Time Traces", fontsize=42)
     path = out_dir / "ech_ich_time_traces.png"
-    fig.savefig(path, dpi=180)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -383,6 +387,9 @@ def plot_force_balance(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from paper_plot_style import apply_paper_figure_style
+
+    apply_paper_figure_style()
 
     mesh = read_species_mesh_series(run.hdf5_dir, species, ("n_m", "Tpar_m", "Tper_m", "u_m"), steps=run.steps)
     if not all(key in mesh for key in ("n_m", "Tpar_m", "Tper_m", "u_m")) or "BX_m" not in fields:
@@ -411,19 +418,18 @@ def plot_force_balance(
     f_par = rolling_mean(_nanmean(f_par[:, time_slice], axis=1), smooth, axis=0)
     f_mag = rolling_mean(_nanmean(f_mag[:, time_slice], axis=1), smooth, axis=0)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(14, 7), constrained_layout=True)
     ax.plot(x_m, f_ke_x, "k", lw=1.8, label="kinetic-gradient")
     ax.plot(x_m, f_par, "tab:blue", lw=1.8, label="parallel pressure")
     ax.plot(x_m, f_mag, "tab:red", lw=1.8, label="mirror")
     ax.axhline(0.0, color="0.35", lw=0.8)
     ax.set_xlabel("x [m]")
     ax.set_ylabel("force density [N m^-3]")
-    ax.set_title(f"Force balance terms: {_run_label(run)} {species}")
+    ax.set_title(f"Force Balance: {species}")
     ax.grid(True, alpha=0.25)
     ax.legend()
-    fig.tight_layout()
     path = out_dir / f"force_balance_{species}.png"
-    fig.savefig(path, dpi=180)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
     return path
 
@@ -442,6 +448,9 @@ def plot_velocity_space(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from paper_plot_style import apply_paper_figure_style
+
+    apply_paper_figure_style()
 
     state = read_species_particle_state(
         run.hdf5_dir,
@@ -503,7 +512,7 @@ def plot_velocity_space(
     y_centers = vperp_centers / v_ref
     floor = 1.0e-300
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7), sharex=True, sharey=True, constrained_layout=True)
     im0 = axes[0].pcolormesh(
         x_centers,
         y_centers,
@@ -531,10 +540,9 @@ def plot_velocity_space(
         ax.grid(False)
         ax.set_aspect("auto")
 
-    fig.suptitle(f"Velocity-space diagnostic: {_run_label(run)} {species} step {step}", fontsize=13)
-    fig.tight_layout()
+    fig.suptitle(f"Velocity-Space Diagnostic: {species}", fontsize=39)
     path = out_dir / f"velocity_space_{species}_step{step}.png"
-    fig.savefig(path, dpi=180)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
     return path
 
