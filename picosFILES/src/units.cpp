@@ -256,10 +256,14 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	double DT_electronPlasma(std::numeric_limits<double>::infinity());
 	bool CFL_particles(false);
 	bool hasKineticElectrons(false);
+	const bool fullOrbitParticlePush = (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT);
+	const bool useElectronGyroTimeScale = fullOrbitParticlePush;
+	const bool useElectronPlasmaTimeScale = (params->SW.EfieldSolve == 1);
 
 	// Time-scale limiter. For the hybrid model this is the main ion gyro
-	// period. If a kinetic electron species is present, it also includes the
-	// electron gyro period and electron plasma period for Poisson readiness.
+	// period. Guiding-center kinetic electrons do not require resolving the
+	// electron gyroperiod; Poisson/electrostatic runs can optionally be limited
+	// by the electron plasma time.
 	DT_particleTimeScale = params->DTc*params->ionGyroPeriod;
 	DT = DT_particleTimeScale;
 
@@ -278,12 +282,13 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 
 	        particlesMaxVel = std::max(particlesMaxVel, speciesMaxVel);
 
-	        if (IONS->at(ss).GyroPeriod > 0.0)
+	        const bool speciesIsKineticElectron = (IONS->at(ss).Z < 0.0);
+	        if (IONS->at(ss).GyroPeriod > 0.0 && (!speciesIsKineticElectron || useElectronGyroTimeScale))
 	        {
 	            fastestGyroPeriod = std::min(fastestGyroPeriod, IONS->at(ss).GyroPeriod);
 	        }
 
-	        if (IONS->at(ss).Z < 0.0)
+	        if (speciesIsKineticElectron)
 	        {
 	            hasKineticElectrons = true;
 	            electronMaxVel = std::max(electronMaxVel, speciesMaxVel);
@@ -308,7 +313,7 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	    }
 
 	    DT_particleTimeScale = params->DTc*fastestGyroPeriod;
-	    if (hasKineticElectrons && std::isfinite(electronPlasmaTime))
+	    if (hasKineticElectrons && useElectronPlasmaTimeScale && std::isfinite(electronPlasmaTime))
 	    {
 	        DT_particleTimeScale = std::min(DT_particleTimeScale, params->DTc*electronPlasmaTime);
 	    }
@@ -384,6 +389,8 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
                 cout << "+ Time step defined by CFL condition for electrons: " << scientific << DT_CFL_electrons << fixed << endl;
                 cout << "+ Time step defined by electron gyro period: " << scientific << DT_electronGyro << fixed << endl;
                 cout << "+ Time step defined by electron plasma time: " << scientific << DT_electronPlasma << fixed << endl;
+                cout << "+ Electron gyro time-scale limiter active: " << (useElectronGyroTimeScale ? "YES" : "NO") << endl;
+                cout << "+ Electron plasma time-scale limiter active: " << (useElectronPlasmaTimeScale ? "YES" : "NO") << endl;
             }
             else
             {
