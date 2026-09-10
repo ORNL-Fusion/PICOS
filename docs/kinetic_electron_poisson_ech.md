@@ -11,9 +11,16 @@ SW_EfieldSolve              1
 SW_fieldSolveModel          0   // original quasi-neutral Ohm-law hybrid solve
 SW_fieldSolveModel          1   // electrostatic Poisson solve from kinetic charge density
 SW_fieldSolveModel          2   // reformulated Poisson electric-field update from kinetic stress moments
+SW_electronGyroTimeStepLimiter   0/1
+SW_electronPlasmaTimeStepLimiter 0/1
 ```
 
 `SW_fieldSolveModel` is optional. If it is absent, PICOS uses the original Ohm-law model.
+The electron gyro timestep limiter defaults on only for full-orbit particle pushing.
+The electron plasma-period limiter defaults on for the standard kinetic Poisson solve
+and off for the reformulated Poisson model, which advances the stiff plasma-frequency
+response implicitly. Turn the plasma limiter on for conservative short validation runs,
+and leave it off for long 1D-2V guiding-center reformulated-Poisson transport scans.
 
 For Poisson runs, the optional voltage boundary values are:
 

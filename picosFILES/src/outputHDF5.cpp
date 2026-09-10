@@ -296,6 +296,14 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(outputFile, name, &params->SW.relativisticElectrons);
         name.clear();
 
+        name = "electronGyroTimeStepLimiter";
+        saveToHDF5(outputFile, name, &params->SW.electronGyroTimeStepLimiter);
+        name.clear();
+
+        name = "electronPlasmaTimeStepLimiter";
+        saveToHDF5(outputFile, name, &params->SW.electronPlasmaTimeStepLimiter);
+        name.clear();
+
         name = "velocityDistributionModel";
         saveToHDF5(outputFile, name, &params->velocityDistributionModel);
         name.clear();

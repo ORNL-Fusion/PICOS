@@ -118,6 +118,16 @@ def compare_command(args: argparse.Namespace, case: Case, out_dir: Path, smooth:
         str(args.output_count),
         "--collisions",
         str(args.collisions),
+        "--efield-solve",
+        str(args.efield_solve),
+        "--field-solve-model",
+        str(args.field_solve_model),
+        "--electron-gyro-timestep-limiter",
+        str(args.electron_gyro_timestep_limiter),
+        "--electron-plasma-timestep-limiter",
+        str(args.electron_plasma_timestep_limiter),
+        "--reformulated-poisson-quasineutral",
+        str(args.reformulated_poisson_quasineutral),
         "--omp-threads",
         str(args.omp_threads),
         "--fortran-omp-threads",
@@ -286,6 +296,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--energy-max", type=float, default=3500.0)
     parser.add_argument("--target-z", type=float, default=8.0)
     parser.add_argument("--collisions", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--efield-solve", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--field-solve-model", type=int, choices=[0, 1, 2], default=2)
+    parser.add_argument("--electron-gyro-timestep-limiter", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--electron-plasma-timestep-limiter", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=0)
     parser.add_argument("--mpi-ranks", type=int, default=2)
     parser.add_argument("--omp-threads", type=int, default=48)
     parser.add_argument("--fortran-omp-threads", type=int, default=48)

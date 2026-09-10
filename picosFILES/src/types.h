@@ -471,6 +471,8 @@ struct SW_TYP
 	int RFheating;
 	int pairSource;
 	int relativisticElectrons;
+	int electronGyroTimeStepLimiter;
+	int electronPlasmaTimeStepLimiter;
 	int linearSolve;
 	int advancePos;
 
@@ -484,6 +486,8 @@ struct SW_TYP
 		RFheating     = 0;
 		pairSource    = 0;
 		relativisticElectrons = 0;
+		electronGyroTimeStepLimiter = 0;
+		electronPlasmaTimeStepLimiter = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
 	}

@@ -277,6 +277,14 @@ void init_TYP::readInputFile(params_TYP * params)
         cout << "ERROR: unsupported SW_fieldSolveModel " << params->SW.fieldSolveModel << endl;
         MPI_Abort(MPI_COMM_WORLD,-104);
     }
+    const int defaultElectronGyroLimiter =
+        (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT) ? 1 : 0;
+    const int defaultElectronPlasmaLimiter =
+        ((params->SW.EfieldSolve == 1) && (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON)) ? 1 : 0;
+    params->SW.electronGyroTimeStepLimiter =
+        getInt("SW_electronGyroTimeStepLimiter", defaultElectronGyroLimiter);
+    params->SW.electronPlasmaTimeStepLimiter =
+        getInt("SW_electronPlasmaTimeStepLimiter", defaultElectronPlasmaLimiter);
 	params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
 	params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
 	params->SW.collisionConservationProjection = getInt("SW_collisionConservationProjection", 0);

@@ -259,11 +259,19 @@ def write_picos_case(args: argparse.Namespace, tag: str, b_norm: np.ndarray, res
     electron_ppc = max(1, int(round(args.particles / max(args.profile_points - 2, 1))))
     ion_ppc = max(1, int(round(electron_ppc / 4.0)))
 
+    field_description = (
+        "reformulated Poisson electrostatic field solve"
+        if args.efield_solve and args.field_solve_model == 2
+        else "standard electrostatic Poisson field solve"
+        if args.efield_solve and args.field_solve_model == 1
+        else "electrostatic solve disabled for direct Fortran RF-transport comparison"
+    )
+
     input_text = f"""// PICOS input generated for MPEX scenario-14 Fig. 17 E-z comparison
 // Source profile: templateFILES/MPEX_B_norm_PICOS_scenario_14.txt.
 // Model: 1D-2V guiding-center D+ ions plus kinetic electrons.
 // Heating: electron ECH enabled with scenario-14 B-field; ion RF heating disabled.
-// Field: electrostatic solve disabled for direct Fortran RF-transport comparison.
+// Field: {field_description}.
 // =============================================================================
 mpisForFields               {args.mpis_for_fields}
 quietStart                  1
@@ -288,8 +296,10 @@ simulationTime              {simulation_time_gyro:.16e}
 
 // Switches:
 // =============================================================================
-SW_EfieldSolve              0
-SW_fieldSolveModel          0
+SW_EfieldSolve              {args.efield_solve}
+SW_fieldSolveModel          {args.field_solve_model}
+SW_electronGyroTimeStepLimiter   {args.electron_gyro_timestep_limiter}
+SW_electronPlasmaTimeStepLimiter {args.electron_plasma_timestep_limiter}
 SW_BfieldSolve              0
 SW_Collisions               {1 if args.collisions else 0}
 CollOperType                2
@@ -317,7 +327,7 @@ IC_phiRight                 0.0
 Poisson_BCModel             1
 Poisson_sheathCoefficient   3.0
 ReformulatedPoisson_lambda  -1.0
-ReformulatedPoisson_quasiNeutral 0
+ReformulatedPoisson_quasiNeutral {args.reformulated_poisson_quasineutral}
 
 // Geometry:
 // =============================================================================
@@ -867,6 +877,11 @@ def main() -> int:
     parser.add_argument("--rf-max-particle-energy", type=float, default=5000.0)
     parser.add_argument("--rf-max-velocity-fraction-c", type=float, default=0.2)
     parser.add_argument("--rf-resonance-mode", type=int, choices=[0, 1], default=0, help="0 uses sign crossing; 1 uses Fortran-compatible resNum<0 window flag.")
+    parser.add_argument("--efield-solve", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--field-solve-model", type=int, choices=[0, 1, 2], default=0)
+    parser.add_argument("--electron-gyro-timestep-limiter", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--electron-plasma-timestep-limiter", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=0)
     parser.add_argument("--kpar", type=float, default=5.864e3)
     parser.add_argument("--kper", type=float, default=2.992e4)
     parser.add_argument("--reference-resonance-z", type=float, default=3.1)

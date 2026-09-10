@@ -7,18 +7,30 @@
 #SBATCH --mail-user=kumara@ornl.gov
 #SBATCH --mail-type=END,FAIL
 #SBATCH -t 11:30:00
+#SBATCH --ntasks-per-node=128
+#SBATCH --cpus-per-task=1
 #SBATCH -o slurm-%x-%j.out
 #SBATCH -e slurm-%x-%j.err
 
 set -euo pipefail
 
-if [ "${PE_ENV:-}" == "CRAY" ]; then
-  export FILENV=my_filenenv
-  assign -U on g:sf
+PICOS_LOAD_MODULES=${PICOS_LOAD_MODULES:-1}
+PICOS_GCC_MODULE=${PICOS_GCC_MODULE:-gcc-native/14}
+if [ "${PICOS_LOAD_MODULES}" = "1" ] && command -v module >/dev/null 2>&1; then
+  module load cpu
+  module load PrgEnv-gnu
+  module load "${PICOS_GCC_MODULE}"
+  module load cray-hdf5
+fi
+if command -v g++ >/dev/null 2>&1; then
+  LIBSTDCXX_DIR=$(dirname "$(g++ -print-file-name=libstdc++.so.6)")
+  if [ -f "${LIBSTDCXX_DIR}/libstdc++.so.6" ]; then
+    export LD_LIBRARY_PATH="${LIBSTDCXX_DIR}:${LD_LIBRARY_PATH:-}"
+  fi
 fi
 
 # Source tree is expected in myRepos; run products go to scratch.
-PICOS_ROOT=${PICOS_ROOT:-${HOME}/myRepos/PICOS}
+PICOS_ROOT=${PICOS_ROOT:-${HOME}/myRepos/PICOS_ECH}
 PICOS_BUILD_DIR=${PICOS_BUILD_DIR:-${PICOS_ROOT}/build}
 PICOS_BIN=${PICOS_BIN:-${PICOS_BUILD_DIR}/picosFILES/src/xpicos}
 RUN_ROOT=${RUN_ROOT:-${SCRATCH}/PICOS_MPEX/scenario14_triplet}
@@ -26,7 +38,7 @@ RUN_LABEL=${RUN_LABEL:-p262144_100us_nocoll_nersc}
 
 # Perlmutter CPU defaults. Keep MPI ranks even; PICOS++ requires that.
 MPI_RANKS=${MPI_RANKS:-128}
-CPUS_PER_TASK=${CPUS_PER_TASK:-2}
+CPUS_PER_TASK=${CPUS_PER_TASK:-1}
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 export OMP_PLACES=${OMP_PLACES:-threads}
 export OMP_PROC_BIND=${OMP_PROC_BIND:-spread}
@@ -70,6 +82,7 @@ echo "RUN_LABEL=${RUN_LABEL}"
 echo "MPI_RANKS=${MPI_RANKS}"
 echo "CPUS_PER_TASK=${CPUS_PER_TASK}"
 echo "OMP_NUM_THREADS=${OMP_NUM_THREADS}"
+echo "LIBSTDCXX_DIR=${LIBSTDCXX_DIR:-unset}"
 echo "Cases: ${CASES[*]}"
 
 for tag in "${CASES[@]}"; do
@@ -78,7 +91,7 @@ for tag in "${CASES[@]}"; do
   if [ ! -f "${input_file}" ] || [ ! -f "${ion_file}" ]; then
     echo "Missing input deck for ${tag}." >&2
     echo "Generate decks before submitting, for example:" >&2
-    echo "  python scripts/run_mpex_triplet_picos_fortran.py --setup-only --skip-smooth --picos-run-mode nonrel --run-label ${RUN_LABEL} --particles 262144 --physical-time 1.0e-4 --output-count 50 --collisions 0" >&2
+    echo "  python scripts/run_mpex_triplet_picos_fortran.py --setup-only --skip-smooth --picos-run-mode nonrel --run-label ${RUN_LABEL} --particles 262144 --physical-time 1.0e-4 --output-count 50 --collisions 0 --efield-solve 1 --field-solve-model 2 --electron-plasma-timestep-limiter 0" >&2
     exit 2
   fi
 

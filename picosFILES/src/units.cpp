@@ -256,9 +256,8 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	double DT_electronPlasma(std::numeric_limits<double>::infinity());
 	bool CFL_particles(false);
 	bool hasKineticElectrons(false);
-	const bool fullOrbitParticlePush = (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT);
-	const bool useElectronGyroTimeScale = fullOrbitParticlePush;
-	const bool useElectronPlasmaTimeScale = (params->SW.EfieldSolve == 1);
+	const bool useElectronGyroTimeScale = (params->SW.electronGyroTimeStepLimiter != 0);
+	const bool useElectronPlasmaTimeScale = (params->SW.electronPlasmaTimeStepLimiter != 0);
 
 	// Time-scale limiter. For the hybrid model this is the main ion gyro
 	// period. Guiding-center kinetic electrons do not require resolving the
