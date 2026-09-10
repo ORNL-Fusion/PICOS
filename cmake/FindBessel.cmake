@@ -7,10 +7,11 @@ Provides the following variables:
 include (CheckCXXSourceCompiles)
 
 check_cxx_source_compiles ("
-#include <cmake>
+#include <cmath>
 
-void foo() {
+int main() {
     std::cyl_bessel_j(1,1);
+    return 0;
 }
 " HAS_BESSEL)
 
