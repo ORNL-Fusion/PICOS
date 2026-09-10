@@ -1,6 +1,223 @@
 #include "initialize.h"
 #include "initDistribution.h"
 
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <stdexcept>
+
+#include <H5Cpp.h>
+
+namespace
+{
+    string stripTrailingSlashes(string path)
+    {
+        while (path.length() > 1 && path.back() == '/')
+        {
+            path.pop_back();
+        }
+        return path;
+    }
+
+    string pathJoin(const string& base, const string& leaf)
+    {
+        string cleanBase = stripTrailingSlashes(base);
+        if (cleanBase.empty())
+        {
+            return leaf;
+        }
+        return cleanBase + "/" + leaf;
+    }
+
+    bool fileExists(const string& path)
+    {
+        ifstream reader(path.c_str());
+        return reader.good();
+    }
+
+    bool hdf5PathExists(H5::H5File& file, const string& path)
+    {
+        return H5Lexists(file.getId(), path.c_str(), H5P_DEFAULT) > 0;
+    }
+
+    bool isNonnegativeInteger(const string& value)
+    {
+        if (value.empty())
+        {
+            return false;
+        }
+        for (char ch : value)
+        {
+            if (!isdigit(static_cast<unsigned char>(ch)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    int latestSnapshotIndex(H5::H5File& file)
+    {
+        int latest = -1;
+        const hsize_t numObjects = file.getNumObjs();
+        for (hsize_t ii=0; ii<numObjects; ii++)
+        {
+            const string objectName = file.getObjnameByIdx(ii);
+            if (isNonnegativeInteger(objectName))
+            {
+                latest = std::max(latest, stoi(objectName));
+            }
+        }
+        return latest;
+    }
+
+    void abortRestart(const params_TYP * params, const string& message, const int code)
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cerr << "PICOS++ RESTART ERROR: " << message << endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, code);
+        throw runtime_error(message);
+    }
+
+    double readHdf5ScalarDouble(H5::H5File& file, const string& datasetName)
+    {
+        H5::DataSet dataset = file.openDataSet(datasetName);
+        double value = 0.0;
+        dataset.read(&value, H5::PredType::NATIVE_DOUBLE);
+        return value;
+    }
+
+    arma::vec readHdf5Vector(H5::H5File& file, const string& datasetName)
+    {
+        H5::DataSet dataset = file.openDataSet(datasetName);
+        H5::DataSpace dataspace = dataset.getSpace();
+        const int rank = dataspace.getSimpleExtentNdims();
+        if (rank != 1)
+        {
+            throw runtime_error("Expected a rank-1 HDF5 dataset for " + datasetName);
+        }
+        hsize_t dims[1];
+        dataspace.getSimpleExtentDims(dims);
+        arma::vec values(dims[0]);
+        dataset.read(values.memptr(), H5::PredType::NATIVE_DOUBLE);
+        return values;
+    }
+
+    arma::mat readHdf5Matrix(H5::H5File& file, const string& datasetName)
+    {
+        H5::DataSet dataset = file.openDataSet(datasetName);
+        H5::DataSpace dataspace = dataset.getSpace();
+        const int rank = dataspace.getSimpleExtentNdims();
+        if (rank != 2)
+        {
+            throw runtime_error("Expected a rank-2 HDF5 dataset for " + datasetName);
+        }
+        hsize_t dims[2];
+        dataspace.getSimpleExtentDims(dims);
+        arma::mat values(dims[1], dims[0]);
+        dataset.read(values.memptr(), H5::PredType::NATIVE_DOUBLE);
+        return values;
+    }
+
+    string restartHdf5Directory(const string& inputPath)
+    {
+        string path = stripTrailingSlashes(inputPath);
+        if (fileExists(pathJoin(path, "main.h5")))
+        {
+            return path;
+        }
+
+        const string hdf5Path = pathJoin(path, "HDF5");
+        if (fileExists(pathJoin(hdf5Path, "main.h5")))
+        {
+            return hdf5Path;
+        }
+        return path;
+    }
+
+    string restartParticleFileName(const params_TYP * params, const int rank)
+    {
+        stringstream ss;
+        ss << params->restart.particleFilePrefix << rank << ".h5";
+        return ss.str();
+    }
+
+    string restartFieldsFileName(const params_TYP * params, const int rank)
+    {
+        if (!params->restart.fieldsFileName.empty())
+        {
+            return params->restart.fieldsFileName;
+        }
+        stringstream ss;
+        ss << params->restart.fieldsFilePrefix << rank << ".h5";
+        return ss.str();
+    }
+
+    void loadRestartMetadata(params_TYP * params, vector<ionSpecies_TYP> * IONS, const string& hdf5Path)
+    {
+        const string mainFileName = pathJoin(hdf5Path, "main.h5");
+        if (!fileExists(mainFileName))
+        {
+            return;
+        }
+
+        H5::H5File mainFile(mainFileName, H5F_ACC_RDONLY);
+        for (unsigned int ss=0; ss<IONS->size(); ss++)
+        {
+            stringstream species;
+            species << (ss + 1);
+            const string base = "/ions/spp_" + species.str();
+
+            if (hdf5PathExists(mainFile, base + "/NCP"))
+            {
+                IONS->at(ss).NCP = readHdf5ScalarDouble(mainFile, base + "/NCP");
+            }
+            if (hdf5PathExists(mainFile, base + "/NSP_OUT"))
+            {
+                const double nspOut = readHdf5ScalarDouble(mainFile, base + "/NSP_OUT");
+                IONS->at(ss).NSP = nspOut;
+                IONS->at(ss).nSupPartOutput = static_cast<unsigned int>(nspOut);
+                IONS->at(ss).pctSupPartOutput = 100.0;
+            }
+        }
+    }
+
+    void loadRestartFieldVector(
+        H5::H5File& file,
+        const string& groupName,
+        const string& variableName,
+        arma::vec& fieldValues,
+        const unsigned int iIndex,
+        const unsigned int fIndex)
+    {
+        const string datasetName = groupName + "/fields/" + variableName + "/x";
+        if (!hdf5PathExists(file, datasetName))
+        {
+            return;
+        }
+
+        arma::vec values = readHdf5Vector(file, datasetName);
+        const unsigned int expectedCount = fIndex - iIndex + 1;
+        if (values.n_elem != expectedCount)
+        {
+            throw runtime_error("Restart field " + datasetName + " has unexpected length");
+        }
+        fieldValues.subvec(iIndex, fIndex) = values;
+
+        if (iIndex == 1)
+        {
+            fieldValues(0) = fieldValues(1);
+        }
+        if (fIndex == fieldValues.n_elem - 2)
+        {
+            fieldValues(fieldValues.n_elem - 1) = fieldValues(fieldValues.n_elem - 2);
+        }
+    }
+}
+
 // Function to split strings:
 // =============================================================================
 vector<string> init_TYP::split(const string& str, const string& delim)
@@ -107,6 +324,7 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     params->errorCodes[-102] = "MPI's Cartesian topology could not be created";
     params->errorCodes[-103] = "Grid size violates assumptions of hybrid model for the plasma -- DX smaller than the electron skind depth can not be resolved";
     params->errorCodes[-106] = "Inconsistency in iniital ion's velocity distribution function";
+    params->errorCodes[-107] = "PICOS++ restart file could not be loaded";
 
     // Program information:
     // ===========================
@@ -301,6 +519,21 @@ void init_TYP::readInputFile(params_TYP * params)
 		cout << "ERROR: unsupported CollOperType " << params->collOperType << endl;
 		MPI_Abort(MPI_COMM_WORLD,-105);
 	}
+
+    // Restart controls:
+    // -------------------------------------------------------------------------
+    params->restart.enabled = getInt("restart_enabled", getInt("SW_restart", 0));
+    params->restart.path = getString("restart_path", "");
+    params->restart.snapshot = getInt("restart_snapshot", -1);
+    params->restart.continueTime = getInt("restart_continueTime", 0);
+    params->restart.particleFilePrefix = getString("restart_particleFilePrefix", "PARTICLES_FILE_");
+    params->restart.fieldsFilePrefix = getString("restart_fieldsFilePrefix", "FIELDS_FILE_");
+    params->restart.fieldsFileName = getString("restart_fieldsFileName", "");
+    if (params->restart.enabled == 1 && params->restart.path.empty())
+    {
+        cout << "ERROR: restart_enabled requires restart_path" << endl;
+        MPI_Abort(MPI_COMM_WORLD,-107);
+    }
 
     // Magnetic field initial conditions:
     // -------------------------------------------------------------------------
@@ -1280,4 +1513,197 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
     {
         cout << "* * * * * * * * * * * * ELECTROMAGNETIC FIELDS INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
     }
+}
+
+// Load particles and fields from a previous HDF5 output snapshot:
+// =============================================================================
+void init_TYP::loadRestartState(params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
+{
+    if (params->restart.enabled != 1)
+    {
+        return;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    H5::Exception::dontPrint();
+
+    const string hdf5Path = restartHdf5Directory(params->restart.path);
+    params->restart.path = hdf5Path;
+
+    int snapshot = params->restart.snapshot;
+    double restartTime = 0.0;
+
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        string probeFileName = pathJoin(hdf5Path, restartFieldsFileName(params, 0));
+        if (!fileExists(probeFileName))
+        {
+            probeFileName = pathJoin(hdf5Path, restartParticleFileName(params, 0));
+        }
+        if (!fileExists(probeFileName))
+        {
+            abortRestart(params, "Could not find restart HDF5 files under " + hdf5Path, -107);
+        }
+
+        try
+        {
+            H5::H5File probeFile(probeFileName, H5F_ACC_RDONLY);
+            if (snapshot < 0)
+            {
+                snapshot = latestSnapshotIndex(probeFile);
+            }
+            if (snapshot < 0)
+            {
+                abortRestart(params, "Could not determine a numeric restart snapshot in " + probeFileName, -107);
+            }
+
+            const string groupName = "/" + to_string(snapshot);
+            if (!hdf5PathExists(probeFile, groupName))
+            {
+                abortRestart(params, "Requested restart snapshot " + groupName + " was not found in " + probeFileName, -107);
+            }
+            if (hdf5PathExists(probeFile, groupName + "/time"))
+            {
+                restartTime = readHdf5ScalarDouble(probeFile, groupName + "/time");
+            }
+        }
+        catch (const H5::Exception& error)
+        {
+            abortRestart(params, "Failed to inspect restart snapshot: " + string(error.getDetailMsg()), -107);
+        }
+        catch (const std::exception& error)
+        {
+            abortRestart(params, "Failed to inspect restart snapshot: " + string(error.what()), -107);
+        }
+    }
+
+    MPI_Bcast(&snapshot, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&restartTime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    params->restart.snapshot = snapshot;
+    params->restart.startTime = restartTime;
+
+    try
+    {
+        loadRestartMetadata(params, IONS, hdf5Path);
+
+        const string groupName = "/" + to_string(snapshot);
+
+        if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)
+        {
+            const string fieldsFileName = pathJoin(hdf5Path, restartFieldsFileName(params, params->mpi.COMM_RANK));
+            if (fileExists(fieldsFileName))
+            {
+                H5::H5File fieldsFile(fieldsFileName, H5F_ACC_RDONLY);
+                if (!hdf5PathExists(fieldsFile, groupName))
+                {
+                    throw runtime_error("Requested restart snapshot " + groupName + " was not found in " + fieldsFileName);
+                }
+
+                loadRestartFieldVector(fieldsFile, groupName, "EX_m", fields->EX_m, params->mpi.iIndex, params->mpi.fIndex);
+                loadRestartFieldVector(fieldsFile, groupName, "Phi_m", fields->Phi_m, params->mpi.iIndex, params->mpi.fIndex);
+                loadRestartFieldVector(fieldsFile, groupName, "BX_m", fields->BX_m, params->mpi.iIndex, params->mpi.fIndex);
+                loadRestartFieldVector(fieldsFile, groupName, "dBX_m", fields->dBX_m, params->mpi.iIndex, params->mpi.fIndex);
+                loadRestartFieldVector(fieldsFile, groupName, "ddBX_m", fields->ddBX_m, params->mpi.iIndex, params->mpi.fIndex);
+            }
+            else if (params->mpi.IS_FIELDS_ROOT)
+            {
+                cout << "WARNING: restart field file not found; using fields from input profiles: " << fieldsFileName << endl;
+            }
+        }
+
+        if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
+        {
+            const string particleFileName = pathJoin(hdf5Path, restartParticleFileName(params, params->mpi.COMM_RANK));
+            if (!fileExists(particleFileName))
+            {
+                throw runtime_error("Missing restart particle file " + particleFileName);
+            }
+
+            H5::H5File particleFile(particleFileName, H5F_ACC_RDONLY);
+            if (!hdf5PathExists(particleFile, groupName))
+            {
+                throw runtime_error("Requested restart snapshot " + groupName + " was not found in " + particleFileName);
+            }
+
+            const unsigned int expectedVelocityColumns =
+                (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT) ? 3 : 2;
+
+            for (unsigned int ss=0; ss<IONS->size(); ss++)
+            {
+                stringstream species;
+                species << (ss + 1);
+                const string speciesGroup = groupName + "/ions/spp_" + species.str();
+                const string xDataset = speciesGroup + "/X_p";
+                const string vDataset = speciesGroup + "/V_p";
+
+                if (!hdf5PathExists(particleFile, xDataset) || !hdf5PathExists(particleFile, vDataset))
+                {
+                    throw runtime_error("Restart requires X_p and V_p under " + speciesGroup);
+                }
+
+                arma::vec X_p = readHdf5Vector(particleFile, xDataset);
+                arma::mat V_p = readHdf5Matrix(particleFile, vDataset);
+
+                if (V_p.n_rows != X_p.n_elem)
+                {
+                    throw runtime_error("Restart X_p/V_p particle counts disagree under " + speciesGroup);
+                }
+                if (V_p.n_cols < expectedVelocityColumns)
+                {
+                    throw runtime_error("Restart V_p does not contain enough velocity components under " + speciesGroup);
+                }
+
+                ionSpecies_TYP& ion = IONS->at(ss);
+                ion.NSP = static_cast<double>(X_p.n_elem);
+                ion.nSupPartOutput = static_cast<unsigned int>(X_p.n_elem);
+                ion.pctSupPartOutput = 100.0;
+                allocateParticleDefinedIonArrays(params, &ion);
+
+                ion.X_p = X_p;
+                ion.V_p = V_p.cols(0, expectedVelocityColumns - 1);
+
+                const string aDataset = speciesGroup + "/a_p";
+                if (hdf5PathExists(particleFile, aDataset))
+                {
+                    arma::vec a_p = readHdf5Vector(particleFile, aDataset);
+                    if (a_p.n_elem != X_p.n_elem)
+                    {
+                        throw runtime_error("Restart a_p particle count disagrees under " + speciesGroup);
+                    }
+                    ion.a_p = a_p;
+                }
+
+                const string muDataset = speciesGroup + "/mu_p";
+                if (hdf5PathExists(particleFile, muDataset))
+                {
+                    arma::vec mu_p = readHdf5Vector(particleFile, muDataset);
+                    if (mu_p.n_elem != X_p.n_elem)
+                    {
+                        throw runtime_error("Restart mu_p particle count disagrees under " + speciesGroup);
+                    }
+                    ion.mu_p = mu_p;
+                }
+            }
+        }
+    }
+    catch (const H5::Exception& error)
+    {
+        abortRestart(params, "Failed to load restart state: " + string(error.getDetailMsg()), -107);
+    }
+    catch (const std::exception& error)
+    {
+        abortRestart(params, "Failed to load restart state: " + string(error.what()), -107);
+    }
+
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    {
+        cout << endl << "* * * * * * * * * * * * RESTART STATE LOADED * * * * * * * * * * * * * * * * * *" << endl;
+        cout << "+ Restart path: " << hdf5Path << endl;
+        cout << "+ Restart snapshot: " << snapshot << endl;
+        cout << "+ Restart snapshot time: " << scientific << restartTime << fixed << " s" << endl;
+        cout << "+ Continue physical clock: " << (params->restart.continueTime == 1 ? "YES" : "NO") << endl;
+        cout << "* * * * * * * * * * * * RESTART STATE LOADED * * * * * * * * * * * * * * * * * *" << endl;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
 }

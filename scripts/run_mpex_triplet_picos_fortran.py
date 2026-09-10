@@ -116,6 +116,8 @@ def compare_command(args: argparse.Namespace, case: Case, out_dir: Path, smooth:
         f"{args.physical_time:.16e}",
         "--output-count",
         str(args.output_count),
+        "--rf-heating",
+        str(args.rf_heating),
         "--collisions",
         str(args.collisions),
         "--efield-solve",
@@ -128,6 +130,20 @@ def compare_command(args: argparse.Namespace, case: Case, out_dir: Path, smooth:
         str(args.electron_plasma_timestep_limiter),
         "--reformulated-poisson-quasineutral",
         str(args.reformulated_poisson_quasineutral),
+        "--source-rate",
+        f"{args.source_rate:.16e}",
+        "--source-z",
+        f"{args.source_z:.16e}",
+        "--source-sigma",
+        f"{args.source_sigma:.16e}",
+        "--profile-ne-floor-fraction",
+        f"{args.profile_ne_floor_fraction:.16e}",
+        "--profile-te-floor-ev",
+        f"{args.profile_te_floor_ev:.16e}",
+        "--quiet-start",
+        str(args.quiet_start),
+        "--pair-source",
+        str(args.pair_source),
         "--omp-threads",
         str(args.omp_threads),
         "--fortran-omp-threads",
@@ -147,6 +163,17 @@ def compare_command(args: argparse.Namespace, case: Case, out_dir: Path, smooth:
         "--out-dir",
         str(out_dir),
     ]
+    if args.plasma_profile_csv is not None:
+        command.extend(["--plasma-profile-csv", str(args.plasma_profile_csv)])
+    if args.source_particles_nc is not None:
+        command.extend(["--source-particles-nc", str(args.source_particles_nc)])
+    if args.restart_path is not None:
+        command.extend(["--restart-path", str(args.restart_path)])
+        command.extend(["--restart-snapshot", str(args.restart_snapshot)])
+        if args.restart_continue_time:
+            command.append("--restart-continue-time")
+    if args.use_density_as_source:
+        command.append("--use-density-as-source")
     if args.picos_run_mode != "none":
         command.extend(["--picos-run-mode", args.picos_run_mode])
     if smooth:
@@ -256,6 +283,15 @@ def write_combined_summary(args: argparse.Namespace) -> Path:
         f"- Fallback OpenMP threads: `{args.omp_threads}`.",
         f"- Fortran OpenMP threads: `{args.fortran_omp_threads}`.",
         f"- PICOS++ OpenMP threads per rank: `{args.picos_omp_threads}`.",
+        f"- Initial density profile mode: `quietStart={args.quiet_start}`.",
+        f"- RF heating switch: `{args.rf_heating}`.",
+        f"- Restart path: `{args.restart_path}`.",
+        f"- Restart snapshot: `{args.restart_snapshot}`.",
+        f"- Restart continues physical clock: `{args.restart_continue_time}`.",
+        f"- Coupled pair source: `SW_pairSource={args.pair_source}`, rate `{args.source_rate:.4g}` s^-1.",
+        f"- Source center/sigma fallback: `{args.source_z:g}` / `{args.source_sigma:g}` m.",
+        f"- Plasma profile CSV: `{args.plasma_profile_csv}`.",
+        f"- Source particle NetCDF: `{args.source_particles_nc}`.",
         "",
         "| case | run | output | count | mean E [eV] | P99 [eV] | max E [eV] | RF absorbed [W] |",
         "|---|---|---:|---:|---:|---:|---:|---:|",
@@ -288,6 +324,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--steps", type=int, default=8000)
     parser.add_argument("--physical-time", type=float, default=1.0e-9)
     parser.add_argument("--output-count", type=int, default=1)
+    parser.add_argument("--rf-heating", type=int, choices=[0, 1], default=1)
     parser.add_argument("--b-scale", type=float, default=0.200418652427244)
     parser.add_argument("--z-min", type=float, default=-2.0)
     parser.add_argument("--z-max", type=float, default=8.0)
@@ -300,7 +337,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--field-solve-model", type=int, choices=[0, 1, 2], default=2)
     parser.add_argument("--electron-gyro-timestep-limiter", type=int, choices=[0, 1], default=0)
     parser.add_argument("--electron-plasma-timestep-limiter", type=int, choices=[0, 1], default=0)
-    parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--source-rate", type=float, default=1.0e23)
+    parser.add_argument("--source-z", type=float, default=1.75)
+    parser.add_argument("--source-sigma", type=float, default=0.15)
+    parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV used for ne/Te/RF-shape deck files.")
+    parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF used for the pair-source z profile.")
+    parser.add_argument("--profile-ne-floor-fraction", type=float, default=0.05)
+    parser.add_argument("--profile-te-floor-ev", type=float, default=0.5)
+    parser.add_argument("--use-density-as-source", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--restart-path", type=Path, default=None)
+    parser.add_argument("--restart-snapshot", type=int, default=-1)
+    parser.add_argument("--restart-continue-time", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--mpi-ranks", type=int, default=2)
     parser.add_argument("--omp-threads", type=int, default=48)
     parser.add_argument("--fortran-omp-threads", type=int, default=48)
@@ -323,6 +373,14 @@ def main() -> int:
         args.scenario14_b_file = args.picos_root / args.scenario14_b_file
     if not args.out_root.is_absolute():
         args.out_root = args.picos_root / args.out_root
+    if args.plasma_profile_csv is not None:
+        args.plasma_profile_csv = args.plasma_profile_csv.expanduser().resolve()
+    if args.source_particles_nc is not None:
+        args.source_particles_nc = args.source_particles_nc.expanduser().resolve()
+    if args.restart_path is not None:
+        args.restart_path = args.restart_path.expanduser()
+        if not args.restart_path.is_absolute():
+            args.restart_path = args.restart_path.resolve()
     args.out_root.mkdir(parents=True, exist_ok=True)
 
     for case in CASES:

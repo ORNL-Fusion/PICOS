@@ -767,6 +767,32 @@ struct RF_TYP
 	}
 };
 
+// Define structure to hold restart controls:
+// =============================================================================
+struct restart_TYP
+{
+	int enabled;
+	int snapshot;
+	int continueTime;
+	double startTime;
+	string path;
+	string particleFilePrefix;
+	string fieldsFilePrefix;
+	string fieldsFileName;
+
+	restart_TYP()
+	{
+		enabled = 0;
+		snapshot = -1;
+		continueTime = 0;
+		startTime = 0.0;
+		path = "";
+		particleFilePrefix = "PARTICLES_FILE_";
+		fieldsFilePrefix = "FIELDS_FILE_";
+		fieldsFileName = "";
+	}
+};
+
 //  Define structure to store simulation parameters:
 // =============================================================================
 struct params_TYP
@@ -832,6 +858,9 @@ struct params_TYP
 
 	// RF operator conditions:
 	RF_TYP RF;
+
+	// Restart controls:
+	restart_TYP restart;
 
 	// Coupled electron-ion source conditions:
 	pairSource_TYP pairSource;

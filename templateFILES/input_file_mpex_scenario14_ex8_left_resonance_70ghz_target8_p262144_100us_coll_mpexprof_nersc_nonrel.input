@@ -1,0 +1,153 @@
+// PICOS input generated for MPEX scenario-14 Fig. 17 E-z comparison
+// Magnetic field source profile: templateFILES/MPEX_B_norm_PICOS_scenario_14.txt.
+// Plasma/source profile model: analytic MPEX-like proxy; pair source follows density profile.
+// Model: 1D-2V guiding-center D+ ions plus kinetic electrons.
+// Heating: electron ECH enabled with scenario-14 B-field; ion RF heating disabled.
+// Field: reformulated Poisson electrostatic field solve.
+// Profile files are dimensionless shapes; IC_ne, IC_Te, IC_Tpar, and IC_Tper set physical amplitudes.
+// RF_*_Prf_fileName is written for bookkeeping/future GENRAY coupling; the current RF operator uses scalar RF_*_Prf in power-balance mode.
+// =============================================================================
+mpisForFields               1
+quietStart                  0
+IC_velocityDistributionModel 1
+IC_randomSeed              271828
+numberOfParticleSpecies     2
+numberOfTracerSpecies       0
+advanceParticleMethod       1
+
+// Characteristic values:
+// =============================================================================
+CV_ne                       5.0000000000000000e+19
+CV_Te                       1.6000000000000000e+01
+CV_B                        1.3584640814139803e+00
+CV_Tpar                     1.6000000000000000e+01
+CV_Tper                     1.6000000000000000e+01
+
+// Simulation time:
+// =============================================================================
+DTc                         5.0000000000000003e-02
+simulationTime              1.0430367059868452e+03
+
+// Switches:
+// =============================================================================
+SW_EfieldSolve              1
+SW_fieldSolveModel          2
+SW_electronGyroTimeStepLimiter   0
+SW_electronPlasmaTimeStepLimiter 0
+SW_BfieldSolve              0
+SW_Collisions               1
+CollOperType                2
+SW_collisionConservationProjection 0
+collisionRandomSeed        314159
+SW_RFheating                1
+SW_RFheatingIons            0
+SW_RFheatingElectrons       1
+SW_relativisticElectrons    0
+SW_relativisticRFOperator   0
+SW_pairSource               1
+SW_advancePos               1
+SW_linearSolve              0
+
+// Magnetic field initial conditions:
+// =============================================================================
+IC_uniformBfield            0
+IC_BX                       1.3584640814139803e+00
+IC_BY                       0.0
+IC_BZ                       0.0
+IC_BX_NX                    200
+IC_BX_fileName              mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_B_norm.txt
+IC_phiLeft                  0.0
+IC_phiRight                 0.0
+Poisson_BCModel             1
+Poisson_sheathCoefficient   3.0
+ReformulatedPoisson_lambda  -1.0
+ReformulatedPoisson_quasiNeutral 1
+
+// Geometry:
+// =============================================================================
+dp                          1.1130010939774260e+00
+r1                          0.0
+r2                          5.0000000000000003e-02
+LX_min                      -2.0000000000000000e+00
+LX_max                      8.0000000000000000e+00
+
+// Electron initial conditions:
+// =============================================================================
+IC_ne                       5.0000000000000000e+19
+IC_Te                       1.6000000000000000e+01
+IC_Te_NX                    200
+IC_Te_fileName              mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_te_norm.txt
+
+// Coupled electron-ion source:
+// =============================================================================
+pairSource_ionSpecies       1
+pairSource_electronSpecies  2
+pairSource_rate             9.9999999999999992e+22
+pairSource_mean_x           1.7500000000000000e+00
+pairSource_sigma_x          1.4999999999999999e-01
+pairSource_Ti_birth         1.6000000000000000e+01
+pairSource_Te_birth         1.6000000000000000e+01
+pairSource_Ei_birth         0
+pairSource_Ee_birth         0
+pairSource_eta_i            0
+pairSource_eta_e            0
+pairSource_positionMode     1
+pairSource_fileName         mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_pair_source_norm.txt
+pairSource_NS               200
+pairSource_maxParticleWeight 1000
+
+// Ion RF operator:
+// =============================================================================
+RF_ion_Prf                      0.0
+RF_ion_n_harmonic               2
+RF_ion_freq                     7.0000000000000000e+10
+RF_ion_x1                       2.6854403690000002e+00
+RF_ion_x2                       8.0000000000000000e+00
+RF_ion_t_ON                     0.0
+RF_ion_t_OFF                    1.0430367059868452e+03
+RF_ion_kpar                     5.8640000000000000e+03
+RF_ion_kper                     2.9920000000000000e+04
+RF_ion_handedness               -1
+RF_ion_EfieldMode               0
+RF_ion_resonanceMode            0
+RF_ion_EfieldAmplitude          1.0000000000000000e+04
+RF_ion_maxEnergyGainFraction    0.0
+RF_ion_maxParticleEnergy        0.0
+RF_ion_maxVelocityFractionC     0.0
+RF_ion_Prf_fileName             mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_rf_power_norm.txt
+RF_ion_Prf_NS                   200
+
+// Electron RF/ECH operator:
+// =============================================================================
+RF_electron_Prf                      3.0000000000000000e+05
+RF_electron_n_harmonic               2
+RF_electron_freq                     7.0000000000000000e+10
+RF_electron_x1                       2.6854403690000002e+00
+RF_electron_x2                       8.0000000000000000e+00
+RF_electron_t_ON                     0.0
+RF_electron_t_OFF                    1.0430367059868452e+03
+RF_electron_kpar                     5.8640000000000000e+03
+RF_electron_kper                     2.9920000000000000e+04
+RF_electron_handedness               -1
+RF_electron_EfieldMode               0
+RF_electron_resonanceMode            0
+RF_electron_EfieldAmplitude          1.0000000000000000e+04
+RF_electron_maxEnergyGainFraction    2.5000000000000000e-01
+RF_electron_maxParticleEnergy        5.0000000000000000e+03
+RF_electron_maxVelocityFractionC     2.0000000000000001e-01
+RF_electron_Prf_fileName             mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_rf_power_norm.txt
+RF_electron_Prf_NS                   200
+
+
+// Output variables:
+// =============================================================================
+// outputCadence is in background ion gyroperiod units. This deck requests
+// 50 output intervals plus the initial t=0 snapshot.
+outputCadence               2.0860734119736904e+01
+outputs_variables           {X_p,V_p,a_p,mu_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}
+
+// Data smoothing:
+// =============================================================================
+smoothingParameter          1.0000000000000000e-03
+filtersPerIterationFields   2
+filtersPerIterationIons     2

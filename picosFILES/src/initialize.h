@@ -57,6 +57,8 @@ public:
 
 	void initializeFields(params_TYP * params, fields_TYP * fields);
 
+	void loadRestartState(params_TYP * params, fields_TYP * fields, vector<ionSpecies_TYP> * IONS);
+
 	void allocateMemoryIons(params_TYP * params, vector<ionSpecies_TYP> * IONS);
 
 };

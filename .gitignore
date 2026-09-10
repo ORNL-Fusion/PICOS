@@ -1,5 +1,7 @@
 *.o
 */*.o
+__pycache__/
+*.pyc
 .DS_Store
 HDF5/
 arma_libs/

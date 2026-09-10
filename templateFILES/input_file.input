@@ -48,6 +48,18 @@ SW_relativisticElectrons     0
 SW_advancePos                1
 SW_linearSolve               0
 
+// Restart controls:
+// restart_snapshot=-1 loads the latest numeric HDF5 output snapshot.
+// Keep restart_enabled=0 for a fresh steady-state run; set it to 1 in the ECH continuation deck.
+// Use pctSupPartOutput=100 in ions_properties*.ion for true particle restart.
+// =============================================================================
+restart_enabled              0
+restart_path                 none
+restart_snapshot             -1
+restart_continueTime         0
+restart_particleFilePrefix   PARTICLES_FILE_
+restart_fieldsFilePrefix     FIELDS_FILE_
+
 // Magnetic field initial conditions:
 // =============================================================================
 IC_uniformBfield            0
@@ -139,7 +151,7 @@ RF_electron_Prf_NS                   200
 // Output variables:
 // =============================================================================
 outputCadence               500
-outputs_variables           {X_p,V_p,a_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
+outputs_variables           {X_p,V_p,a_p,mu_p,BX_p,BX_m,n_m,Tpar_m,Tper_m,u_m,EX_m}
 
 // Data smoothing:
 // =============================================================================

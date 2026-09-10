@@ -99,6 +99,9 @@ int main(int argc, char* argv[])
     // Initialize electromagnetic field variable:
     init.initializeFields(&params, &fields);
 
+    // Load a previous HDF5 state before characteristic normalization.
+    init.loadRestartState(&params, &fields, &IONS);
+
     // Define characteristic scales and broadcast them to all processes in COMM_WORLD:
     units.defineCharacteristicScalesAndBcast(&params, &IONS, &CS);
 
@@ -133,7 +136,7 @@ int main(int argc, char* argv[])
     // =========================================================================
     double t1 = 0.0;
     double t2 = 0.0;
-    params.currentTime = 0.0;
+    params.currentTime = ((params.restart.enabled == 1) && (params.restart.continueTime == 1)) ? params.restart.startTime : 0.0;
     int outputIterator = 0;
     int numberOfIterationsForEstimator = 1000;
 
@@ -156,7 +159,7 @@ int main(int argc, char* argv[])
 
     // Save 1st output:
     // =========================================================================
-    HDF.saveOutputs(&params, &IONS, &electrons, &fields, &CS, &particleBC, 0, 0);
+    HDF.saveOutputs(&params, &IONS, &electrons, &fields, &CS, &particleBC, 0, params.currentTime);
 
     // Start timing simulations:
     // =========================================================================

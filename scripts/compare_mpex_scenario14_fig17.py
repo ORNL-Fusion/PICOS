@@ -97,6 +97,139 @@ def write_vector(path: Path, values: np.ndarray) -> None:
     np.savetxt(path, values, fmt="%.16e")
 
 
+def picos_profile_z(args: argparse.Namespace) -> np.ndarray:
+    """Coordinate used by PICOS++ for external B-field profile files.
+
+    initializeElectromagneticFields() interprets the external B file as two
+    guard-like points wider than the active mesh:
+    z_i = LX_min - 0.5*dz + i*dz, dz = LX/(Nfile - 2).
+    """
+    dx = (args.z_max - args.z_min) / (args.profile_points - 2)
+    return args.z_min - 0.5 * dx + dx * np.arange(args.profile_points)
+
+
+def picos_aux_profile_z(args: argparse.Namespace) -> np.ndarray:
+    """Coordinate used by PICOS++ for IC and pair-source profile files."""
+    return np.linspace(args.z_min, args.z_max, args.profile_points)
+
+
+def normalize_shape(values: np.ndarray, floor_fraction: float = 0.0) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    values = np.where(np.isfinite(values), values, 0.0)
+    values = np.maximum(values, 0.0)
+    vmax = float(values.max()) if values.size else 0.0
+    if vmax <= 0.0:
+        return np.ones_like(values)
+    shape = values / vmax
+    if floor_fraction > 0.0:
+        shape = np.maximum(shape, floor_fraction)
+    return shape
+
+
+def gaussian_shape(z: np.ndarray, center: float, sigma: float, floor_fraction: float = 0.0) -> np.ndarray:
+    sigma = max(float(sigma), 1.0e-6)
+    shape = np.exp(-0.5 * np.square((z - center) / sigma))
+    if floor_fraction > 0.0:
+        shape = np.maximum(shape, floor_fraction)
+    return normalize_shape(shape)
+
+
+def read_csv_column(data: np.ndarray, *names: str) -> np.ndarray | None:
+    if data.dtype.names is None:
+        return None
+    names_by_lower = {name.lower(): name for name in data.dtype.names}
+    for name in names:
+        actual = names_by_lower.get(name.lower())
+        if actual is not None:
+            return np.asarray(data[actual], dtype=float)
+    return None
+
+
+def profile_from_particles_nc(path: Path, z_profile: np.ndarray) -> np.ndarray | None:
+    try:
+        import netCDF4 as nc
+    except Exception:
+        return None
+
+    with nc.Dataset(path) as ds:
+        if "z" not in ds.variables:
+            return None
+        z_birth = np.asarray(ds.variables["z"][:], dtype=float).reshape(-1)
+
+    z_birth = z_birth[np.isfinite(z_birth)]
+    if z_birth.size == 0:
+        return None
+
+    if z_profile.size > 1:
+        dz = float(np.median(np.diff(z_profile)))
+    else:
+        dz = 1.0
+    edges = np.concatenate(([z_profile[0] - 0.5 * dz], 0.5 * (z_profile[:-1] + z_profile[1:]), [z_profile[-1] + 0.5 * dz]))
+    hist, _ = np.histogram(z_birth, bins=edges)
+    return normalize_shape(hist.astype(float))
+
+
+def mpex_proxy_profiles(args: argparse.Namespace, z_profile: np.ndarray, resonance_z: float) -> dict[str, np.ndarray | str]:
+    """Build normalized profile shapes for the MPEX ECH decks.
+
+    If a HERMES axial CSV is supplied, ne/Te/RF-power shapes are interpolated
+    from it.  Otherwise a smooth analytic proxy is used.  The output arrays are
+    dimensionless shapes; the input deck scalar values set physical units.
+    """
+    source = "analytic MPEX-like proxy"
+    ne_shape = 0.08 + 0.70 * np.exp(-0.5 * np.square((z_profile - 1.7) / 0.55))
+    ne_shape += 0.35 * np.exp(-0.5 * np.square((z_profile - 2.8) / 1.75))
+    ne_shape += 0.16 / (1.0 + np.exp(-(z_profile - 3.8) / 0.7))
+    ne_shape = normalize_shape(ne_shape, args.profile_ne_floor_fraction)
+
+    te_eV = args.profile_te_floor_ev + (args.te_ev - args.profile_te_floor_ev) * (
+        0.15 + 0.85 * np.exp(-0.5 * np.square((z_profile - 2.55) / 0.95))
+    )
+    te_shape = np.clip(te_eV / max(args.te_ev, 1.0e-12), args.profile_te_floor_ev / max(args.te_ev, 1.0e-12), None)
+    ti_shape = np.ones_like(z_profile)
+    rf_shape = gaussian_shape(z_profile, resonance_z, 0.45)
+    source_shape = gaussian_shape(z_profile, args.source_z, args.source_sigma)
+
+    if args.plasma_profile_csv is not None and args.plasma_profile_csv.is_file():
+        data = np.genfromtxt(args.plasma_profile_csv, delimiter=",", names=True, dtype=None, encoding=None)
+        z_csv = read_csv_column(data, "z_m", "z")
+        ne_csv = read_csv_column(data, "Ne_m3", "ne", "density")
+        te_csv = read_csv_column(data, "Te_eV", "te", "temperature")
+        q_csv = read_csv_column(data, "q_W_m2", "qpar", "q")
+        if z_csv is not None:
+            order = np.argsort(z_csv)
+            z_sorted = z_csv[order]
+            if ne_csv is not None:
+                ne_interp = np.interp(z_profile, z_sorted, ne_csv[order], left=ne_csv[order][0], right=ne_csv[order][-1])
+                ne_shape = normalize_shape(ne_interp, args.profile_ne_floor_fraction)
+            if te_csv is not None:
+                te_interp = np.interp(z_profile, z_sorted, te_csv[order], left=te_csv[order][0], right=te_csv[order][-1])
+                te_interp = np.maximum(te_interp, args.profile_te_floor_ev)
+                te_shape = te_interp / max(args.te_ev, 1.0e-12)
+            if q_csv is not None:
+                q_interp = np.interp(z_profile, z_sorted, q_csv[order], left=0.0, right=q_csv[order][-1])
+                rf_shape = normalize_shape(q_interp)
+            source = f"HERMES axial CSV {args.plasma_profile_csv.name}"
+
+    if args.source_particles_nc is not None and args.source_particles_nc.is_file():
+        particle_source = profile_from_particles_nc(args.source_particles_nc, z_profile)
+        if particle_source is not None and np.any(particle_source > 0.0):
+            source_shape = particle_source
+            source += f"; helicon particle-source z histogram {args.source_particles_nc.name}"
+    elif args.use_density_as_source:
+        source_shape = normalize_shape(ne_shape)
+        source += "; pair source follows density profile"
+
+    return {
+        "ne": ne_shape,
+        "te": te_shape,
+        "ti": ti_shape,
+        "source": normalize_shape(source_shape),
+        "rf": normalize_shape(rf_shape),
+        "description": source,
+    }
+
+
 def fortran_case_path(args: argparse.Namespace) -> Path:
     return args.linear_root / "InputFiles" / f"{args.case_name}.in"
 
@@ -196,7 +329,7 @@ params%phi3 = 0.0
     return path
 
 
-def rf_block(args: argparse.Namespace, one_file: str, simulation_time_gyro: float, resonance_z: float) -> str:
+def rf_block(args: argparse.Namespace, rf_file: str, simulation_time_gyro: float, resonance_z: float) -> str:
     return f"""// Ion RF operator:
 // =============================================================================
 RF_ion_Prf                      0.0
@@ -215,7 +348,7 @@ RF_ion_EfieldAmplitude          {args.rf_efield_amplitude:.16e}
 RF_ion_maxEnergyGainFraction    0.0
 RF_ion_maxParticleEnergy        0.0
 RF_ion_maxVelocityFractionC     0.0
-RF_ion_Prf_fileName             {one_file}
+RF_ion_Prf_fileName             {rf_file}
 RF_ion_Prf_NS                   {args.profile_points}
 
 // Electron RF/ECH operator:
@@ -236,19 +369,31 @@ RF_electron_EfieldAmplitude          {args.rf_efield_amplitude:.16e}
 RF_electron_maxEnergyGainFraction    {args.rf_max_energy_gain_fraction:.16e}
 RF_electron_maxParticleEnergy        {args.rf_max_particle_energy:.16e}
 RF_electron_maxVelocityFractionC     {args.rf_max_velocity_fraction_c:.16e}
-RF_electron_Prf_fileName             {one_file}
+RF_electron_Prf_fileName             {rf_file}
 RF_electron_Prf_NS                   {args.profile_points}
 
 """
 
 
-def write_picos_case(args: argparse.Namespace, tag: str, b_norm: np.ndarray, resonance_z: float, relativistic: bool) -> tuple[Path, Path]:
+def write_picos_case(args: argparse.Namespace, tag: str, z_b: np.ndarray, b_norm: np.ndarray, resonance_z: float, relativistic: bool) -> tuple[Path, Path]:
     input_dir = picos_input_dir(args)
     input_dir.mkdir(parents=True, exist_ok=True)
     b_norm_file = f"{tag}_B_norm.txt"
-    one_file = f"{tag}_one.txt"
-    write_vector(input_dir / b_norm_file, b_norm)
-    write_vector(input_dir / one_file, np.ones_like(b_norm))
+    ne_file = f"{tag}_ne_norm.txt"
+    te_file = f"{tag}_te_norm.txt"
+    ti_file = f"{tag}_ti_norm.txt"
+    source_file = f"{tag}_pair_source_norm.txt"
+    rf_file = f"{tag}_rf_power_norm.txt"
+    z_b_profile = picos_profile_z(args)
+    z_aux_profile = picos_aux_profile_z(args)
+    b_for_picos = np.interp(z_b_profile, z_b, b_norm, left=b_norm[0], right=b_norm[-1])
+    profiles = mpex_proxy_profiles(args, z_aux_profile, resonance_z)
+    write_vector(input_dir / b_norm_file, b_for_picos)
+    write_vector(input_dir / ne_file, profiles["ne"])
+    write_vector(input_dir / te_file, profiles["te"])
+    write_vector(input_dir / ti_file, profiles["ti"])
+    write_vector(input_dir / source_file, profiles["source"])
+    write_vector(input_dir / rf_file, profiles["rf"])
 
     cv_b = args.cv_b
     dx = (args.z_max - args.z_min) / (args.profile_points - 2)
@@ -268,13 +413,16 @@ def write_picos_case(args: argparse.Namespace, tag: str, b_norm: np.ndarray, res
     )
 
     input_text = f"""// PICOS input generated for MPEX scenario-14 Fig. 17 E-z comparison
-// Source profile: templateFILES/MPEX_B_norm_PICOS_scenario_14.txt.
+// Magnetic field source profile: templateFILES/MPEX_B_norm_PICOS_scenario_14.txt.
+// Plasma/source profile model: {profiles["description"]}.
 // Model: 1D-2V guiding-center D+ ions plus kinetic electrons.
 // Heating: electron ECH enabled with scenario-14 B-field; ion RF heating disabled.
 // Field: {field_description}.
+// Profile files are dimensionless shapes; IC_ne, IC_Te, IC_Tpar, and IC_Tper set physical amplitudes.
+// RF_*_Prf_fileName is written for bookkeeping/future GENRAY coupling; the current RF operator uses scalar RF_*_Prf in power-balance mode.
 // =============================================================================
 mpisForFields               {args.mpis_for_fields}
-quietStart                  1
+quietStart                  {args.quiet_start}
 IC_velocityDistributionModel 1
 IC_randomSeed              271828
 numberOfParticleSpecies     2
@@ -305,14 +453,26 @@ SW_Collisions               {1 if args.collisions else 0}
 CollOperType                2
 SW_collisionConservationProjection 0
 collisionRandomSeed        314159
-SW_RFheating                1
+SW_RFheating                {args.rf_heating}
 SW_RFheatingIons            0
 SW_RFheatingElectrons       1
 SW_relativisticElectrons    {1 if relativistic else 0}
 SW_relativisticRFOperator   {1 if relativistic else 0}
-SW_pairSource               0
+SW_pairSource               {args.pair_source}
 SW_advancePos               1
 SW_linearSolve              0
+
+// Restart controls:
+// restart_snapshot=-1 loads the latest numeric HDF5 output snapshot.
+// For a two-stage run, first run SW_RFheating=0 to steady state, then set
+// restart_enabled=1 and restart_path to the stage-1 output HDF5 directory.
+// =============================================================================
+restart_enabled             {1 if args.restart_path is not None else 0}
+restart_path                {args.restart_path if args.restart_path is not None else "none"}
+restart_snapshot            {args.restart_snapshot}
+restart_continueTime        {1 if args.restart_continue_time else 0}
+restart_particleFilePrefix  PARTICLES_FILE_
+restart_fieldsFilePrefix    FIELDS_FILE_
 
 // Magnetic field initial conditions:
 // =============================================================================
@@ -342,13 +502,13 @@ LX_max                      {args.z_max:.16e}
 IC_ne                       {args.ne_m3:.16e}
 IC_Te                       {args.te_ev:.16e}
 IC_Te_NX                    {args.profile_points}
-IC_Te_fileName              {one_file}
+IC_Te_fileName              {te_file}
 
 // Coupled electron-ion source:
 // =============================================================================
 pairSource_ionSpecies       1
 pairSource_electronSpecies  2
-pairSource_rate             0.0
+pairSource_rate             {args.source_rate:.16e}
 pairSource_mean_x           {args.source_z:.16e}
 pairSource_sigma_x          {args.source_sigma:.16e}
 pairSource_Ti_birth         {args.ti_ev:.16e}
@@ -357,18 +517,18 @@ pairSource_Ei_birth         0
 pairSource_Ee_birth         0
 pairSource_eta_i            0
 pairSource_eta_e            0
-pairSource_positionMode     0
-pairSource_fileName         {one_file}
+pairSource_positionMode     1
+pairSource_fileName         {source_file}
 pairSource_NS               {args.profile_points}
 pairSource_maxParticleWeight 1000
 
-{rf_block(args, one_file, simulation_time_gyro, resonance_z)}
+{rf_block(args, rf_file, simulation_time_gyro, resonance_z)}
 // Output variables:
 // =============================================================================
 // outputCadence is in background ion gyroperiod units. This deck requests
 // {output_count} output intervals plus the initial t=0 snapshot.
 outputCadence               {output_cadence_gyro:.16e}
-outputs_variables           {{X_p,V_p,a_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}}
+outputs_variables           {{X_p,V_p,a_p,mu_p,BX_p,EX_p,BX_m,dBX_m,ddBX_m,n_m,Tpar_m,Tper_m,u_m,EX_m,Phi_m}}
 
 // Data smoothing:
 // =============================================================================
@@ -390,13 +550,13 @@ M1                            2.0000000000000000e+00
 
 IC_type_1                     1
 IC_Tper_1                     {args.ti_ev:.16e}
-IC_Tper_fileName_1            {one_file}
+IC_Tper_fileName_1            {ti_file}
 IC_Tper_NX_1                  {args.profile_points}
 IC_Tpar_1                     {args.ti_ev:.16e}
-IC_Tpar_fileName_1            {one_file}
+IC_Tpar_fileName_1            {ti_file}
 IC_Tpar_NX_1                  {args.profile_points}
 IC_densityFraction_1          1.0
-IC_densityFraction_fileName_1 {one_file}
+IC_densityFraction_fileName_1 {ne_file}
 IC_densityFraction_NX_1       {args.profile_points}
 
 BC_type_1                     {args.boundary_type}
@@ -406,7 +566,7 @@ BC_eta_1                      0.7853981633974483
 BC_mean_x_1                   {args.source_z:.16e}
 BC_sigma_x_1                  {args.source_sigma:.16e}
 BC_G_1                        {args.source_rate:.16e}
-BC_G_fileName_1               {one_file}
+BC_G_fileName_1               {source_file}
 BC_G_NS_1                     {args.profile_points}
 
 // =============================================================================
@@ -420,13 +580,13 @@ M2                            5.485799090441e-4
 
 IC_type_2                     1
 IC_Tper_2                     {args.te_ev:.16e}
-IC_Tper_fileName_2            {one_file}
+IC_Tper_fileName_2            {te_file}
 IC_Tper_NX_2                  {args.profile_points}
 IC_Tpar_2                     {args.te_ev:.16e}
-IC_Tpar_fileName_2            {one_file}
+IC_Tpar_fileName_2            {te_file}
 IC_Tpar_NX_2                  {args.profile_points}
 IC_densityFraction_2          1.0
-IC_densityFraction_fileName_2 {one_file}
+IC_densityFraction_fileName_2 {ne_file}
 IC_densityFraction_NX_2       {args.profile_points}
 
 BC_type_2                     {args.boundary_type}
@@ -436,7 +596,7 @@ BC_eta_2                      0.7853981633974483
 BC_mean_x_2                   {args.source_z:.16e}
 BC_sigma_x_2                  {args.source_sigma:.16e}
 BC_G_2                        {args.source_rate:.16e}
-BC_G_fileName_2               {one_file}
+BC_G_fileName_2               {source_file}
 BC_G_NS_2                     {args.profile_points}
 """
     input_path = input_dir / f"input_file_{tag}.input"
@@ -454,9 +614,9 @@ def setup_cases(args: argparse.Namespace) -> None:
     args.rf_window_end = args.rf_window_end if args.rf_window_end is not None else args.z_max
     write_fortran_case(args, z, b_t, resonance_z)
     if args.picos_run_mode in ("both", "nonrel"):
-        write_picos_case(args, args.picos_tag_nonrel, b_norm, resonance_z, relativistic=False)
+        write_picos_case(args, args.picos_tag_nonrel, z, b_norm, resonance_z, relativistic=False)
     if args.picos_run_mode in ("both", "rel"):
-        write_picos_case(args, args.picos_tag_rel, b_norm, resonance_z, relativistic=True)
+        write_picos_case(args, args.picos_tag_rel, z, b_norm, resonance_z, relativistic=True)
 
 
 def read_fortran_snapshot(args: argparse.Namespace) -> dict[str, np.ndarray] | None:
@@ -707,6 +867,10 @@ def write_summary(args: argparse.Namespace, plot_paths: list[Path]) -> Path:
         f"- Target marker: `z={args.target_z:.4g}` m.",
         f"- RF window: `z={resonance_z - args.rf_window_half_width:.4g}` m to `z={args.rf_window_end:.4g}` m.",
         f"- RF resonance mode: `{args.rf_resonance_mode}`.",
+        f"- RF heating switch: `{args.rf_heating}`.",
+        f"- Restart path: `{args.restart_path}`.",
+        f"- Restart snapshot: `{args.restart_snapshot}`.",
+        f"- Restart continues physical clock: `{args.restart_continue_time}`.",
         f"- Fortran/PICOS physical time requested: `{args.physical_time:.4g}` s.",
         f"- PICOS output intervals requested: `{args.output_count}` plus the initial snapshot.",
         "",
@@ -796,6 +960,14 @@ def normalize_args(args: argparse.Namespace) -> argparse.Namespace:
         args.picos_build_dir = args.picos_root / args.picos_build_dir
     args.picos_build_dir = args.picos_build_dir.resolve()
     args.scenario14_b_file = args.scenario14_b_file.resolve()
+    if args.plasma_profile_csv is not None:
+        args.plasma_profile_csv = args.plasma_profile_csv.expanduser().resolve()
+    if args.source_particles_nc is not None:
+        args.source_particles_nc = args.source_particles_nc.expanduser().resolve()
+    if args.restart_path is not None:
+        args.restart_path = args.restart_path.expanduser()
+        if not args.restart_path.is_absolute():
+            args.restart_path = args.restart_path.resolve()
     if not args.out_dir.is_absolute():
         args.out_dir = args.picos_root / args.out_dir
     args.out_dir = args.out_dir.resolve()
@@ -871,6 +1043,7 @@ def main() -> int:
     parser.add_argument("--resonance-b-t", type=float, default=1.2, help="Target ECH resonance magnetic field in tesla. By default RF frequency is derived from this value.")
     parser.add_argument("--derive-rf-frequency-from-resonance-b", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--rf-power", type=float, default=3.0e5)
+    parser.add_argument("--rf-heating", type=int, choices=[0, 1], default=1)
     parser.add_argument("--max-rf-power", type=float, default=3.0e5)
     parser.add_argument("--rf-efield-amplitude", type=float, default=1.0e4)
     parser.add_argument("--rf-max-energy-gain-fraction", type=float, default=0.25)
@@ -890,9 +1063,19 @@ def main() -> int:
     parser.add_argument("--rf-window-end", type=float, default=None, help="End of active RF heating window in meters; defaults to --z-max.")
     parser.add_argument("--target-z", type=float, default=None, help="Target marker position in meters; defaults to --z-max.")
     parser.add_argument("--boundary-type", type=int, default=1)
-    parser.add_argument("--source-rate", type=float, default=1.0e19)
-    parser.add_argument("--source-z", type=float, default=1.5)
-    parser.add_argument("--source-sigma", type=float, default=0.3)
+    parser.add_argument("--source-rate", type=float, default=1.0e23)
+    parser.add_argument("--source-z", type=float, default=1.75)
+    parser.add_argument("--source-sigma", type=float, default=0.15)
+    parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV with z_m, Ne_m3, Te_eV, and optionally q_W_m2 columns.")
+    parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF; the z histogram is used as the pair-source profile.")
+    parser.add_argument("--profile-ne-floor-fraction", type=float, default=0.05, help="Minimum density-shape value as a fraction of the profile peak.")
+    parser.add_argument("--profile-te-floor-ev", type=float, default=0.5, help="Minimum Te used when building normalized Te profile files.")
+    parser.add_argument("--use-density-as-source", action=argparse.BooleanOptionalAction, default=False, help="Use the density profile shape as the pair-source shape when no source particle file is provided.")
+    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--restart-path", type=Path, default=None, help="Previous PICOS++ output/HDF5 directory to load before normalization.")
+    parser.add_argument("--restart-snapshot", type=int, default=-1, help="HDF5 snapshot index to load; -1 loads the latest numeric snapshot.")
+    parser.add_argument("--restart-continue-time", action=argparse.BooleanOptionalAction, default=False, help="Continue the physical clock from the restart snapshot time.")
     parser.add_argument("--ic-type", type=int, default=1)
     parser.add_argument("--radius", type=float, default=0.05)
     parser.add_argument("--dtc", type=float, default=0.05)
