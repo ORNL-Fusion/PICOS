@@ -1,6 +1,9 @@
 #include "rfOperator.h"
 
 #include <algorithm>
+#include <cmath>
+#include <exception>
+#include <limits>
 
 #ifndef HAS_STD_BESSEL
 #include <boost/math/special_functions/bessel.hpp>
@@ -60,7 +63,24 @@ double perpendicularSpeedForRf(const params_TYP * params, const ionSpecies_TYP &
     {
         return hypot(species.V_p(ii,1), species.V_p(ii,2));
     }
-    return species.V_p(ii,1);
+    return fabs(species.V_p(ii,1));
+}
+
+double safeBesselJ(int order, double argument)
+{
+    if (order < 0 || !std::isfinite(argument) || argument < 0.0)
+    {
+        return 0.0;
+    }
+
+    try
+    {
+        return CYL_BESSEL_J(order, argument);
+    }
+    catch (const std::exception&)
+    {
+        return 0.0;
+    }
 }
 
 double gammaFromSpeed(double speed)
@@ -146,8 +166,18 @@ void RF_Operator_TYP::calculateResNum(int ii, params_TYP * params, CS_TYP * CS, 
     // Particle states:
     double vpar = IONS->V_p(ii,0);
     double vper = perpendicularSpeedForRf(params, *IONS, ii);
-    double Bp   = IONS->BX_p(ii);
+    double Bp   = fabs(IONS->BX_p(ii));
+    if (!std::isfinite(Bp) || Bp <= double_zero || !std::isfinite(vpar) || !std::isfinite(vper))
+    {
+        IONS->resNum(ii) = std::numeric_limits<double>::infinity();
+        return;
+    }
     double gamma = relativisticElectronsEnabledForSpecies(params, *IONS) ? gammaFromVelocity(vpar, vper) : 1.0;
+    if (!std::isfinite(gamma) || gamma <= double_zero)
+    {
+        IONS->resNum(ii) = std::numeric_limits<double>::infinity();
+        return;
+    }
     double wcp   = abs(Q)*Bp/(gamma*Ma);
 
     // RF paramters:
@@ -259,39 +289,93 @@ void RF_Operator_TYP::calculateRfTerms(int ii, params_TYP * params, CS_TYP * CS,
     const double gamma = relativistic ? gammaFromVelocity(vpar, vper) : 1.0;
 
     // Particle-defined fields:
-    double Bp   = IONS->BX_p(ii);
+    double Bp   = fabs(IONS->BX_p(ii));
     double dBp  = IONS->dBX_p(ii);
     double ddBp = IONS->ddBX_p(ii);
     double Ep   = IONS->EX_p(ii);
+    if (!std::isfinite(Bp) || Bp <= double_zero ||
+        !std::isfinite(dBp) || !std::isfinite(ddBp) || !std::isfinite(Ep) ||
+        !std::isfinite(vpar) || !std::isfinite(vper) ||
+        !std::isfinite(gamma) || gamma <= double_zero || Ma <= double_zero ||
+        n <= 0)
+    {
+        IONS->udErf(ii) = 0.0;
+        IONS->doppler(ii) = 0.0;
+        IONS->udE3(ii) = 0.0;
+        return;
+    }
 
     // Derived quantities:
     double Omega   = abs(Q)*Bp/(gamma*Ma);
     double dOmega  = abs(Q)*dBp/(gamma*Ma);
     double ddOmega = abs(Q)*ddBp/(gamma*Ma);
     double qOverMass = Q/(gamma*Ma);
+    if (!std::isfinite(Omega) || Omega <= double_zero ||
+        !std::isfinite(dOmega) || !std::isfinite(ddOmega) || !std::isfinite(qOverMass))
+    {
+        IONS->udErf(ii) = 0.0;
+        IONS->doppler(ii) = 0.0;
+        IONS->udE3(ii) = 0.0;
+        return;
+    }
 
     // Calculate the first and second time derivative of Omega:
     double Omega_dot  = vpar*dOmega;
     double Omega_ddot = pow(vpar,2)*ddOmega  - pow(vper,2)*pow(dOmega,2)/(2.*Omega)  +  qOverMass*Ep*dOmega;
+    if (!std::isfinite(Omega_dot) || !std::isfinite(Omega_ddot))
+    {
+        IONS->udErf(ii) = 0.0;
+        IONS->doppler(ii) = 0.0;
+        IONS->udE3(ii) = 0.0;
+        return;
+    }
 
     // Calculate the interaction time:
     if ( pow(n*Omega_ddot,2) > 4.8175*abs(pow(n*Omega_dot,3)) )
     {
         // tau_b
         // Approximate Ai(x) ~ 0.3833
+        if (abs(n*Omega_ddot) <= double_zero)
+        {
+            IONS->udErf(ii) = 0.0;
+            IONS->doppler(ii) = 0.0;
+            IONS->udE3(ii) = 0.0;
+            return;
+        }
         tau_rf = (2*M_PI)*pow(abs(2/(n*Omega_ddot)),1.0/3.0)*0.3833;
     }
     else
     {
         // tau_a
+        if (abs(n*Omega_dot) <= double_zero)
+        {
+            IONS->udErf(ii) = 0.0;
+            IONS->doppler(ii) = 0.0;
+            IONS->udE3(ii) = 0.0;
+            return;
+        }
         tau_rf = sqrt(2*M_PI/abs(n*Omega_dot));
+    }
+    if (!std::isfinite(tau_rf) || tau_rf <= double_zero)
+    {
+        IONS->udErf(ii) = 0.0;
+        IONS->doppler(ii) = 0.0;
+        IONS->udE3(ii) = 0.0;
+        return;
     }
 
     // Calculate bessel terms:
     rL  = vper/Omega;
-    flr = kper*rL;
-    J_nm1 = CYL_BESSEL_J(n - 1,flr);
-    J_np1 = CYL_BESSEL_J(n + 1,flr);
+    flr = fabs(kper)*rL;
+    if (!std::isfinite(flr) || flr < 0.0)
+    {
+        IONS->udErf(ii) = 0.0;
+        IONS->doppler(ii) = 0.0;
+        IONS->udE3(ii) = 0.0;
+        return;
+    }
+    J_nm1 = safeBesselJ(n - 1, flr);
+    J_np1 = safeBesselJ(n + 1, flr);
 
     /*
     cout << "rL = " << rL*CS->length << endl;
