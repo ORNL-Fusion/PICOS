@@ -34,7 +34,7 @@ PICOS_ROOT=${PICOS_ROOT:-${HOME}/myRepos/PICOS_ECH}
 PICOS_BUILD_DIR=${PICOS_BUILD_DIR:-${PICOS_ROOT}/build}
 PICOS_BIN=${PICOS_BIN:-${PICOS_BUILD_DIR}/picosFILES/src/xpicos}
 RUN_ROOT=${RUN_ROOT:-${SCRATCH}/PICOS_MPEX/scenario14_triplet}
-RUN_LABEL=${RUN_LABEL:-p262144_100us_nocoll_nersc}
+RUN_LABEL=${RUN_LABEL:-p262144_100us_coll_nersc}
 
 # Perlmutter CPU defaults. Keep MPI ranks even; PICOS++ requires that.
 MPI_RANKS=${MPI_RANKS:-128}
@@ -66,7 +66,12 @@ fi
 
 RUN_PICOS_FILES=${RUN_ROOT}/picosFILES
 mkdir -p "${RUN_PICOS_FILES}/inputFiles" "${RUN_PICOS_FILES}/outputFiles" "${RUN_ROOT}/logs"
-rsync -a "${PICOS_ROOT}/picosFILES/inputFiles/" "${RUN_PICOS_FILES}/inputFiles/"
+if [ -d "${PICOS_ROOT}/templateFILES" ]; then
+  rsync -a "${PICOS_ROOT}/templateFILES/" "${RUN_PICOS_FILES}/inputFiles/"
+fi
+if [ -d "${PICOS_ROOT}/picosFILES/inputFiles" ]; then
+  rsync -a "${PICOS_ROOT}/picosFILES/inputFiles/" "${RUN_PICOS_FILES}/inputFiles/"
+fi
 git -C "${PICOS_ROOT}" log --oneline -1 > "${RUN_ROOT}/commitHash.txt"
 
 CASES=(
@@ -91,7 +96,7 @@ for tag in "${CASES[@]}"; do
   if [ ! -f "${input_file}" ] || [ ! -f "${ion_file}" ]; then
     echo "Missing input deck for ${tag}." >&2
     echo "Generate decks before submitting, for example:" >&2
-    echo "  python scripts/run_mpex_triplet_picos_fortran.py --setup-only --skip-smooth --picos-run-mode nonrel --run-label ${RUN_LABEL} --particles 262144 --physical-time 1.0e-4 --output-count 50 --collisions 0 --efield-solve 1 --field-solve-model 2 --electron-plasma-timestep-limiter 0" >&2
+    echo "  python scripts/run_mpex_triplet_picos_fortran.py --setup-only --skip-smooth --picos-run-mode nonrel --run-label ${RUN_LABEL} --particles 262144 --physical-time 1.0e-4 --output-count 50 --collisions 1 --efield-solve 1 --field-solve-model 2 --electron-plasma-timestep-limiter 0" >&2
     exit 2
   fi
 

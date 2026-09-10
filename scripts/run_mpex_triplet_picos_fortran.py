@@ -295,7 +295,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plot-z-max", type=float, default=8.0)
     parser.add_argument("--energy-max", type=float, default=3500.0)
     parser.add_argument("--target-z", type=float, default=8.0)
-    parser.add_argument("--collisions", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--collisions", type=int, choices=[0, 1], default=1)
     parser.add_argument("--efield-solve", type=int, choices=[0, 1], default=1)
     parser.add_argument("--field-solve-model", type=int, choices=[0, 1, 2], default=2)
     parser.add_argument("--electron-gyro-timestep-limiter", type=int, choices=[0, 1], default=0)
