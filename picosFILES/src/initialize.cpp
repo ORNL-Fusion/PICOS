@@ -310,8 +310,8 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * LOADING ION PARAMETERS * * * * * * * * * * * * * * * * * *\n";
-    	cout << "+ Number of ion species: " << params->numberOfParticleSpecies << endl;
-    	cout << "+ Number of tracer species: " << params->numberOfTracerSpecies << endl;
+        cout << "+ Number of ion species: " << params->numberOfParticleSpecies << endl;
+        cout << "+ Number of tracer species: " << params->numberOfTracerSpecies << endl;
     }
 
     // Assemble path to "ion_properties.ion":
@@ -514,6 +514,31 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
     params->em_IC.Bx_profile.load(fileName5);
     params->f_IC.Te_profile.load(fileName6);
 
+    // Guard the field-line (lmag) profile-length contract:
+    // ====================================================
+    // PICOS assumes each profile is sampled uniformly on [LX_min, LX_max] with exactly
+    // BX_NX/Te_NX points and reconstructs the grid spacing from that count (see
+    // initializeFields() and the A/ds derivation below). It never reads a companion grid
+    // file, so this guard can verify sample count but not coordinate uniformity. The
+    // external field-line preprocessor is responsible for uniform sampling.
+    if ((int)params->em_IC.Bx_profile.n_elem != params->em_IC.BX_NX)
+    {
+        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+            cerr << "ERROR: B profile '" << params->em_IC.BX_fileName << "' has "
+                 << params->em_IC.Bx_profile.n_elem << " samples but IC_BX_NX = "
+                 << params->em_IC.BX_NX << ". The profile must contain exactly "
+                 << "IC_BX_NX points." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -111);
+    }
+    if ((int)params->f_IC.Te_profile.n_elem != params->f_IC.Te_NX)
+    {
+        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+            cerr << "ERROR: Te profile '" << params->f_IC.Te_fileName << "' has "
+                 << params->f_IC.Te_profile.n_elem << " samples but IC_Te_NX = "
+                 << params->f_IC.Te_NX << "." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -111);
+    }
+
     // Electron temperature "x" scale:
     // ===============================
     int Te_NX = params->f_IC.Te_NX;
@@ -538,6 +563,18 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
         IONS->at(ss).p_IC.Tper_profile.load(fileName2);
         IONS->at(ss).p_IC.Tpar_profile.load(fileName3);
         IONS->at(ss).p_IC.densityFraction_profile.load(fileName4);
+
+        // Guard the uniform-grid contract for each ion profile (see note above):
+        // =====================================================================
+        if ((int)IONS->at(ss).p_IC.Tper_profile.n_elem != IONS->at(ss).p_IC.Tper_NX ||
+            (int)IONS->at(ss).p_IC.Tpar_profile.n_elem != IONS->at(ss).p_IC.Tpar_NX ||
+            (int)IONS->at(ss).p_IC.densityFraction_profile.n_elem != IONS->at(ss).p_IC.densityFraction_NX)
+        {
+            if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+                cerr << "ERROR: ion species " << ss << " IC profile length does not match "
+                     << "its declared NX. Each profile must contain exactly NX points." << endl;
+            MPI_Abort(MPI_COMM_WORLD, -111);
+        }
 
         // Rescale the plasma Profiles:
         // ================================
@@ -763,9 +800,11 @@ void init_TYP::calculateMeshParams(params_TYP * params)
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "+ Fraction of cell resolved: " << params->dp << endl;
-        cout << "+ Number of mesh nodes along x-axis: " << params->mesh.NX_IN_SIM << endl;
-    	cout << "+ Size of simulation domain along the x-axis: " << params->mesh.LX << " m" << endl;
-    	cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
+        // "x-axis" here is the 1-D spatial coordinate: field-line arc length lmag
+        // (= axial x for a straight axis). See docs/field_aligned_generalization.tex.
+        cout << "+ Number of mesh nodes along arc-length (lmag) axis: " << params->mesh.NX_IN_SIM << endl;
+        cout << "+ Size of simulation domain along the arc-length (lmag) axis: " << params->mesh.LX << " m" << endl;
+        cout << "* * * * * * * * * * * *  SIMULATION GRID LOADED/COMPUTED  * * * * * * * * * * * * * * * * * *" << endl;
     }
 }
 
@@ -1104,9 +1143,12 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 
         // ddBX profile:
         // ============
+        // diff(.,2) returns BX_NX-2 values; element k is the 2nd difference centered at
+        // node k+1, so it must be written to subvec(1, BX_NX-2) (not subvec(0, BX_NX-3)),
+        // mirroring the dBX assignment above. The old half-cell misalignment is fixed here.
         arma::vec ddBX(BX_NX,1);
-        ddBX.subvec(0,BX_NX-3) = diff(params->em_IC.Bx_profile,2)/(dX*dX);
-        ddBX(BX_NX-2) = ddBX(BX_NX-3);
+        ddBX.subvec(1,BX_NX-2) = diff(params->em_IC.Bx_profile,2)/(dX*dX);
+        ddBX(0)       = ddBX(1);
         ddBX(BX_NX-1) = ddBX(BX_NX-2);
 
         yt = ddBX;
@@ -1118,7 +1160,8 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "Initializing electromagnetic fields within simulation" << endl;
-        cout << "+ Reference magnetic field along x-axis: " << scientific << params->em_IC.BX << fixed << " T" << endl;
+        // Reference B is the value at the normalization node of the arc-length (lmag) grid.
+        cout << "+ Reference magnetic field along arc-length (lmag) axis: " << scientific << params->em_IC.BX << fixed << " T" << endl;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);

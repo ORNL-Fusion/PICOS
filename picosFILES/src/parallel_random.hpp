@@ -3,8 +3,10 @@
 
 #include <mpi.h>
 
+#include <cmath>
 #include <concepts>
 #include <random>
+#include <vector>
 
 /// Name space for PICOS.
 namespace picos {
@@ -175,17 +177,26 @@ namespace picos {
                           to_MPI_type<T> (), MPI_SUM, MPI_COMM_WORLD);
 
             const T base = autocorrelation(result, 0)*static_cast<T>(0.05);
-            MPI_Barrier(MPI_COMM_WORLD);
-#pragma omp parallel default(shared)
-            for (size_t i = 1 + rank*randoms.size()*batch_size/2, ie = i - 1 + batch_size/2; i < ie; i++) {
-                const T test = autocorrelation(result, i);
-                if (test > base) {
-                    std::cerr << "Auto correlation failure." << " "
-                              << rank << " " << thread() << " "
-                              << base << " " << test << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, -1);
+
+            // Representative short, intra-stream, and cross-stream lags are enough to
+            // catch correlated generators. Testing thousands of full-sequence lags made
+            // this unit test quadratic in the global sample count. With MPI ranks each
+            // also inheriting every OpenMP thread, that could consume all CPUs for hours.
+            if (rank == 0) {
+                const std::vector<size_t> offsets {
+                    1, 2, 3, 5, 8, 13, 21, 55,
+                    batch_size/2, batch_size - 1, batch_size, batch_size + 1
+                };
+                for (const size_t i : offsets) {
+                    const T test = autocorrelation(result, i);
+                    if (std::abs(test) > base) {
+                        std::cerr << "Auto correlation failure at lag " << i << ". "
+                                  << base << " " << test << std::endl;
+                        MPI_Abort(MPI_COMM_WORLD, -1);
+                    }
                 }
             }
+            MPI_Barrier(MPI_COMM_WORLD);
         }
     }
 }

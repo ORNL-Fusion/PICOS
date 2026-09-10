@@ -1,11 +1,7 @@
 #ifndef H_OUTPUTHDF5
 #define H_OUTPUTHDF5
 
-#ifdef OLD_HEADER_FILENAME
-#include <iostream.h>
-#else
 #include <iostream>
-#endif
 
 #include <string>
 #include <cmath>
