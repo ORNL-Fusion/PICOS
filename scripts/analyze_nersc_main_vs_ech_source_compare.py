@@ -48,7 +48,6 @@ def hdf_dir(run_root: Path, case: dict[str, str]) -> Path:
         / "run"
         / "picosFILES"
         / "outputFiles"
-        / case["tag"]
         / "HDF5"
     )
     if not path.is_dir():

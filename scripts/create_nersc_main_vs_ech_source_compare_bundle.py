@@ -260,24 +260,29 @@ def common_script(case: CompareCase) -> str:
 
       STAGE_ROOT="${{RUN_ROOT}}/${{CASE_SUBDIR}}/run"
       RUN_PICOS_FILES="${{STAGE_ROOT}}/picosFILES"
-      mkdir -p "${{RUN_PICOS_FILES}}/inputFiles" "${{RUN_PICOS_FILES}}/outputFiles" "${{STAGE_ROOT}}/logs"
+      mkdir -p "${{RUN_PICOS_FILES}}/inputFiles" "${{STAGE_ROOT}}/logs"
       rsync -a "${{CASE_DIR}}/inputFiles/" "${{RUN_PICOS_FILES}}/inputFiles/"
       git -C "${{PICOS_ROOT}}" log --oneline -1 > "${{STAGE_ROOT}}/commitHash.txt" || true
 
-      if [ ! -f "${{RUN_PICOS_FILES}}/inputFiles/input_file_${{CASE_TAG}}.input" ]; then
-        echo "Missing input_file_${{CASE_TAG}}.input under ${{RUN_PICOS_FILES}}/inputFiles." >&2
+      if [ ! -f "${{RUN_PICOS_FILES}}/inputFiles/input_file.input" ]; then
+        echo "Missing input_file.input under ${{RUN_PICOS_FILES}}/inputFiles." >&2
+        exit 2
+      fi
+      if [ ! -f "${{RUN_PICOS_FILES}}/inputFiles/ions_properties.ion" ]; then
+        echo "Missing ions_properties.ion under ${{RUN_PICOS_FILES}}/inputFiles." >&2
         exit 2
       fi
 
-      if [ -d "${{RUN_PICOS_FILES}}/outputFiles/${{CASE_TAG}}" ]; then
+      if [ -d "${{RUN_PICOS_FILES}}/outputFiles/HDF5" ]; then
         if [ "${{OVERWRITE_OUTPUTS:-0}}" = "1" ]; then
-          rm -rf "${{RUN_PICOS_FILES}}/outputFiles/${{CASE_TAG}}"
+          rm -rf "${{RUN_PICOS_FILES}}/outputFiles"
         else
-          echo "Output exists: ${{RUN_PICOS_FILES}}/outputFiles/${{CASE_TAG}}" >&2
+          echo "Output exists: ${{RUN_PICOS_FILES}}/outputFiles/HDF5" >&2
           echo "Set OVERWRITE_OUTPUTS=1 to replace it." >&2
           exit 2
         fi
       fi
+      ABS_OUTPUT_DIR="${{RUN_PICOS_FILES}}/outputFiles"
 
       echo "[$(date)] Starting ${{CASE_TAG}}"
       echo "PICOS_ROOT=${{PICOS_ROOT}}"
@@ -286,15 +291,16 @@ def common_script(case: CompareCase) -> str:
       echo "STAGE_ROOT=${{STAGE_ROOT}}"
       echo "MPI_RANKS=${{MPI_RANKS}}"
       echo "OMP_NUM_THREADS=${{OMP_NUM_THREADS}}"
+      echo "ABS_OUTPUT_DIR=${{ABS_OUTPUT_DIR}}"
 
       (
         cd "${{RUN_PICOS_FILES}}"
         srun -n "${{MPI_RANKS}}" -c "${{CPUS_PER_TASK}}" --cpu-bind=cores \\
-          "${{PICOS_BIN}}" 1-D outputFiles "${{CASE_TAG}}"
+          "${{PICOS_BIN}}" 1-D "${{ABS_OUTPUT_DIR}}"
       ) > "${{STAGE_ROOT}}/logs/${{CASE_TAG}}.log" 2>&1
 
       echo "[$(date)] Finished ${{CASE_TAG}}"
-      echo "Output: ${{RUN_PICOS_FILES}}/outputFiles/${{CASE_TAG}}"
+      echo "Output: ${{RUN_PICOS_FILES}}/outputFiles"
     }}
     """
 
@@ -318,7 +324,7 @@ def batch_script(case: CompareCase) -> str:
     CASE_TAG={case.tag}
     CASE_SUBDIR={case.subdir}
     CASE_DIR=${{SLURM_SUBMIT_DIR:-$(pwd)}}
-    if [ ! -f "${{CASE_DIR}}/inputFiles/input_file_${{CASE_TAG}}.input" ]; then
+    if [ ! -f "${{CASE_DIR}}/inputFiles/input_file.input" ]; then
       echo "Submit from this case directory:" >&2
       echo "  cd <bundle>/{case.subdir} && sbatch ./run_case_nersc.sh" >&2
       exit 2
@@ -400,6 +406,9 @@ def readme_text() -> str:
     The physics is intentionally restricted to features common to both
     branches: one D+ guiding-center kinetic species, fluid electrons, Ohm-law
     electric field solve, collisions on, RF off, and the legacy z=0 warm source.
+    Each case directory uses the legacy untagged input names, `input_file.input`
+    and `ions_properties.ion`, because the current master branch resolves
+    profile paths from the absolute output directory.
     This is the right comparison to check that the PICOS_ECH branch still
     reproduces the main-branch steady-source behavior before enabling kinetic
     electrons, explicit pair source, Poisson solve, or ECH.
@@ -449,8 +458,8 @@ def populate_case(root: Path, case: CompareCase, profile_dir: Path) -> None:
     case_dir = root / case.subdir
     input_dir = case_dir / "inputFiles"
     input_dir.mkdir(parents=True, exist_ok=True)
-    (input_dir / f"input_file_{case.tag}.input").write_text(input_deck(case.tag))
-    (input_dir / f"ions_properties_{case.tag}.ion").write_text(ion_deck())
+    (input_dir / "input_file.input").write_text(input_deck(case.tag))
+    (input_dir / "ions_properties.ion").write_text(ion_deck())
     for name in PROFILE_FILES:
         src = profile_dir / name
         if not src.is_file():
