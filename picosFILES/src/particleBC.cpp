@@ -45,7 +45,9 @@ double particleParallelKineticEnergy(const params_TYP &params, const ionSpecies_
 }
 
 particleBC_TYP::particleBC_TYP() :
-dot_({0, 0, 0, 0, 0, 0}),
+dot_({0, 0, 0, 0, 0, 0, 0}),
+pairSourceBacklogIonPairs_(0.0),
+pairSourceBacklogElectronPairs_(0.0),
 randoms_2pi(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device())),
 randoms_one(picos::random::instances<double, uniform, 0.0, 1.0> (device())){}
 
@@ -321,6 +323,7 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
     {
         dot_.N5 = 0;
         dot_.E5 = 0;
+        dot_.P5 = 0;
         const double DT = params.DT;
 
         for (ionSpecies_TYP &ion : IONS)
@@ -328,7 +331,7 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
             const double NCP = ion.NCP/DT;
 
             const int iie=ion.NSP;
-            #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N5 += omp_in.N5, omp_out.E5 += omp_in.E5)
+            #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N5 += omp_in.N5, omp_out.E5 += omp_in.E5, omp_out.P5 += omp_in.P5)
             #pragma omp parallel for default(none) shared(ion, iie, NCP) reduction(sum:dot_)
             for(int ii=0; ii<iie; ii++)
             {
@@ -340,6 +343,7 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
                     // Accumulate fluxes:
                     dot_.N5 += a_p;
                     dot_.E5 += a_p*ion.dE5(ii);
+                    dot_.P5 += a_p*ion.M*ion.V_p(ii,0);
 
                     // Clear flags:
                     ion.f5(ii)  = 0;
@@ -350,7 +354,7 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
         } // Species
 
         // Reduce over all MPI process
-        MPI_AllreduceDouble<2> (params,&dot_.N5);
+        MPI_AllreduceDouble<3> (params,&dot_.N5);
 
     } // Particle MPI
 }
@@ -474,6 +478,53 @@ void particleBC_TYP::injectParticleFromPairSource(int ii, double xBirth, double 
     ION.dE2(ii) = 0.0;
 }
 
+void particleBC_TYP::deactivatePairSourceCandidate(int ii, const params_TYP &params, ionSpecies_TYP &ION) const
+{
+    const double xBirth = min(max(params.pairSource.mean_x,
+                                  params.geometry.LX_min + double_zero),
+                              params.geometry.LX_max - double_zero);
+    ION.X_p(ii) = xBirth;
+    ION.V_p.row(ii).zeros();
+    ION.a_p(ii) = 0.0;
+    ION.f1(ii) = 0;
+    ION.f2(ii) = 0;
+    ION.f5(ii) = 0;
+    ION.dE1(ii) = 0.0;
+    ION.dE2(ii) = 0.0;
+    ION.dE5(ii) = 0.0;
+    if (ii < static_cast<int>(ION.mu_p.n_elem))
+    {
+        ION.mu_p(ii) = 0.0;
+    }
+}
+
+double particleBC_TYP::pairSourceRequestedPairsThisStep(const params_TYP &params, double globalSlots, double &backlog)
+{
+    if (params.pairSource.weightMode != PAIR_SOURCE_WEIGHT_EXPLICIT_RATE ||
+        params.pairSource.rate <= 0.0)
+    {
+        return 0.0;
+    }
+
+    backlog += params.pairSource.rate*params.DT;
+    if (globalSlots <= 0.0)
+    {
+        return 0.0;
+    }
+
+    return backlog;
+}
+
+void particleBC_TYP::consumePairSourceBacklog(const params_TYP &params, double actualPairs, double &backlog)
+{
+    if (params.pairSource.weightMode != PAIR_SOURCE_WEIGHT_EXPLICIT_RATE)
+    {
+        return;
+    }
+
+    backlog = max(0.0, backlog - max(0.0, actualPairs));
+}
+
 void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS)
 {
     if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR)
@@ -498,62 +549,134 @@ void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const 
 
     ionSpecies_TYP &ion = IONS[ionIndex];
     ionSpecies_TYP &electron = IONS[electronIndex];
+    const bool explicitWeightMode = params.pairSource.weightMode == PAIR_SOURCE_WEIGHT_EXPLICIT_RATE;
 
-    vector<int> ionLost;
-    vector<int> electronLost;
-    ionLost.reserve(static_cast<size_t>(ion.NSP));
-    electronLost.reserve(static_cast<size_t>(electron.NSP));
+    vector<int> ionCandidates;
+    vector<int> electronCandidates;
+    ionCandidates.reserve(static_cast<size_t>(ion.NSP));
+    electronCandidates.reserve(static_cast<size_t>(electron.NSP));
 
     for (int ii=0; ii<static_cast<int>(ion.NSP); ii++)
     {
-        if (ion.f1(ii) == 1 || ion.f2(ii) == 1)
+        if (ion.f1(ii) == 1 || ion.f2(ii) == 1 ||
+            (explicitWeightMode && ion.a_p(ii) <= double_zero))
         {
-            ionLost.push_back(ii);
+            ionCandidates.push_back(ii);
         }
     }
     for (int ii=0; ii<static_cast<int>(electron.NSP); ii++)
     {
-        if (electron.f1(ii) == 1 || electron.f2(ii) == 1)
+        if (electron.f1(ii) == 1 || electron.f2(ii) == 1 ||
+            (explicitWeightMode && electron.a_p(ii) <= double_zero))
         {
-            electronLost.push_back(ii);
+            electronCandidates.push_back(ii);
         }
-    }
-
-    const int localPairs = min(ionLost.size(), electronLost.size());
-    double globalPairs = static_cast<double>(localPairs);
-    MPI_Allreduce(MPI_IN_PLACE, &globalPairs, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
-
-    const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
-    double ionWeight = min(ion.p_BC.a_p_new, maxWeight);
-    double electronWeight = min(electron.p_BC.a_p_new, maxWeight);
-    if (params.pairSource.weightMode == PAIR_SOURCE_WEIGHT_EXPLICIT_RATE &&
-        globalPairs > 0.0 && params.pairSource.rate > 0.0)
-    {
-        const double realIonPairsPerStep = params.pairSource.rate*params.DT;
-        ionWeight = min(realIonPairsPerStep/(max(ion.NCP, double_zero)*globalPairs), maxWeight);
-        electronWeight = min(realIonPairsPerStep*fabs(ion.Z)/(max(fabs(electron.Z), double_zero)*max(electron.NCP, double_zero)*globalPairs),
-                             maxWeight);
     }
 
     uniform_2Pi &rand_2pi = randoms_2pi[picos::random::thread()];
     uniform_one &rand_one = randoms_one[picos::random::thread()];
 
-    for (int kk=0; kk<localPairs; kk++)
+    if (explicitWeightMode)
+    {
+        double globalIonSlots = static_cast<double>(ionCandidates.size());
+        double globalElectronSlots = static_cast<double>(electronCandidates.size());
+        MPI_Allreduce(MPI_IN_PLACE, &globalIonSlots, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+        MPI_Allreduce(MPI_IN_PLACE, &globalElectronSlots, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+        const double requestedIonPairs =
+            pairSourceRequestedPairsThisStep(params, globalIonSlots, pairSourceBacklogIonPairs_);
+        const double requestedElectronPairs =
+            pairSourceRequestedPairsThisStep(params, globalElectronSlots, pairSourceBacklogElectronPairs_);
+        const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
+        const double ionCharge = fabs(ion.Z);
+        const double electronCharge = fabs(electron.Z);
+
+        if ((globalIonSlots > 0.0 || globalElectronSlots > 0.0) &&
+            (ion.NCP <= double_zero || electron.NCP <= double_zero ||
+             ionCharge <= double_zero || electronCharge <= double_zero))
+        {
+            if (params.mpi.IS_PARTICLES_ROOT)
+            {
+                cout << "PICOS++ ERROR: explicit pairSource weighting requires positive NCP and charge magnitude for both species." << endl;
+            }
+            MPI_Abort(params.mpi.COMM, -112);
+        }
+
+        const double ionWeight = (requestedIonPairs > 0.0 && globalIonSlots > 0.0) ?
+                                 min(requestedIonPairs/(ion.NCP*globalIonSlots), maxWeight) :
+                                 0.0;
+        const double electronWeight = (requestedElectronPairs > 0.0 && globalElectronSlots > 0.0) ?
+                                      min(requestedElectronPairs*ionCharge/(electronCharge*electron.NCP*globalElectronSlots),
+                                          maxWeight) :
+                                      0.0;
+
+        for (size_t kk=0; kk<ionCandidates.size(); kk++)
+        {
+            const int ii = ionCandidates[kk];
+            if (ionWeight <= double_zero)
+            {
+                deactivatePairSourceCandidate(ii, params, ion);
+                continue;
+            }
+            const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
+            injectParticleFromPairSource(ii, xBirth, ionWeight,
+                                         params.pairSource.ionT, params.pairSource.ionE,
+                                         params.pairSource.ionEta, params, ion,
+                                         rand_2pi, rand_one);
+        }
+
+        for (size_t kk=0; kk<electronCandidates.size(); kk++)
+        {
+            const int ii = electronCandidates[kk];
+            if (electronWeight <= double_zero)
+            {
+                deactivatePairSourceCandidate(ii, params, electron);
+                continue;
+            }
+            const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
+            injectParticleFromPairSource(ii, xBirth, electronWeight,
+                                         params.pairSource.electronT, params.pairSource.electronE,
+                                         params.pairSource.electronEta, params, electron,
+                                         rand_2pi, rand_one);
+        }
+
+        if (requestedIonPairs > 0.0 && globalIonSlots > 0.0)
+        {
+            const double actualIonPairs = min(requestedIonPairs, ionWeight*ion.NCP*globalIonSlots);
+            consumePairSourceBacklog(params, actualIonPairs, pairSourceBacklogIonPairs_);
+        }
+        if (requestedElectronPairs > 0.0 && globalElectronSlots > 0.0)
+        {
+            const double actualElectronPairs =
+                min(requestedElectronPairs,
+                    electronWeight*electron.NCP*globalElectronSlots*electronCharge/ionCharge);
+            consumePairSourceBacklog(params, actualElectronPairs, pairSourceBacklogElectronPairs_);
+        }
+
+        return;
+    }
+
+    const size_t localPairs = min(ionCandidates.size(), electronCandidates.size());
+    const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
+    double ionWeight = min(ion.p_BC.a_p_new, maxWeight);
+    double electronWeight = min(electron.p_BC.a_p_new, maxWeight);
+
+    for (size_t kk=0; kk<localPairs; kk++)
     {
         const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
-        injectParticleFromPairSource(ionLost[kk], xBirth, ionWeight,
+        injectParticleFromPairSource(ionCandidates[kk], xBirth, ionWeight,
                                      params.pairSource.ionT, params.pairSource.ionE,
                                      params.pairSource.ionEta, params, ion,
                                      rand_2pi, rand_one);
-        injectParticleFromPairSource(electronLost[kk], xBirth, electronWeight,
+        injectParticleFromPairSource(electronCandidates[kk], xBirth, electronWeight,
                                      params.pairSource.electronT, params.pairSource.electronE,
                                      params.pairSource.electronEta, params, electron,
                                      rand_2pi, rand_one);
     }
 
-    for (size_t kk=localPairs; kk<ionLost.size(); kk++)
+    for (size_t kk=localPairs; kk<ionCandidates.size(); kk++)
     {
-        const int ii = ionLost[kk];
+        const int ii = ionCandidates[kk];
         particleReinjection(ii, params, CS, fields, ion, rand_2pi, rand_one);
         ion.f5(ii) = 1;
         ion.dE5(ii) = particleKineticEnergy(params, ion, ii);
@@ -563,9 +686,9 @@ void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const 
         ion.dE2(ii) = 0.0;
     }
 
-    for (size_t kk=localPairs; kk<electronLost.size(); kk++)
+    for (size_t kk=localPairs; kk<electronCandidates.size(); kk++)
     {
-        const int ii = electronLost[kk];
+        const int ii = electronCandidates[kk];
         particleReinjection(ii, params, CS, fields, electron, rand_2pi, rand_one);
         electron.f5(ii) = 1;
         electron.dE5(ii) = particleKineticEnergy(params, electron, ii);

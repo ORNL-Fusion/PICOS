@@ -124,7 +124,7 @@ def validate_case_inputs(root: Path) -> None:
             "restart_enabled             0",
             "pairSource_mean_x           0.0000000000000000e+00",
             "pairSource_positionMode     0",
-            "pairSource_weightMode       0",
+            "pairSource_weightMode       1",
             "pairSource_Ti_birth         1.5000000000000000e+01",
             "pairSource_Te_birth         1.5000000000000000e+01",
         ],
@@ -148,7 +148,7 @@ def validate_case_inputs(root: Path) -> None:
             "restart_enabled             0",
             "pairSource_mean_x           0.0000000000000000e+00",
             "pairSource_positionMode     0",
-            "pairSource_weightMode       0",
+            "pairSource_weightMode       1",
             "pairSource_Ti_birth         1.5000000000000000e+01",
             "pairSource_Te_birth         1.5000000000000000e+01",
         ],
@@ -184,7 +184,7 @@ def validate_case_inputs(root: Path) -> None:
                 "restart_enabled             0",
                 "pairSource_mean_x           0.0000000000000000e+00",
                 "pairSource_positionMode     0",
-                "pairSource_weightMode       0",
+                "pairSource_weightMode       1",
                 "pairSource_Ti_birth         1.5000000000000000e+01",
                 "pairSource_Te_birth         1.5000000000000000e+01",
                 "RF_electron_Prf                      3.0000000000000000e+05",
@@ -467,7 +467,7 @@ def readme_text() -> str:
     - `IC_weightScale = 1`
     - `pairSource_mean_x = 0`
     - `pairSource_positionMode = 0`
-    - `pairSource_weightMode = 0`
+    - `pairSource_weightMode = 1`
     - `BC_mean_x_1 = BC_mean_x_2 = 0`
     - Stage 1: `SW_RFheating = 0`
     - Stage 2: `SW_RFheating = 1`, `SW_RFheatingIons = 0`, `SW_RFheatingElectrons = 1`

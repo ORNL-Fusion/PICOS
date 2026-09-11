@@ -4,7 +4,8 @@
 The test is intentionally small and artificial: particles stream in a short
 1D domain with no collisions, RF, or field solve.  Boundary-loss reinjection is
 forced often enough that the source location can be inferred from jumps in
-saved particle positions.  The default source is a narrow Gaussian at z=0.
+saved particle positions.  The pair-source cases use explicit-rate weights and
+a narrow Gaussian or profile-weighted source at z=0.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ class Case:
     exe: Path
     pair_source: bool
     pair_mode: int
+    pair_weight_mode: int
     pair_profile_file: str
 
 
@@ -136,6 +138,7 @@ def input_deck(case: Case) -> str:
         pairSource_eta_i            0.7853981633974483
         pairSource_eta_e            0.7853981633974483
         pairSource_positionMode     {case.pair_mode}
+        pairSource_weightMode       {case.pair_weight_mode}
         pairSource_fileName         {case.pair_profile_file}
         pairSource_NS               34
         pairSource_maxParticleWeight 1000
@@ -436,8 +439,9 @@ def summarize_case(case: Case, hdf_dir: Path) -> dict[str, float | str]:
     row: dict[str, float | str] = {
         "case": case.name,
         "branch": case.branch_label,
-        "source_model": "pair" if case.pair_source else "legacy",
+        "source_model": ("pair_explicit_weight" if case.pair_weight_mode == 1 else "pair_legacy_weight") if case.pair_source else "legacy",
         "pair_position_mode": case.pair_mode if case.pair_source else -1,
+        "pair_weight_mode": case.pair_weight_mode if case.pair_source else -1,
         "ion_density_peak_z_m": ion_peak_z,
         "ion_density_peak_m3": ion_peak_n,
         "electron_density_peak_z_m": electron_peak_z,
@@ -537,10 +541,10 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cases = [
-        Case("master_legacy_z0", "origin/master", master_exe, False, 0, "source_compare_unit_profile.txt"),
-        Case("current_legacy_z0", "PICOS_ECH", current_exe, False, 0, "source_compare_unit_profile.txt"),
-        Case("current_pair_gaussian_z0", "PICOS_ECH", current_exe, True, 0, "source_compare_unit_profile.txt"),
-        Case("current_pair_profile_z0", "PICOS_ECH", current_exe, True, 1, "source_compare_pair_profile_z0.txt"),
+        Case("master_legacy_z0", "origin/master", master_exe, False, 0, 0, "source_compare_unit_profile.txt"),
+        Case("current_legacy_z0", "PICOS_ECH", current_exe, False, 0, 0, "source_compare_unit_profile.txt"),
+        Case("current_pair_gaussian_z0", "PICOS_ECH", current_exe, True, 0, 1, "source_compare_unit_profile.txt"),
+        Case("current_pair_profile_z0", "PICOS_ECH", current_exe, True, 1, 1, "source_compare_pair_profile_z0.txt"),
     ]
 
     run_dirs: dict[str, Path] = {}

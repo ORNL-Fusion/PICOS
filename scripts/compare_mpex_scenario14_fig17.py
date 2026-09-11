@@ -1078,7 +1078,7 @@ def main() -> int:
     parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
     parser.add_argument("--ic-weight-scale", type=float, default=1.0, help="Initial physical weight multiplier for computational markers. Use 0 for source-only startup.")
     parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
-    parser.add_argument("--pair-source-weight-mode", type=int, choices=[0, 1], default=0, help="0 uses legacy BC_G weighting; 1 uses explicit pairSource_rate weighting.")
+    parser.add_argument("--pair-source-weight-mode", type=int, choices=[0, 1], default=1, help="0 uses legacy BC_G weighting; 1 uses explicit pairSource_rate weighting.")
     parser.add_argument("--restart-path", type=Path, default=None, help="Previous PICOS++ output/HDF5 directory to load before normalization.")
     parser.add_argument("--restart-snapshot", type=int, default=-1, help="HDF5 snapshot index to load; -1 loads the latest numeric snapshot.")
     parser.add_argument("--restart-continue-time", action=argparse.BooleanOptionalAction, default=False, help="Continue the physical clock from the restart snapshot time.")

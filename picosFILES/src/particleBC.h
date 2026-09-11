@@ -40,9 +40,14 @@ private:
 	void sampleSourceVelocity(int ii, double temperature, double energy, double eta,
 	                          const params_TYP &params, ionSpecies_TYP &ION,
 	                          uniform_2Pi &rand_2pi, uniform_one &rand_one) const;
+	void deactivatePairSourceCandidate(int ii, const params_TYP &params, ionSpecies_TYP &ION) const;
+	double pairSourceRequestedPairsThisStep(const params_TYP &params, double globalSlots, double &backlog);
+	void consumePairSourceBacklog(const params_TYP &params, double actualPairs, double &backlog);
+	double pairSourceBacklogIonPairs_;
+	double pairSourceBacklogElectronPairs_;
 
-    template <size_t S>
-    static void MPI_AllreduceDouble(const params_TYP &params, double *v)
+	template <size_t S>
+	static void MPI_AllreduceDouble(const params_TYP &params, double *v)
     {
         MPI_Allreduce(MPI_IN_PLACE, v, S, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
     }
@@ -89,6 +94,7 @@ public:
         double E2;
         double N5;
         double E5;
+        double P5;
     };
     dot_buffer dot_;
 

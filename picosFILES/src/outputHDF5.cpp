@@ -782,6 +782,7 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 				saveBoundaryScalar("E1", particleBC->dot_.E1, CS->energy/CS->time);
 				saveBoundaryScalar("E2", particleBC->dot_.E2, CS->energy/CS->time);
 				saveBoundaryScalar("E5", particleBC->dot_.E5, CS->energy/CS->time);
+				saveBoundaryScalar("P5", particleBC->dot_.P5, CS->mass*CS->velocity/CS->time);
 				delete group_boundary;
 			}
 		else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)

@@ -2,15 +2,15 @@
 """Validate PICOS++ source build-up before RF/ECH studies.
 
 The validation uses fixed computational markers with zero initial physical
-weight.  Lost markers are reinjected from a warm source centered at z=0 using
-the legacy rate-constrained BC_G source model.  The expected qualitative
-behavior is:
+weight.  In explicit pair-source mode those zero-weight markers are activated
+from a warm source centered at z=0 using the requested pair source rate.  The
+expected qualitative behavior is:
 
 * n_i and n_e are initially zero in every cell.
 * density appears first near the source and then fills the open domain.
 * finite-temperature cells stay close to the source birth temperature.
-* the pair-source path, when enabled with legacy BC weighting, gives the same
-  source-rate normalization as the master-style per-species source.
+* the pair-source path injects equal-and-opposite charge pairs at the requested
+  rate while recording particle, energy, and momentum source terms.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def write_vector(path: Path, values: np.ndarray) -> None:
     np.savetxt(path, np.asarray(values, dtype=float), fmt="%.16e")
 
 
-def input_deck(tag: str, pair_source: bool, sim_gyroperiods: float, output_gyroperiods: float) -> str:
+def input_deck(tag: str, pair_source: bool, source_rate: float, sim_gyroperiods: float, output_gyroperiods: float) -> str:
     pair_switch = 1 if pair_source else 0
     return textwrap.dedent(
         f"""
@@ -139,11 +139,11 @@ def input_deck(tag: str, pair_source: bool, sim_gyroperiods: float, output_gyrop
         IC_Te_fileName              {tag}_one.txt
 
         // Coupled electron-ion source:
-        // pairSource_weightMode=0 preserves the legacy BC_G_* source weighting.
+        // pairSource_weightMode=1 uses pairSource_rate to set injected weights.
         // =============================================================================
         pairSource_ionSpecies       1
         pairSource_electronSpecies  2
-        pairSource_rate             0.0
+        pairSource_rate             {source_rate:.16e}
         pairSource_mean_x           0.0
         pairSource_sigma_x          4.0000000000000001e-02
         pairSource_Ti_birth         5.0000000000000000e+03
@@ -153,7 +153,7 @@ def input_deck(tag: str, pair_source: bool, sim_gyroperiods: float, output_gyrop
         pairSource_eta_i            7.8539816339744828e-01
         pairSource_eta_e            7.8539816339744828e-01
         pairSource_positionMode     0
-        pairSource_weightMode       0
+        pairSource_weightMode       1
         pairSource_fileName         {tag}_one.txt
         pairSource_NS               80
         pairSource_maxParticleWeight 1000
@@ -216,8 +216,9 @@ def ion_deck(tag: str, npc: int, source_rate: float, source_sigma: float) -> str
     return textwrap.dedent(
         f"""
         // PICOS++ source build-up validation species deck.
-        // Both kinetic species start with zero physical marker weight and are
-        // fueled from the z=0 warm source through the legacy BC_G_* model.
+        // Both kinetic species start with zero physical marker weight.  In
+        // pair-source mode they are fueled from z=0 using pairSource_rate.
+        // In legacy mode each species uses its own BC_G_* boundary source.
         // =============================================================================
         SPECIES1                      1
         NPC1                          {npc}
@@ -296,7 +297,8 @@ def prepare_case(root: Path, case: SourceCase, npc: int, source_rate: float, sou
     picos_files = root / case.tag / "picosFILES"
     input_dir = picos_files / "inputFiles"
     input_dir.mkdir(parents=True, exist_ok=True)
-    (input_dir / f"input_file_{case.tag}.input").write_text(input_deck(case.tag, case.pair_source, sim_gyroperiods, output_gyroperiods))
+    deck_source_rate = source_rate if case.pair_source else 0.0
+    (input_dir / f"input_file_{case.tag}.input").write_text(input_deck(case.tag, case.pair_source, deck_source_rate, sim_gyroperiods, output_gyroperiods))
     (input_dir / f"ions_properties_{case.tag}.ion").write_text(ion_deck(case.tag, npc, source_rate, source_sigma))
     write_vector(input_dir / f"{case.tag}_one.txt", np.ones(80))
     return picos_files
@@ -404,7 +406,7 @@ def summarize_case(case: SourceCase, data: dict[str, object]) -> list[dict[str, 
         rows.append(
             {
                 "case": case.tag,
-                "source_model": "pair_legacy_weight" if case.pair_source else "legacy",
+                "source_model": "pair_explicit_rate" if case.pair_source else "legacy",
                 "species": SPECIES_LABEL.get(species, species),
                 "t_initial_s": float(times[0]),
                 "t_final_s": float(times[-1]),
@@ -564,7 +566,7 @@ def main() -> int:
     if args.case in ("legacy", "both"):
         cases.append(SourceCase("source_build_up_legacy_z0_empty", False))
     if args.case in ("pair", "both"):
-        cases.append(SourceCase("source_build_up_pair_legacy_weight_z0_empty", True))
+        cases.append(SourceCase("source_build_up_pair_explicit_rate_z0_empty", True))
 
     rows: list[dict[str, object]] = []
     figures: list[Path] = []
@@ -581,8 +583,8 @@ def main() -> int:
         figures.append(output_dir / f"{case.tag}_density_temperature_build_up.png")
         figures.append(output_dir / f"{case.tag}_source_build_up_metrics.png")
 
-    validate_summary(rows, args.min_coverage)
     write_summary(output_dir, rows, figures)
+    validate_summary(rows, args.min_coverage)
     print(output_dir)
     return 0
 
