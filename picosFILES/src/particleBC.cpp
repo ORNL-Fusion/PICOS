@@ -161,8 +161,9 @@ void particleBC_TYP::calculateParticleWeight(const params_TYP &params, const CS_
                 // Total number of computational particles that have leaked:
                 const double S_total  = ion.p_BC.S1 + ion.p_BC.S2;
 
-                // Check if enough particles have left the domain:
-                if ( S_total >= S_min )
+                // Check if enough particles have left the domain. Bootstrap
+                // immediately if the current reinjection weight is still zero.
+                if ( S_total >= S_min || (S_total > 0.0 && ion.p_BC.a_p_new <= double_zero) )
                 {
                     // Calculate computational particle leak rate:
                     const double uN_total = (ion.NCP/DT)*S_total;
@@ -523,9 +524,10 @@ void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const 
     MPI_Allreduce(MPI_IN_PLACE, &globalPairs, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
 
     const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
-    double ionWeight = ion.p_BC.a_p_new;
-    double electronWeight = electron.p_BC.a_p_new;
-    if (globalPairs > 0.0 && params.pairSource.rate > 0.0)
+    double ionWeight = min(ion.p_BC.a_p_new, maxWeight);
+    double electronWeight = min(electron.p_BC.a_p_new, maxWeight);
+    if (params.pairSource.weightMode == PAIR_SOURCE_WEIGHT_EXPLICIT_RATE &&
+        globalPairs > 0.0 && params.pairSource.rate > 0.0)
     {
         const double realIonPairsPerStep = params.pairSource.rate*params.DT;
         ionWeight = min(realIonPairsPerStep/(max(ion.NCP, double_zero)*globalPairs), maxWeight);

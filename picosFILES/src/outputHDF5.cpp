@@ -1092,14 +1092,23 @@ void HDF_TYP::saveIonsVariables(const params_TYP * params, const vector<ionSpeci
 					if (params->mpi.IS_PARTICLES_ROOT)
 					{
 						Group * group_bulkVelocity = new Group( group_ionSpecies->createGroup( "u_m" ) );
+						arma::vec density = IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM);
+						arma::vec flow = zeros<vec>(density.n_elem);
+						for (arma::uword jj=0; jj<density.n_elem; jj++)
+						{
+							if (density(jj) > double_zero)
+							{
+								flow(jj) = CS->velocity*IONS->at(ii).nv_m(jj + 1)/density(jj);
+							}
+						}
 
 						//x-component species bulk velocity
 						name = "x";
 						#ifdef HDF5_DOUBLE
-						vec_values = CS->velocity*IONS->at(ii).nv_m.subvec(1,params->mesh.NX_IN_SIM)/IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM);
-						saveToHDF5(group_ionSpecies, name, &vec_values);
+						vec_values = flow;
+						saveToHDF5(group_bulkVelocity, name, &vec_values);
 						#elif defined HDF5_FLOAT
-						fvec_values = conv_to<fvec>::from(CS->velocity*IONS->at(ii).nv_m.subvec(1,params->mesh.NX_IN_SIM)/IONS->at(ii).n_m.subvec(1,params->mesh.NX_IN_SIM));
+						fvec_values = conv_to<fvec>::from(flow);
 						saveToHDF5(group_bulkVelocity, name, &fvec_values);
 						#endif
 						name.clear();

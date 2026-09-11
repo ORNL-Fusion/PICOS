@@ -24,7 +24,7 @@ BC_type_1                     1
 BC_T_1                        1.6000000000000000e+01
 BC_E_1                        0.0
 BC_eta_1                      0.7853981633974483
-BC_mean_x_1                   1.7500000000000000e+00
+BC_mean_x_1                   0.0000000000000000e+00
 BC_sigma_x_1                  1.4999999999999999e-01
 BC_G_1                        9.9999999999999992e+22
 BC_G_fileName_1               mpex_scenario14_ex8_steady_2ms_p262144_coll_mpexprof_nersc_nonrel_pair_source_norm.txt
@@ -54,7 +54,7 @@ BC_type_2                     1
 BC_T_2                        1.6000000000000000e+01
 BC_E_2                        0.0
 BC_eta_2                      0.7853981633974483
-BC_mean_x_2                   1.7500000000000000e+00
+BC_mean_x_2                   0.0000000000000000e+00
 BC_sigma_x_2                  1.4999999999999999e-01
 BC_G_2                        9.9999999999999992e+22
 BC_G_fileName_2               mpex_scenario14_ex8_steady_2ms_p262144_coll_mpexprof_nersc_nonrel_pair_source_norm.txt

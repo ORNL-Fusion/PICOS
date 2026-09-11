@@ -972,6 +972,15 @@ void PIC_TYP::calculateDerivedIonMoments(const params_TYP &params, CS_TYP &CS, i
 	// Ion pressures:
 
 	// Ion temperatures:
-	ION.Tpar_m = (ION.P11_m - (ION.M*ION.nv_m % ION.nv_m/ION.n_m))/(F_E_DS*ION.n_m);
-	ION.Tper_m = ION.P22_m/(F_E_DS*ION.n_m);
+	ION.Tpar_m.zeros();
+	ION.Tper_m.zeros();
+	for (arma::uword ii=0; ii<ION.n_m.n_elem; ii++)
+	{
+		const double n = ION.n_m(ii);
+		if (n > double_zero)
+		{
+			ION.Tpar_m(ii) = (ION.P11_m(ii) - ION.M*ION.nv_m(ii)*ION.nv_m(ii)/n)/(F_E_DS*n);
+			ION.Tper_m(ii) = ION.P22_m(ii)/(F_E_DS*n);
+		}
+	}
 }

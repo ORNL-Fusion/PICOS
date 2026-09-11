@@ -1,6 +1,6 @@
 // PICOS input generated for MPEX scenario-14 Fig. 17 E-z comparison
 // Magnetic field source profile: templateFILES/MPEX_B_norm_PICOS_scenario_14.txt.
-// Plasma/source profile model: analytic MPEX-like proxy; pair source follows density profile.
+// Plasma/source profile model: analytic MPEX-like proxy.
 // Model: 1D-2V guiding-center D+ ions plus kinetic electrons.
 // Heating: electron ECH enabled with scenario-14 B-field; ion RF heating disabled.
 // Field: reformulated Poisson electrostatic field solve.
@@ -48,6 +48,18 @@ SW_pairSource               1
 SW_advancePos               1
 SW_linearSolve              0
 
+// Restart controls:
+// restart_snapshot=-1 loads the latest numeric HDF5 output snapshot.
+// For a two-stage run, first run SW_RFheating=0 to steady state, then set
+// restart_enabled=1 and restart_path to the stage-1 output HDF5 directory.
+// =============================================================================
+restart_enabled             0
+restart_path                none
+restart_snapshot            -1
+restart_continueTime        0
+restart_particleFilePrefix  PARTICLES_FILE_
+restart_fieldsFilePrefix    FIELDS_FILE_
+
 // Magnetic field initial conditions:
 // =============================================================================
 IC_uniformBfield            0
@@ -83,7 +95,7 @@ IC_Te_fileName              mpex_scenario14_ex8_left_resonance_70ghz_target8_p26
 pairSource_ionSpecies       1
 pairSource_electronSpecies  2
 pairSource_rate             9.9999999999999992e+22
-pairSource_mean_x           1.7500000000000000e+00
+pairSource_mean_x           0.0000000000000000e+00
 pairSource_sigma_x          1.4999999999999999e-01
 pairSource_Ti_birth         1.6000000000000000e+01
 pairSource_Te_birth         1.6000000000000000e+01
@@ -91,7 +103,7 @@ pairSource_Ei_birth         0
 pairSource_Ee_birth         0
 pairSource_eta_i            0
 pairSource_eta_e            0
-pairSource_positionMode     1
+pairSource_positionMode     0
 pairSource_fileName         mpex_scenario14_ex8_left_resonance_70ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel_pair_source_norm.txt
 pairSource_NS               200
 pairSource_maxParticleWeight 1000

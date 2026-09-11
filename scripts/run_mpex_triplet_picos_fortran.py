@@ -315,7 +315,7 @@ def parse_args() -> argparse.Namespace:
     picos_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--picos-root", type=Path, default=picos_root)
-    parser.add_argument("--linear-root", type=Path, default=Path("/home/78k/picos_kinetic_electron_eval/LinearFokkerPlanck_Axisymmetric"))
+    parser.add_argument("--linear-root", type=Path, default=picos_root.parent / "LinearFokkerPlanck_Axisymmetric")
     parser.add_argument("--picos-build-dir", type=Path, default=Path("build-fusiont6"))
     parser.add_argument("--scenario14-b-file", type=Path, default=Path("templateFILES/MPEX_B_norm_PICOS_scenario_14.txt"))
     parser.add_argument("--out-root", type=Path, default=Path("validation/mpex_scenario14_triplet_picos_fortran"))
@@ -339,7 +339,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--electron-plasma-timestep-limiter", type=int, choices=[0, 1], default=0)
     parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=1)
     parser.add_argument("--source-rate", type=float, default=1.0e23)
-    parser.add_argument("--source-z", type=float, default=1.75)
+    parser.add_argument("--source-z", type=float, default=0.0)
     parser.add_argument("--source-sigma", type=float, default=0.15)
     parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV used for ne/Te/RF-shape deck files.")
     parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF used for the pair-source z profile.")

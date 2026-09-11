@@ -44,6 +44,7 @@ CASE_COLORS = {
 }
 
 SELECTED_TIME_FRACTIONS = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+MOMENT_DENSITY_MASK_FRACTION = 0.02
 
 
 @dataclass
@@ -532,6 +533,49 @@ def plot_final_eedf(
     plt.close(fig)
 
 
+def plot_final_eedf_linear(
+    cases: Sequence[CaseInfo],
+    final_data: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
+    bins: np.ndarray,
+    electron_species: str,
+    out_dir: Path,
+) -> None:
+    fig, axes = plt.subplots(1, 2, figsize=(14.2, 5.8))
+    for case in cases:
+        _, energy, weights = final_data[case.name]
+        centers, pdf = eedf_histogram(energy, weights, bins)
+        axes[0].plot(
+            centers,
+            pdf,
+            label=case.label,
+            color=CASE_COLORS.get(case.name),
+            linewidth=2.2,
+        )
+        axes[1].plot(
+            centers,
+            pdf,
+            label=case.label,
+            color=CASE_COLORS.get(case.name),
+            linewidth=2.2,
+        )
+    _, e0, w0 = read_particles(cases[0], cases[0].snapshots[0], electron_species)
+    centers0, pdf0 = eedf_histogram(e0, w0, bins)
+    for ax in axes:
+        ax.plot(centers0, pdf0, "--", color="0.35", linewidth=2.0, label="initial")
+        ax.set_xlabel("electron kinetic energy [eV]")
+        ax.set_ylabel("weighted probability density [1/eV]")
+        ax.legend(frameon=False, fontsize=9)
+        set_axis_style(ax)
+    axes[0].set_xlim(bins[0], min(300.0, bins[-1]))
+    axes[0].set_title("bulk EEDF, linear scale")
+    axes[1].set_xlim(bins[0], bins[-1])
+    axes[1].set_title("full EEDF range, linear scale")
+    fig.suptitle("Final electron energy distribution on linear axes")
+    fig.tight_layout()
+    fig.savefig(out_dir / "eedf_final_linear.png", dpi=220)
+    plt.close(fig)
+
+
 def plot_final_eedf_logbins(
     cases: Sequence[CaseInfo],
     final_data: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
@@ -783,6 +827,66 @@ def plot_energy_vs_z(
     plt.close(fig)
 
 
+def plot_energy_vs_z_linear(
+    cases: Sequence[CaseInfo],
+    final_data: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
+    energy_max: float,
+    z_bins: int,
+    out_dir: Path,
+) -> None:
+    histograms = []
+    extent_by_case = []
+    for case in cases:
+        z, energy, weights = final_data[case.name]
+        z_edges = np.linspace(-2.0, 8.0, z_bins + 1)
+        e_edges = np.linspace(0.0, energy_max, 260)
+        hist, _, _ = np.histogram2d(z, energy, bins=(z_edges, e_edges), weights=weights)
+        total = np.sum(hist)
+        probability = hist / total if total > 0 else hist
+        histograms.append(probability)
+        extent_by_case.append((z_edges[0], z_edges[-1], e_edges[0], e_edges[-1]))
+
+    positive_values = np.concatenate([h[h > 0.0] for h in histograms if np.any(h > 0.0)])
+    vmax = float(np.percentile(positive_values, 99.7)) if positive_values.size else 1.0
+    vmax = vmax if np.isfinite(vmax) and vmax > 0.0 else 1.0
+
+    fig, axes = plt.subplots(1, len(cases), figsize=(7.2 * len(cases), 6.2), sharey=True)
+    if len(cases) == 1:
+        axes = [axes]
+    im = None
+    for ax, case, probability, extent in zip(axes, cases, histograms, extent_by_case):
+        im = ax.imshow(
+            probability.T,
+            origin="lower",
+            extent=extent,
+            aspect="auto",
+            cmap="viridis",
+            vmin=0.0,
+            vmax=vmax,
+            interpolation="nearest",
+        )
+        x_m, b_m, _, _ = read_field_profile(case, case.snapshots[-1])
+        ax2 = ax.twinx()
+        ax2.plot(x_m, b_m, color="#d62728", linewidth=2.0, alpha=0.9)
+        ax2.set_ylim(0.0, max(1.1 * float(np.nanmax(b_m)), 1.5))
+        ax2.set_ylabel("B [T]", color="#d62728")
+        ax2.tick_params(axis="y", colors="#d62728")
+        if case.resonance_z is not None:
+            ax.axvline(case.resonance_z, color="white", linestyle="--", linewidth=1.8)
+        ax.axvline(8.0, color="lime", linewidth=2.0)
+        ax.set_xlabel("z [m]")
+        ax.set_title(case.label)
+        set_axis_style(ax)
+    axes[0].set_ylabel("electron kinetic energy [eV]")
+    if im is not None:
+        cbar = fig.colorbar(im, ax=list(axes), pad=0.02)
+        cbar.set_label("linear weighted probability per bin")
+    fig.suptitle("Final electron energy distribution versus z, linear color scale")
+    fig.tight_layout(rect=(0.0, 0.0, 0.93, 0.95))
+    fig.savefig(out_dir / "electron_energy_vs_z_final_linear.png", dpi=220)
+    plt.close(fig)
+
+
 def plot_fig17_style_maps(
     cases: Sequence[CaseInfo],
     final_data: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
@@ -859,6 +963,84 @@ def plot_fig17_style_maps(
 
             fig.subplots_adjust(left=0.10, right=0.86, bottom=0.14, top=0.82)
             fig.savefig(out_dir / f"fig17_style_{case.name}.png", dpi=220)
+            plt.close(fig)
+
+
+def plot_fig17_style_linear_maps(
+    cases: Sequence[CaseInfo],
+    final_data: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
+    energy_max: float,
+    current_a: float,
+    out_dir: Path,
+) -> None:
+    rc = {
+        "font.size": 24,
+        "axes.titlesize": 28,
+        "axes.labelsize": 26,
+        "xtick.labelsize": 22,
+        "ytick.labelsize": 22,
+        "legend.fontsize": 18,
+        "figure.titlesize": 30,
+    }
+    with plt.rc_context(rc):
+        for case in cases:
+            z, energy, weights = final_data[case.name]
+            z_edges = np.linspace(-2.0, 8.0, 240)
+            e_edges = np.linspace(0.0, energy_max, 220)
+            hist, _, _ = np.histogram2d(z, energy, bins=(z_edges, e_edges), weights=weights)
+            total = float(np.sum(hist))
+            probability = hist / total if total > 0 else hist
+            positive = probability[probability > 0.0]
+            vmax = float(np.percentile(positive, 99.7)) if positive.size else 1.0
+            vmax = vmax if np.isfinite(vmax) and vmax > 0.0 else 1.0
+
+            fig, ax = plt.subplots(figsize=(16.0, 8.2))
+            im = ax.imshow(
+                probability.T,
+                origin="lower",
+                extent=(z_edges[0], z_edges[-1], e_edges[0], e_edges[-1]),
+                aspect="auto",
+                cmap="viridis",
+                vmin=0.0,
+                vmax=vmax,
+                interpolation="nearest",
+            )
+
+            if case.resonance_z is not None:
+                ax.axvline(case.resonance_z, color="red", linestyle=":", linewidth=5.0)
+            ax.axvline(8.0, color="limegreen", linewidth=5.0)
+
+            x_m, b_m, _, _ = read_field_profile(case, case.snapshots[-1])
+            ax2 = ax.twinx()
+            ax2.plot(x_m, b_m, color="red", linewidth=4.0)
+            ax2.set_ylabel("B0 [T]", color="red")
+            ax2.tick_params(axis="y", colors="red", width=2.0, length=7)
+            ax2.set_ylim(0.0, max(1.45, 1.05 * float(np.nanmax(b_m))))
+            ax2.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+
+            ax.set_xlim(-2.0, 8.0)
+            ax.set_ylim(0.0, energy_max)
+            ax.set_xlabel("z [m]")
+            ax.set_ylabel("E_e [eV]")
+            ax.set_title(f"I: {current_a:.0f} [A] (PICOS++ nonrel)\n{case.label}, linear color")
+            ax.grid(True, color="0.7", alpha=0.3, linewidth=1.4)
+            ax.tick_params(width=2.0, length=7)
+
+            cax = inset_axes(
+                ax,
+                width="4.0%",
+                height="76%",
+                loc="upper right",
+                bbox_to_anchor=(-0.13, -0.02, 1.0, 1.0),
+                bbox_transform=ax.transAxes,
+                borderpad=0,
+            )
+            cbar = fig.colorbar(im, cax=cax)
+            cbar.ax.set_title("f(E,z)", fontsize=22, pad=12)
+            cbar.ax.tick_params(width=2.0, length=7)
+
+            fig.subplots_adjust(left=0.10, right=0.86, bottom=0.14, top=0.82)
+            fig.savefig(out_dir / f"fig17_style_linear_{case.name}.png", dpi=220)
             plt.close(fig)
 
 
@@ -1081,9 +1263,13 @@ def plot_mirror_trapping_summary(
         total_hot_by_bin, _ = np.histogram(phase.z[hot], bins=z_edges, weights=phase.weights[hot])
         mag_by_bin, _ = np.histogram(phase.z[mag], bins=z_edges, weights=phase.weights[mag])
         eff_by_bin, _ = np.histogram(phase.z[eff], bins=z_edges, weights=phase.weights[eff])
+        hot_counts_by_bin, _ = np.histogram(phase.z[hot], bins=z_edges)
         with np.errstate(divide="ignore", invalid="ignore"):
             mag_frac = np.where(total_hot_by_bin > 0.0, mag_by_bin / total_hot_by_bin, np.nan)
             eff_frac = np.where(total_hot_by_bin > 0.0, eff_by_bin / total_hot_by_bin, np.nan)
+        low_count = hot_counts_by_bin < 20
+        mag_frac[low_count] = np.nan
+        eff_frac[low_count] = np.nan
         axes[row, 1].plot(z_centers, mag_frac, color="#1f77b4", linewidth=2.0, label="magnetic")
         axes[row, 1].plot(z_centers, eff_frac, color="#d62728", linewidth=2.0, label="magnetic + phi")
         axes[row, 1].set_ylim(-0.05, 1.05)
@@ -1190,6 +1376,433 @@ def plot_density_fields(
     fig.tight_layout()
     fig.savefig(out_dir / "density_and_fields_final.png", dpi=220)
     plt.close(fig)
+
+
+def species_parameters(case: CaseInfo, species: str) -> Tuple[float, float]:
+    """Return species mass [kg] and charge [C] from main.h5."""
+
+    with h5py.File(case.main_file, "r") as h5:
+        mass = float(np.asarray(h5[f"ions/{species}/M"]).reshape(-1)[0])
+        charge = float(np.asarray(h5[f"ions/{species}/Q"]).reshape(-1)[0])
+    # Older files may store M in amu or Q as charge state. Current PICOS++
+    # output stores SI values, but keep this guard for the legacy scripts.
+    if abs(mass) > 1.0e-20:
+        mass *= 1.66053906660e-27
+    if abs(charge) > 1.0e-10:
+        charge *= E_CHARGE
+    return mass, charge
+
+
+def read_mesh_series(case: CaseInfo, species: str, variable: str) -> np.ndarray:
+    """Read a mesh moment from the first particle-rank file for all snapshots."""
+
+    if variable == "u_m":
+        dataset_name = "u_m/x"
+    else:
+        dataset_name = variable
+    values = []
+    with h5py.File(case.particles[0], "r") as h5:
+        for snap in case.snapshots:
+            dataset = f"{snap}/ions/{species}/{dataset_name}"
+            if dataset not in h5:
+                raise KeyError(f"Missing {dataset} in {case.particles[0]}")
+            values.append(np.asarray(h5[dataset], dtype=np.float64).reshape(-1))
+    return np.column_stack(values)
+
+
+def read_field_series_for_case(case: CaseInfo, variable: str) -> np.ndarray:
+    values = []
+    with h5py.File(case.fields_file, "r") as h5:
+        for snap in case.snapshots:
+            dataset = f"{snap}/fields/{variable}/x"
+            if dataset not in h5:
+                raise KeyError(f"Missing {dataset} in {case.fields_file}")
+            values.append(np.asarray(h5[dataset], dtype=np.float64).reshape(-1))
+    return np.column_stack(values)
+
+
+def smooth_profiles(values: np.ndarray, window: int = 7) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float64)
+    if window <= 1:
+        return values
+    kernel = np.ones(window, dtype=np.float64) / float(window)
+    if values.ndim == 1:
+        return np.convolve(values, kernel, mode="same")
+    return np.apply_along_axis(lambda row: np.convolve(row, kernel, mode="same"), 0, values)
+
+
+def finite_values(values: np.ndarray) -> np.ndarray:
+    arr = np.asarray(values, dtype=np.float64)
+    return arr[np.isfinite(arr)]
+
+
+def robust_abs_limit(values: np.ndarray, percentile: float = 98.0, fallback: float = 1.0) -> float:
+    vals = finite_values(np.abs(values))
+    if vals.size == 0:
+        return fallback
+    limit = float(np.nanpercentile(vals, percentile))
+    return limit if np.isfinite(limit) and limit > 0.0 else fallback
+
+
+def robust_upper_limit(values: np.ndarray, percentile: float = 99.0, fallback: float = 1.0) -> float:
+    vals = finite_values(values)
+    if vals.size == 0:
+        return fallback
+    limit = float(np.nanpercentile(vals, percentile))
+    return limit if np.isfinite(limit) and limit > 0.0 else fallback
+
+
+def density_active_mask(density: np.ndarray, fraction: float = MOMENT_DENSITY_MASK_FRACTION) -> np.ndarray:
+    density = np.asarray(density, dtype=np.float64)
+    peak = float(np.nanmax(density)) if np.any(np.isfinite(density)) else 0.0
+    if peak <= 0.0:
+        return np.zeros_like(density, dtype=bool)
+    return np.isfinite(density) & (density >= fraction * peak)
+
+
+def mask_by_density(values: np.ndarray, density: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float64).copy()
+    values[~density_active_mask(density)] = np.nan
+    return values
+
+
+def masked_mean(values: np.ndarray, mask: np.ndarray) -> float:
+    vals = np.asarray(values, dtype=np.float64)
+    active = vals[mask & np.isfinite(vals)]
+    return float(np.mean(active)) if active.size else float("nan")
+
+
+def masked_max(values: np.ndarray, mask: np.ndarray) -> float:
+    vals = np.asarray(values, dtype=np.float64)
+    active = vals[mask & np.isfinite(vals)]
+    return float(np.max(active)) if active.size else float("nan")
+
+
+def masked_max_abs(values: np.ndarray, mask: np.ndarray) -> float:
+    vals = np.asarray(values, dtype=np.float64)
+    active = np.abs(vals[mask & np.isfinite(vals)])
+    return float(np.max(active)) if active.size else float("nan")
+
+
+def final_window_indices(case: CaseInfo, count: int = 5) -> List[int]:
+    n = len(case.snapshots)
+    start = max(0, n - count)
+    return list(range(start, n))
+
+
+def plot_moment_profiles(cases: Sequence[CaseInfo], out_dir: Path) -> None:
+    """MPEX/ProtoLite-style final ion/electron moment profile comparison."""
+
+    fig, axes = plt.subplots(len(cases), 4, figsize=(20.0, 4.0 * len(cases)), sharex=True)
+    if len(cases) == 1:
+        axes = np.asarray([axes])
+
+    rows: List[Dict[str, object]] = []
+    for row, case in enumerate(cases):
+        x_m, b_m, e_m, phi_m = read_field_profile(case, case.snapshots[-1])
+        idx = final_window_indices(case)
+        case_moments = {}
+        for species in ("spp_1", "spp_2"):
+            n_m = read_mesh_series(case, species, "n_m")
+            tpar = read_mesh_series(case, species, "Tpar_m")
+            tper = read_mesh_series(case, species, "Tper_m")
+            u_m = read_mesh_series(case, species, "u_m")
+            case_moments[species] = {
+                "n": np.nanmean(n_m[:, idx], axis=1),
+                "Tpar": np.nanmean(tpar[:, idx], axis=1),
+                "Tper": np.nanmean(tper[:, idx], axis=1),
+                "u": np.nanmean(u_m[:, idx], axis=1),
+            }
+
+        ni = case_moments["spp_1"]["n"]
+        ne = case_moments["spp_2"]["n"]
+        ion_active = density_active_mask(ni)
+        elec_active = density_active_mask(ne)
+        norm = max(float(np.nanmax(np.abs(ni))), float(np.nanmax(np.abs(ne))), 1.0)
+        axes[row, 0].plot(x_m, ni / norm, color="#1f77b4", linewidth=2.0, label="D+")
+        axes[row, 0].plot(x_m, ne / norm, color="#d62728", linewidth=2.0, label="e-")
+        axes[row, 0].set_title("final density")
+        axes[row, 0].set_ylabel(case.label)
+        axes[row, 0].legend(frameon=False, fontsize=8)
+
+        ti_par = mask_by_density(case_moments["spp_1"]["Tpar"], ni)
+        ti_per = mask_by_density(case_moments["spp_1"]["Tper"], ni)
+        te_par = mask_by_density(case_moments["spp_2"]["Tpar"], ne)
+        te_per = mask_by_density(case_moments["spp_2"]["Tper"], ne)
+        ui_plot = mask_by_density(case_moments["spp_1"]["u"], ni)
+        ue_plot = mask_by_density(case_moments["spp_2"]["u"], ne)
+
+        axes[row, 1].plot(x_m, ti_par, color="#1f77b4", linewidth=1.8, label="D+ Tpar")
+        axes[row, 1].plot(x_m, ti_per, color="#1f77b4", linewidth=1.8, linestyle="--", label="D+ Tper")
+        axes[row, 1].set_title("D+ temperature [eV]")
+        axes[row, 1].set_ylim(0.0, 1.15 * robust_upper_limit(np.r_[ti_par, ti_per], 99.0, 20.0))
+        axes[row, 1].legend(frameon=False, fontsize=8)
+
+        axes[row, 2].plot(x_m, te_par, color="#d62728", linewidth=1.8, label="e- Tpar")
+        axes[row, 2].plot(x_m, te_per, color="#d62728", linewidth=1.8, linestyle="--", label="e- Tper")
+        axes[row, 2].set_title("electron temperature [eV]")
+        axes[row, 2].set_ylim(0.0, 1.15 * robust_upper_limit(np.r_[te_par, te_per], 99.0, 20.0))
+        axes[row, 2].legend(frameon=False, fontsize=8)
+
+        axes[row, 3].plot(x_m, ui_plot, color="#1f77b4", linewidth=1.8, label="D+")
+        axes[row, 3].plot(x_m, ue_plot, color="#d62728", linewidth=1.8, label="e-")
+        u_limit = 1.15 * robust_abs_limit(np.r_[ui_plot, ue_plot], 98.0, 1.0)
+        axes[row, 3].set_ylim(-u_limit, u_limit)
+        ax2 = axes[row, 3].twinx()
+        ax2.plot(x_m, b_m, color="0.25", linewidth=1.4, alpha=0.75, label="B")
+        ax2.set_ylabel("B [T]", color="0.25")
+        ax2.tick_params(axis="y", colors="0.25")
+        axes[row, 3].set_title("flow and B")
+        axes[row, 3].legend(frameon=False, fontsize=8, loc="upper left")
+
+        for species, label in (("spp_1", "D+"), ("spp_2", "e-")):
+            moments = case_moments[species]
+            active_mask = ion_active if species == "spp_1" else elec_active
+            rows.append(
+                {
+                    "case": case.name,
+                    "species": label,
+                    "density_mask_fraction_of_peak": MOMENT_DENSITY_MASK_FRACTION,
+                    "active_cells": int(np.count_nonzero(active_mask)),
+                    "mean_density": float(np.nanmean(moments["n"])),
+                    "max_density": float(np.nanmax(moments["n"])),
+                    "active_mean_Tpar_eV": masked_mean(moments["Tpar"], active_mask),
+                    "active_max_Tpar_eV": masked_max(moments["Tpar"], active_mask),
+                    "active_mean_Tper_eV": masked_mean(moments["Tper"], active_mask),
+                    "active_max_Tper_eV": masked_max(moments["Tper"], active_mask),
+                    "active_mean_u_m_per_s": masked_mean(moments["u"], active_mask),
+                    "active_max_abs_u_m_per_s": masked_max_abs(moments["u"], active_mask),
+                    "mean_EX_V_per_m": float(np.nanmean(e_m)),
+                    "phi_range_V": float(np.nanmax(phi_m) - np.nanmin(phi_m)),
+                }
+            )
+
+        for ax in axes[row, :]:
+            if case.resonance_z is not None:
+                ax.axvline(case.resonance_z, color=CASE_COLORS.get(case.name), linestyle="--", linewidth=1.4)
+            ax.axvline(8.0, color="limegreen", linewidth=1.3)
+            ax.set_xlim(-2.0, 8.0)
+            set_axis_style(ax)
+
+    for ax in axes[-1, :]:
+        ax.set_xlabel("z [m]")
+    fig.suptitle("Final five-output averaged PICOS++ moment profiles, density-gated")
+    fig.tight_layout()
+    fig.savefig(out_dir / "mpex_moment_profiles_final.png", dpi=220)
+    plt.close(fig)
+    write_rows(out_dir / "moment_profile_summary.csv", rows)
+
+
+def plot_moment_contours(cases: Sequence[CaseInfo], out_dir: Path) -> None:
+    """Time-z contours in the style of the ProtoLite preview scripts."""
+
+    for case in cases:
+        x_m, b_m, _, _ = read_field_profile(case, case.snapshots[-1])
+        times_us = np.asarray(case.times_s, dtype=float) * 1.0e6
+        ne = read_mesh_series(case, "spp_2", "n_m")
+        ni = read_mesh_series(case, "spp_1", "n_m")
+        tepar = read_mesh_series(case, "spp_2", "Tpar_m")
+        teper = read_mesh_series(case, "spp_2", "Tper_m")
+        ui = read_mesh_series(case, "spp_1", "u_m")
+        ue = read_mesh_series(case, "spp_2", "u_m")
+        fields_ex = read_field_series_for_case(case, "EX_m")
+        elec_active = density_active_mask(ne)
+        ion_active = density_active_mask(ni)
+        ne_norm = ne / max(float(np.nanmax(ne)), 1.0)
+        tepar_plot = np.where(elec_active, tepar, np.nan)
+        teper_plot = np.where(elec_active, teper, np.nan)
+        ue_plot = np.where(elec_active, ue, np.nan)
+        ui_plot = np.where(ion_active, ui, np.nan)
+
+        data = [
+            ("n_e / max", ne_norm, "viridis"),
+            ("T_e,par [eV]", tepar_plot, "inferno"),
+            ("T_e,perp [eV]", teper_plot, "inferno"),
+            ("u_i and u_e [m/s]", None, "coolwarm"),
+            ("E_parallel [V/m]", fields_ex, "coolwarm"),
+            ("B [T]", np.tile(b_m[:, None], (1, len(times_us))), "magma"),
+        ]
+
+        fig, axes = plt.subplots(2, 3, figsize=(18.5, 9.0), sharex=True, sharey=True)
+        for ax, (title, values, cmap) in zip(axes.reshape(-1), data):
+            if values is None:
+                vmax = max(robust_abs_limit(ui_plot, 98.0, 1.0), robust_abs_limit(ue_plot, 98.0, 1.0))
+                im = ax.pcolormesh(x_m, times_us, ue_plot.T, shading="auto", cmap=cmap, vmin=-vmax, vmax=vmax)
+                if np.any(np.isfinite(ui_plot)):
+                    ax.contour(x_m, times_us, ui_plot.T, levels=7, colors="k", linewidths=0.7, alpha=0.65)
+            else:
+                values = np.asarray(values, dtype=float)
+                if title == "E_parallel [V/m]":
+                    vmax = robust_abs_limit(values, 97.0, 1.0)
+                    im = ax.pcolormesh(x_m, times_us, values.T, shading="auto", cmap=cmap, vmin=-vmax, vmax=vmax)
+                elif title.startswith("T_e"):
+                    vmax = robust_upper_limit(values, 99.0, 20.0)
+                    im = ax.pcolormesh(x_m, times_us, values.T, shading="auto", cmap=cmap, vmin=0.0, vmax=vmax)
+                else:
+                    im = ax.pcolormesh(x_m, times_us, values.T, shading="auto", cmap=cmap)
+            if case.resonance_z is not None:
+                ax.axvline(case.resonance_z, color="w", linestyle="--", linewidth=1.4)
+            ax.axvline(8.0, color="limegreen", linewidth=1.3)
+            ax.set_title(title)
+            ax.set_xlim(-2.0, 8.0)
+            fig.colorbar(im, ax=ax, pad=0.01)
+        for ax in axes[:, 0]:
+            ax.set_ylabel("time [us]")
+        for ax in axes[-1, :]:
+            ax.set_xlabel("z [m]")
+        fig.suptitle(f"MPEX ECH mesh-moment evolution: {case.label}")
+        fig.tight_layout()
+        fig.savefig(out_dir / f"mpex_moment_contours_{case.name}.png", dpi=220)
+        plt.close(fig)
+
+
+def force_balance_terms(case: CaseInfo, species: str) -> Dict[str, np.ndarray]:
+    x_m, b_final, e_final, _ = read_field_profile(case, case.snapshots[-1])
+    idx = final_window_indices(case)
+    mass, charge = species_parameters(case, species)
+
+    n = read_mesh_series(case, species, "n_m")
+    tpar = read_mesh_series(case, species, "Tpar_m")
+    tper = read_mesh_series(case, species, "Tper_m")
+    u = read_mesh_series(case, species, "u_m")
+    b = read_field_series_for_case(case, "BX_m")
+    e = read_field_series_for_case(case, "EX_m")
+    dx = float(np.nanmedian(np.diff(x_m)))
+    dt = float(np.nanmedian(np.diff(np.asarray(case.times_s, dtype=float)))) if len(case.times_s) > 1 else 1.0
+
+    n = smooth_profiles(n, 5)
+    tpar = smooth_profiles(tpar, 5)
+    tper = smooth_profiles(tper, 5)
+    u = smooth_profiles(u, 5)
+    b = smooth_profiles(b, 5)
+    e = smooth_profiles(e, 5)
+
+    ppar = E_CHARGE * n * tpar
+    pper = E_CHARGE * n * tper
+    pke = mass * n * u * u
+    n_u = n * u
+    dppar_dx = np.gradient(ppar, dx, axis=0, edge_order=1)
+    db_dx = np.gradient(b, dx, axis=0, edge_order=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        f_ke_x = b * np.gradient(pke / np.maximum(b, 1.0e-30), dx, axis=0, edge_order=1)
+        f_mag = ((pper - ppar) / np.maximum(b, 1.0e-30)) * db_dx
+    f_ke_t = mass * np.gradient(n_u, dt, axis=1, edge_order=1)
+    f_electric = charge * n * e
+    n_final = np.nanmean(n[:, idx], axis=1)
+    active = density_active_mask(n_final)
+
+    terms = {
+        "F_KE_x": np.nanmean(f_ke_x[:, idx], axis=1),
+        "F_KE_t": np.nanmean(f_ke_t[:, idx], axis=1),
+        "F_parallel": np.nanmean(dppar_dx[:, idx], axis=1),
+        "F_mirror": np.nanmean(f_mag[:, idx], axis=1),
+        "F_E": np.nanmean(f_electric[:, idx], axis=1),
+        "B": b_final,
+        "E": e_final,
+        "x": x_m,
+        "active": active,
+    }
+    for key in ("F_KE_x", "F_KE_t", "F_parallel", "F_mirror", "F_E"):
+        terms[key] = np.where(active, terms[key], np.nan)
+    return terms
+
+
+def plot_force_balance(cases: Sequence[CaseInfo], out_dir: Path) -> None:
+    rows: List[Dict[str, object]] = []
+    labels = {
+        "F_KE_x": "inertial spatial",
+        "F_KE_t": "inertial temporal",
+        "F_parallel": "grad P_parallel",
+        "F_mirror": "mirror",
+        "F_E": "electric",
+    }
+    for species, species_label in (("spp_1", "D+"), ("spp_2", "electron")):
+        fig, axes = plt.subplots(len(cases), 2, figsize=(16.0, 4.2 * len(cases)), sharex=True)
+        if len(cases) == 1:
+            axes = np.asarray([axes])
+        for row, case in enumerate(cases):
+            terms = force_balance_terms(case, species)
+            x_m = terms["x"]
+            force_keys = ["F_KE_x", "F_KE_t", "F_parallel", "F_mirror", "F_E"]
+            scale = max([robust_abs_limit(terms[key], 98.0, 1.0e-30) for key in force_keys] + [1.0e-30])
+            for key in force_keys:
+                axes[row, 0].plot(x_m, terms[key] / scale, linewidth=1.8, label=labels[key])
+            stacked = np.vstack([np.asarray(terms[key], dtype=np.float64) for key in force_keys])
+            valid_any = np.any(np.isfinite(stacked), axis=0)
+            residual = np.nansum(stacked, axis=0)
+            residual[~valid_any] = np.nan
+            axes[row, 1].plot(x_m, residual / scale, color="k", linewidth=2.0, label="sum")
+            axes[row, 1].plot(x_m, terms["B"] / max(float(np.nanmax(terms["B"])), 1.0), color="#d62728", linewidth=1.4, alpha=0.75, label="B / max")
+            axes[row, 0].set_ylabel(case.label)
+            axes[row, 0].set_title(f"{species_label} force components / p98")
+            axes[row, 1].set_title(f"{species_label} residual and B")
+            rows.append(
+                {
+                    "case": case.name,
+                    "species": species_label,
+                    "density_mask_fraction_of_peak": MOMENT_DENSITY_MASK_FRACTION,
+                    "active_cells": int(np.count_nonzero(terms["active"])),
+                    "scale_N_per_m3": scale,
+                    "max_abs_residual_N_per_m3": robust_abs_limit(residual, 100.0, float("nan")),
+                    "rms_residual_N_per_m3": float(np.sqrt(np.nanmean(residual * residual))),
+                    **{f"max_abs_{key}_N_per_m3": robust_abs_limit(terms[key], 100.0, float("nan")) for key in force_keys},
+                }
+            )
+            for ax in axes[row, :]:
+                if case.resonance_z is not None:
+                    ax.axvline(case.resonance_z, color=CASE_COLORS.get(case.name), linestyle="--", linewidth=1.3)
+                ax.axvline(8.0, color="limegreen", linewidth=1.3)
+                ax.set_xlim(-2.0, 8.0)
+                set_axis_style(ax)
+                ax.legend(frameon=False, fontsize=8, ncol=2)
+        for ax in axes[-1, :]:
+            ax.set_xlabel("z [m]")
+        fig.suptitle(f"Final-window parallel force-balance diagnostic: {species_label}")
+        fig.tight_layout()
+        fig.savefig(out_dir / f"force_balance_final_{species}.png", dpi=220)
+        plt.close(fig)
+    write_rows(out_dir / "force_balance_summary.csv", rows)
+
+
+def plot_boundary_losses(cases: Sequence[CaseInfo], out_dir: Path) -> None:
+    fig, axes = plt.subplots(2, 1, figsize=(11.5, 8.0), sharex=True)
+    rows: List[Dict[str, object]] = []
+    for case in cases:
+        times = np.asarray(case.times_s, dtype=float) * 1.0e6
+        with h5py.File(case.particles[0], "r") as h5:
+            n1, n2, n5, e1, e2, e5 = [], [], [], [], [], []
+            for snap in case.snapshots:
+                base = h5[f"{snap}/boundary"]
+                n1.append(float(np.asarray(base["N1"]).reshape(-1)[0]))
+                n2.append(float(np.asarray(base["N2"]).reshape(-1)[0]))
+                n5.append(float(np.asarray(base["N5"]).reshape(-1)[0]))
+                e1.append(float(np.asarray(base["E1"]).reshape(-1)[0]))
+                e2.append(float(np.asarray(base["E2"]).reshape(-1)[0]))
+                e5.append(float(np.asarray(base["E5"]).reshape(-1)[0]))
+        n_total = np.asarray(n1) + np.asarray(n2) + np.asarray(n5)
+        e_total = np.asarray(e1) + np.asarray(e2) + np.asarray(e5)
+        axes[0].plot(times, n_total, linewidth=2.0, color=CASE_COLORS.get(case.name), label=case.label)
+        axes[1].plot(times, e_total, linewidth=2.0, color=CASE_COLORS.get(case.name), label=case.label)
+        rows.append(
+            {
+                "case": case.name,
+                "final_boundary_N_total": float(n_total[-1]),
+                "final_boundary_E_total": float(e_total[-1]),
+                "delta_boundary_N_total": float(n_total[-1] - n_total[0]),
+                "delta_boundary_E_total": float(e_total[-1] - e_total[0]),
+            }
+        )
+    axes[0].set_ylabel("boundary N total [code output]")
+    axes[1].set_ylabel("boundary E total [code output]")
+    axes[1].set_xlabel("time [us]")
+    for ax in axes:
+        ax.legend(frameon=False)
+        set_axis_style(ax)
+    fig.suptitle("Boundary particle and energy counters")
+    fig.tight_layout()
+    fig.savefig(out_dir / "boundary_losses_vs_time.png", dpi=220)
+    plt.close(fig)
+    write_rows(out_dir / "boundary_loss_summary.csv", rows)
 
 
 def plot_bfield_and_rf(cases: Sequence[CaseInfo], out_dir: Path) -> None:
@@ -1339,6 +1952,7 @@ def write_readme(
         "",
         "This directory contains analysis products generated from the NERSC MPEX profile triplet archive.",
         "The EEDFs use `ions/spp_2` as the kinetic electron species and particle weights from `a_p`.",
+        "Particle-space diagnostics aggregate all `PARTICLES_FILE_*.h5` ranks; mesh-moment diagnostics use the reduced rank-0 moment arrays written by PICOS++.",
         "",
         "## Cases",
     ]
@@ -1365,11 +1979,14 @@ def write_readme(
             "",
             "## Files",
             "- `eedf_final_global.png`: global final-time EEDF comparison plus initial EEDF.",
+            "- `eedf_final_linear.png`: linear-axis final EEDF comparison for bulk-distribution inspection.",
             "- `eedf_final_logbins_and_tail.png`: log-binned final EEDF and cumulative high-energy tail.",
             "- `eedf_time_evolution_*.png`: EEDF evolution for each case.",
             "- `eedf_final_regions.png`: final EEDF split by axial region.",
             "- `electron_energy_vs_z_final.png`: Fig. 17-style final energy-versus-z distributions with B-field overlay.",
+            "- `electron_energy_vs_z_final_linear.png`: final energy-versus-z distributions with linear color scale.",
             "- `fig17_style_*.png`: individual paper-style energy-versus-z maps with B-field overlay.",
+            "- `fig17_style_linear_*.png`: individual paper-style energy-versus-z maps with linear color scale.",
             "- `fig17_hot_Egt*_*.png`: hot-electron-only Fig. 17-style maps.",
             "- `fig17_magnetic_trapped_Egt*_*.png`: Fig. 17-style maps filtered to magnetic-mirror-eligible electrons.",
             "- `pitch_loss_cone_Egt100.png`: hot-electron pitch-angle distribution versus magnetic loss cone.",
@@ -1377,9 +1994,13 @@ def write_readme(
             "- `energy_metrics_vs_time.png`: weighted mean, p99, p99.9, and max energy versus time.",
             "- `tail_fraction_vs_time.png`: weighted high-energy tail fractions versus time.",
             "- `density_and_fields_final.png`: final relative line density, E_parallel, phi, and B profiles.",
+            "- `mpex_moment_profiles_final.png`: final-window D+ and electron density, temperature, and flow profiles, density-gated where moments are ill-conditioned.",
+            "- `mpex_moment_contours_*.png`: MPEX-style time-z evolution of electron moments, E_parallel, and B, with density-gated kinetic moments.",
+            "- `force_balance_final_spp_1.png`, `force_balance_final_spp_2.png`: dimensional final-window force-balance diagnostics reconstructed from mesh moments.",
+            "- `boundary_losses_vs_time.png`: boundary particle and energy counters versus time.",
             "- `bfield_and_rf_windows.png`: B-field and RF heating window setup.",
             "- `input_profiles_and_resonances.png`: normalized input profiles and resonance markers.",
-            "- `time_metrics.csv`, `final_metrics.csv`, `case_inventory.csv`, `mirror_trapping_metrics.csv`: numeric summaries.",
+            "- `time_metrics.csv`, `final_metrics.csv`, `case_inventory.csv`, `mirror_trapping_metrics.csv`, `moment_profile_summary.csv`, `force_balance_summary.csv`, `boundary_loss_summary.csv`: numeric summaries.",
         ]
     )
     (out_dir / "README.md").write_text("\n".join(lines) + "\n")
@@ -1441,13 +2062,16 @@ def main() -> None:
     plot_bfield_and_rf(cases, out_dir)
     plot_input_profiles(cases, out_dir)
     plot_final_eedf(cases, final_data, bins, args.electron_species, out_dir)
+    plot_final_eedf_linear(cases, final_data, bins, args.electron_species, out_dir)
     plot_final_eedf_logbins(cases, final_data, energy_max, args.electron_species, out_dir)
     plot_time_evolution_eedf(cases, args.electron_species, bins, out_dir)
     plot_region_eedf(cases, final_data, bins, out_dir)
     plot_energy_metrics(time_rows, out_dir)
     plot_tail_fraction(time_rows, out_dir)
     plot_energy_vs_z(cases, final_data, energy_max, args.z_bins, out_dir)
+    plot_energy_vs_z_linear(cases, final_data, args.fig17_energy_max, args.z_bins, out_dir)
     plot_fig17_style_maps(cases, final_data, args.fig17_energy_max, args.figure_current_a, out_dir)
+    plot_fig17_style_linear_maps(cases, final_data, args.fig17_energy_max, args.figure_current_a, out_dir)
     plot_hot_filtered_fig17_maps(
         cases, phase_data, hot_thresholds, args.fig17_energy_max, args.figure_current_a, out_dir
     )
@@ -1456,6 +2080,10 @@ def main() -> None:
         plot_pitch_loss_cone(cases, phase_data, diagnostic_threshold, out_dir)
         plot_mirror_trapping_summary(cases, phase_data, diagnostic_threshold, out_dir)
     plot_density_fields(cases, final_data, out_dir)
+    plot_moment_profiles(cases, out_dir)
+    plot_moment_contours(cases, out_dir)
+    plot_force_balance(cases, out_dir)
+    plot_boundary_losses(cases, out_dir)
     write_readme(out_dir, cases, final_rows)
 
     print(f"Wrote analysis outputs to {out_dir}")

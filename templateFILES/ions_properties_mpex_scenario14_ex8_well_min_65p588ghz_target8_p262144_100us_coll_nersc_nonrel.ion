@@ -24,7 +24,7 @@ BC_type_1                     1
 BC_T_1                        1.6000000000000000e+01
 BC_E_1                        0.0
 BC_eta_1                      0.7853981633974483
-BC_mean_x_1                   1.5000000000000000e+00
+BC_mean_x_1                   0.0000000000000000e+00
 BC_sigma_x_1                  2.9999999999999999e-01
 BC_G_1                        1.0000000000000000e+19
 BC_G_fileName_1               mpex_scenario14_ex8_well_min_65p588ghz_target8_p262144_100us_coll_nersc_nonrel_one.txt
@@ -54,7 +54,7 @@ BC_type_2                     1
 BC_T_2                        1.6000000000000000e+01
 BC_E_2                        0.0
 BC_eta_2                      0.7853981633974483
-BC_mean_x_2                   1.5000000000000000e+00
+BC_mean_x_2                   0.0000000000000000e+00
 BC_sigma_x_2                  2.9999999999999999e-01
 BC_G_2                        1.0000000000000000e+19
 BC_G_fileName_2               mpex_scenario14_ex8_well_min_65p588ghz_target8_p262144_100us_coll_nersc_nonrel_one.txt

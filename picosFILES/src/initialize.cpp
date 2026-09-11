@@ -461,10 +461,16 @@ void init_TYP::readInputFile(params_TYP * params)
     }
     params->velocityDistributionModel = getInt("IC_velocityDistributionModel", VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN);
     params->initialConditionRandomSeed = getInt("IC_randomSeed", -1);
+    params->initialConditionWeightScale = getDouble("IC_weightScale", 1.0);
     if (params->velocityDistributionModel != VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN &&
         params->velocityDistributionModel != VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP)
     {
         cout << "ERROR: unsupported IC_velocityDistributionModel " << params->velocityDistributionModel << endl;
+        MPI_Abort(MPI_COMM_WORLD,-105);
+    }
+    if (params->initialConditionWeightScale < 0.0)
+    {
+        cout << "ERROR: IC_weightScale must be non-negative." << endl;
         MPI_Abort(MPI_COMM_WORLD,-105);
     }
 
@@ -580,6 +586,7 @@ void init_TYP::readInputFile(params_TYP * params)
 	params->pairSource.ionEta = getDouble("pairSource_eta_i", 0.0);
 	params->pairSource.electronEta = getDouble("pairSource_eta_e", 0.0);
 	params->pairSource.positionMode = getInt("pairSource_positionMode", PAIR_SOURCE_GAUSSIAN);
+	params->pairSource.weightMode = getInt("pairSource_weightMode", PAIR_SOURCE_WEIGHT_LEGACY_BC);
 	params->pairSource.profile_fileName = getString("pairSource_fileName", "");
 	params->pairSource.profile_NS = getInt("pairSource_NS", 0);
 	params->pairSource.maxParticleWeight = getDouble("pairSource_maxParticleWeight", 1000.0);
@@ -587,6 +594,12 @@ void init_TYP::readInputFile(params_TYP * params)
 	    params->pairSource.positionMode != PAIR_SOURCE_PROFILE)
 	{
 		cout << "ERROR: unsupported pairSource_positionMode " << params->pairSource.positionMode << endl;
+		MPI_Abort(MPI_COMM_WORLD,-105);
+	}
+	if (params->pairSource.weightMode != PAIR_SOURCE_WEIGHT_LEGACY_BC &&
+	    params->pairSource.weightMode != PAIR_SOURCE_WEIGHT_EXPLICIT_RATE)
+	{
+		cout << "ERROR: unsupported pairSource_weightMode " << params->pairSource.weightMode << endl;
 		MPI_Abort(MPI_COMM_WORLD,-105);
 	}
 
@@ -691,6 +704,19 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
     // =========================================================
     std::map<string,string> parametersMap;
     parametersMap = readTextFile(&name);
+    auto getIonDouble = [&parametersMap](const string& key, double defaultValue)
+    {
+        auto found = parametersMap.find(key);
+        if (found == parametersMap.end())
+        {
+            return defaultValue;
+        }
+        if (found->second.empty())
+        {
+            return defaultValue;
+        }
+        return stod(found->second);
+    };
 
     // Determine the total number of ION species:
     // =========================================
@@ -781,6 +807,15 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
             name = "IC_densityFraction_NX_" + kk.str();
             ions.p_IC.densityFraction_NX = stoi(parametersMap[name]);
             name.clear();
+
+            name = "IC_weightScale_" + kk.str();
+            ions.p_IC.initialWeightScale = getIonDouble(name, params->initialConditionWeightScale);
+            name.clear();
+            if (ions.p_IC.initialWeightScale < 0.0)
+            {
+                cout << "ERROR: " << "IC_weightScale_" << kk.str() << " must be non-negative." << endl;
+                MPI_Abort(MPI_COMM_WORLD,-105);
+            }
 
             // Boundary conditions:
             // =================================================================
@@ -1275,6 +1310,8 @@ void init_TYP::allocateParticleDefinedIonArrays(const params_TYP * params, ionSp
     // Initialize particle weight:
     // ===========================
     IONS->a_p.ones(IONS->NSP);
+    IONS->a_p *= IONS->p_IC.initialWeightScale;
+    IONS->p_BC.a_p_new = IONS->p_IC.initialWeightScale;
 
     // Initialize magnetic moment:
     // ===========================

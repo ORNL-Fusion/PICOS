@@ -41,6 +41,8 @@ using namespace std;
 #define COLLISION_OPERATOR_BOOZER_KIM 2
 #define PAIR_SOURCE_GAUSSIAN 0
 #define PAIR_SOURCE_PROFILE 1
+#define PAIR_SOURCE_WEIGHT_LEGACY_BC 0
+#define PAIR_SOURCE_WEIGHT_EXPLICIT_RATE 1
 
 #define float_zero 1E-7
 #define double_zero 1E-15
@@ -97,6 +99,19 @@ struct p_IC_TYP
 	arma::vec Tpar_profile;
 	arma::vec densityFraction_profile;
 	arma::vec x_profile;
+	double initialWeightScale;
+
+	p_IC_TYP()
+	{
+		IC_type = 0;
+		Tper = 0;
+		Tpar = 0;
+		densityFraction = 0;
+		Tper_NX = 0;
+		Tpar_NX = 0;
+		densityFraction_NX = 0;
+		initialWeightScale = 1.0;
+	}
 };
 
 //  Structure to store each ion species particle boundary condition parameters:
@@ -501,6 +516,7 @@ struct SW_TYP
 		int ionSpecies;
 		int electronSpecies;
 		int positionMode;
+		int weightMode;
 		int profile_NS;
 		double rate;
 		double mean_x;
@@ -521,6 +537,7 @@ struct SW_TYP
 			ionSpecies = -1;
 			electronSpecies = -1;
 			positionMode = PAIR_SOURCE_GAUSSIAN;
+			weightMode = PAIR_SOURCE_WEIGHT_LEGACY_BC;
 			profile_NS = 0;
 			rate = 0.0;
 			mean_x = 0.0;
@@ -814,6 +831,7 @@ struct params_TYP
 	bool quietStart;
 	int velocityDistributionModel;
 	int initialConditionRandomSeed;
+	double initialConditionWeightScale;
 
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation
@@ -889,7 +907,13 @@ struct params_TYP
 	map<int,string> errorCodes;
 
 	// Constructor
-	params_TYP(){};
+	params_TYP()
+	{
+		quietStart = false;
+		velocityDistributionModel = VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN;
+		initialConditionRandomSeed = -1;
+		initialConditionWeightScale = 1.0;
+	}
 };
 
 // Define structure to hold fundamental scales:

@@ -425,6 +425,7 @@ mpisForFields               {args.mpis_for_fields}
 quietStart                  {args.quiet_start}
 IC_velocityDistributionModel 1
 IC_randomSeed              271828
+IC_weightScale              {args.ic_weight_scale:.16e}
 numberOfParticleSpecies     2
 numberOfTracerSpecies       0
 advanceParticleMethod       1
@@ -517,7 +518,8 @@ pairSource_Ei_birth         0
 pairSource_Ee_birth         0
 pairSource_eta_i            0
 pairSource_eta_e            0
-pairSource_positionMode     1
+pairSource_positionMode     0
+pairSource_weightMode       {args.pair_source_weight_mode}
 pairSource_fileName         {source_file}
 pairSource_NS               {args.profile_points}
 pairSource_maxParticleWeight 1000
@@ -558,6 +560,7 @@ IC_Tpar_NX_1                  {args.profile_points}
 IC_densityFraction_1          1.0
 IC_densityFraction_fileName_1 {ne_file}
 IC_densityFraction_NX_1       {args.profile_points}
+IC_weightScale_1              {args.ic_weight_scale:.16e}
 
 BC_type_1                     {args.boundary_type}
 BC_T_1                        {args.ti_ev:.16e}
@@ -588,6 +591,7 @@ IC_Tpar_NX_2                  {args.profile_points}
 IC_densityFraction_2          1.0
 IC_densityFraction_fileName_2 {ne_file}
 IC_densityFraction_NX_2       {args.profile_points}
+IC_weightScale_2              {args.ic_weight_scale:.16e}
 
 BC_type_2                     {args.boundary_type}
 BC_T_2                        {args.te_ev:.16e}
@@ -1016,9 +1020,9 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--physical-time", type=float, default=2.0e-5)
     parser.add_argument("--output-count", type=int, default=1, help="Number of PICOS output intervals over the requested physical time; the initial t=0 snapshot is also written.")
-    parser.add_argument("--ne-m3", type=float, default=5.0e19)
-    parser.add_argument("--te-ev", type=float, default=16.0)
-    parser.add_argument("--ti-ev", type=float, default=16.0)
+    parser.add_argument("--ne-m3", type=float, default=1.0e19)
+    parser.add_argument("--te-ev", type=float, default=15.0)
+    parser.add_argument("--ti-ev", type=float, default=15.0)
     parser.add_argument("--b-scale", type=float, default=None, help="Multiplier applied to the checked-in scenario-14 B profile before normalization.")
     parser.add_argument("--scale-reference-z-to-resonance-b", action=argparse.BooleanOptionalAction, default=True, help="When --b-scale is omitted, scale B so B(reference resonance z) equals --resonance-b-t. Disable to scale the profile peak instead.")
     parser.add_argument("--z-min", type=float, default=-2.0)
@@ -1064,7 +1068,7 @@ def main() -> int:
     parser.add_argument("--target-z", type=float, default=None, help="Target marker position in meters; defaults to --z-max.")
     parser.add_argument("--boundary-type", type=int, default=1)
     parser.add_argument("--source-rate", type=float, default=1.0e23)
-    parser.add_argument("--source-z", type=float, default=1.75)
+    parser.add_argument("--source-z", type=float, default=0.0)
     parser.add_argument("--source-sigma", type=float, default=0.15)
     parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV with z_m, Ne_m3, Te_eV, and optionally q_W_m2 columns.")
     parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF; the z histogram is used as the pair-source profile.")
@@ -1072,7 +1076,9 @@ def main() -> int:
     parser.add_argument("--profile-te-floor-ev", type=float, default=0.5, help="Minimum Te used when building normalized Te profile files.")
     parser.add_argument("--use-density-as-source", action=argparse.BooleanOptionalAction, default=False, help="Use the density profile shape as the pair-source shape when no source particle file is provided.")
     parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--ic-weight-scale", type=float, default=1.0, help="Initial physical weight multiplier for computational markers. Use 0 for source-only startup.")
     parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
+    parser.add_argument("--pair-source-weight-mode", type=int, choices=[0, 1], default=0, help="0 uses legacy BC_G weighting; 1 uses explicit pairSource_rate weighting.")
     parser.add_argument("--restart-path", type=Path, default=None, help="Previous PICOS++ output/HDF5 directory to load before normalization.")
     parser.add_argument("--restart-snapshot", type=int, default=-1, help="HDF5 snapshot index to load; -1 loads the latest numeric snapshot.")
     parser.add_argument("--restart-continue-time", action=argparse.BooleanOptionalAction, default=False, help="Continue the physical clock from the restart snapshot time.")

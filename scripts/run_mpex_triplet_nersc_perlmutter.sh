@@ -101,7 +101,7 @@ for tag in "${CASES[@]}"; do
     echo "    --run-label ${RUN_LABEL} --particles 262144 --physical-time 1.0e-4 --output-count 50 \\" >&2
     echo "    --collisions 1 --efield-solve 1 --field-solve-model 2 --reformulated-poisson-quasineutral 1 \\" >&2
     echo "    --electron-plasma-timestep-limiter 0 --quiet-start 0 --pair-source 1 \\" >&2
-    echo "    --source-rate 1.0e23 --source-z 1.75 --source-sigma 0.15 \\" >&2
+    echo "    --source-rate 1.0e23 --source-z 0.0 --source-sigma 0.15 \\" >&2
     echo "    --use-density-as-source" >&2
     exit 2
   fi

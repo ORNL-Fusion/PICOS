@@ -81,7 +81,7 @@ IC_Te_fileName              mpex_scenario14_ex8_left_resonance_70ghz_target8_p26
 pairSource_ionSpecies       1
 pairSource_electronSpecies  2
 pairSource_rate             0.0
-pairSource_mean_x           1.5000000000000000e+00
+pairSource_mean_x           0.0000000000000000e+00
 pairSource_sigma_x          2.9999999999999999e-01
 pairSource_Ti_birth         1.6000000000000000e+01
 pairSource_Te_birth         1.6000000000000000e+01
