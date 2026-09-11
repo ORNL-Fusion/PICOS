@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare NERSC hybrid source runs from PICOS main and PICOS_ECH branches."""
+"""Compare MPEX hybrid source runs from PICOS main and PICOS_ECH branches."""
 
 from __future__ import annotations
 
@@ -15,16 +15,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-DEFAULT_RUN_ROOT = Path("PICOS_NERSC_main_vs_ech_hybrid_source_1ms")
+DEFAULT_RUN_ROOT = Path("PICOS_NERSC_main_vs_ech_MPEX_scenario14_mainformat_1ms")
 CASES = {
     "main": {
-        "subdir": "main_hybrid_1ms",
-        "tag": "picos_main_hybrid_source_1ms",
+        "subdir": "main_mpex_scenario14_1ms",
+        "tag": "picos_main_mpex_scenario14_mainformat_1ms",
         "label": "PICOS main",
     },
     "ech": {
-        "subdir": "ech_branch_hybrid_1ms",
-        "tag": "picos_ech_branch_hybrid_source_1ms",
+        "subdir": "ech_branch_mpex_scenario14_1ms",
+        "tag": "picos_ech_mpex_scenario14_mainformat_1ms",
         "label": "PICOS_ECH",
     },
 }
@@ -158,7 +158,7 @@ def make_profile_plot(data: dict[str, dict[str, np.ndarray]], out_dir: Path) -> 
         ax.legend()
     axes[1, 0].set_xlabel("z [m]")
     axes[1, 1].set_xlabel("z [m]")
-    fig.suptitle("Final 1 ms hybrid source profiles: main vs PICOS_ECH")
+    fig.suptitle("MPEX Scenario 14 final 1 ms hybrid source profiles: main vs PICOS_ECH")
     fig.tight_layout()
     out_path = out_dir / "main_vs_ech_hybrid_final_profiles.png"
     fig.savefig(out_path, dpi=220)
@@ -182,7 +182,7 @@ def make_history_plot(data: dict[str, dict[str, np.ndarray]], out_dir: Path) -> 
     for ax in axes:
         ax.grid(True, alpha=0.25)
         ax.legend()
-    fig.suptitle("1 ms hybrid source histories: main vs PICOS_ECH")
+    fig.suptitle("MPEX Scenario 14 1 ms hybrid source histories: main vs PICOS_ECH")
     fig.tight_layout()
     out_path = out_dir / "main_vs_ech_hybrid_histories.png"
     fig.savefig(out_path, dpi=220)
