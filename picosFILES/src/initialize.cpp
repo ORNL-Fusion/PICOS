@@ -595,6 +595,14 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
                      << "its declared NX. Each profile must contain exactly NX points." << endl;
             MPI_Abort(MPI_COMM_WORLD, -111);
         }
+        if (IONS->at(ss).p_IC.Tper_NX < 2 || IONS->at(ss).p_IC.Tpar_NX < 2 ||
+            IONS->at(ss).p_IC.densityFraction_NX < 2)
+        {
+            if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+                cerr << "ERROR: ion species " << ss << " IC profiles need at least "
+                     << "2 inclusive samples on [LX_min, LX_max]." << endl;
+            MPI_Abort(MPI_COMM_WORLD, -111);
+        }
 
         // Rescale the plasma Profiles:
         // ================================
@@ -677,7 +685,7 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
         double Q       = F_E*Z;
 
         // Select ion density profile:
-        if (params->quietStart)
+        if (IONS->at(ss).p_IC.IC_type == 1 && params->quietStart)
         {
             n_ion *= ne0*f;
         }
@@ -1021,6 +1029,11 @@ void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fiel
                     }
                     break;
                 }
+                case(2):
+                {
+                    initDist.profile_maxwellianDistribution(params, &IONS->at(ss));
+                    break;
+                }
                 default:
                 {
                 }
@@ -1032,7 +1045,12 @@ void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fiel
         {
             cout << "ION SPECIES: " << (ss + 1) << endl;
 
-            if (params->quietStart)
+            if (IONS->at(ss).p_IC.IC_type == 2)
+            {
+                cout << "+ Particle loading: direct n(lmag)/B(lmag) profile Maxwellian (IC_type = 2)" << endl;
+                cout << "+ Ion profile files shape initial loading: YES" << endl;
+            }
+            else if (params->quietStart)
             {
                 cout << "+ Particle loading: uniform positions and characteristic-temperature Maxwellian (quietStart = 1)" << endl;
                 cout << "+ Ion profile files shape initial loading: NO" << endl;

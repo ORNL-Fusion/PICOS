@@ -12,6 +12,9 @@ M1                            2.0
 
 // Initial conditions:
 // =============================================================================
+// IC_type 1 uses the legacy loader selected by quietStart in input_file.input.
+// IC_type 2 directly samples equal-weight positions proportional to n(lmag)/B(lmag)
+// and local bi-Maxwellian velocities from the three external ion profiles below.
 IC_type_1                      1
 
 IC_Tper_1                      15

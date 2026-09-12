@@ -47,7 +47,7 @@ extern double F_C_DS; 		// Dimensionless speed of light
 // =============================================================================
 struct p_IC_TYP
 {
-	int IC_type;             	   		// 1: Uniform profiles, 2: profiles from external files
+	int IC_type;             	   		// 1: legacy loader, 2: direct profile Maxwellian
 
 	// Reference values for profiles:
 	// ==============================

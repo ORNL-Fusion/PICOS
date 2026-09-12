@@ -1,5 +1,6 @@
 #include "initDistribution.h"
 
+#include <algorithm>
 #include <random>
 
 initDist_TYP::initDist_TYP(const params_TYP * params, const unsigned int speciesIndex) :
@@ -50,6 +51,124 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
     IONS->V_p.col(0) = V1;
     IONS->V_p.col(1) = V4;
 }
+
+// Directly sample the equal-weight thin-flux-tube distribution represented by the
+// supplied density and temperature profiles. The spatial marker marginal is n/B;
+// velocities are a local bi-Maxwellian conditional on the sampled position.
+void initDist_TYP::profile_maxwellianDistribution(
+    const params_TYP * params, ionSpecies_TYP * IONS)
+{
+    const auto randomVector = [params, this, IONS](const std::uint64_t stream) {
+        if (params->randomSeed >= 0)
+        {
+            const auto seed = static_cast<std::uint64_t>(params->randomSeed)
+                            + 1000003ULL*params->mpi.MPI_DOMAIN_NUMBER
+                            + 10000019ULL*speciesIndex
+                            + 10007ULL*stream;
+            arma_rng::set_seed(seed);
+        }
+        else
+        {
+            arma_rng::set_seed_random();
+        }
+        return randu<vec>(IONS->NSP);
+    };
+
+    const arma::vec density_x = linspace(
+        params->geometry.LX_min,
+        params->geometry.LX_max,
+        IONS->p_IC.densityFraction_NX
+    );
+    const arma::vec field_x = linspace(
+        params->geometry.LX_min,
+        params->geometry.LX_max,
+        params->em_IC.BX_NX
+    );
+    arma::vec field_on_density(IONS->p_IC.densityFraction_NX, fill::zeros);
+    interp1(field_x, params->em_IC.Bx_profile, density_x, field_on_density);
+    const arma::vec spatial_density =
+        IONS->p_IC.densityFraction_profile / field_on_density;
+    if (!spatial_density.is_finite() || spatial_density.min() <= 0.0)
+    {
+        if (params->mpi.IS_PARTICLES_ROOT)
+            cerr << "ERROR: IC_type = 2 requires finite, strictly positive density "
+                 << "and B profiles." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -106);
+        return;
+    }
+
+    arma::vec cdf(spatial_density.n_elem, fill::zeros);
+    for (arma::uword index = 1; index < cdf.n_elem; ++index)
+    {
+        cdf(index) = cdf(index - 1)
+                   + 0.5*(spatial_density(index - 1) + spatial_density(index))
+                   * (density_x(index) - density_x(index - 1));
+    }
+    if (!std::isfinite(cdf(cdf.n_elem - 1)) || cdf(cdf.n_elem - 1) <= 0.0)
+    {
+        if (params->mpi.IS_PARTICLES_ROOT)
+            cerr << "ERROR: IC_type = 2 spatial marginal has zero normalization." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -106);
+        return;
+    }
+    cdf /= cdf(cdf.n_elem - 1);
+
+    const arma::vec position_uniform = randomVector(1);
+    IONS->X_p.set_size(IONS->NSP);
+    for (arma::uword particle = 0; particle < IONS->X_p.n_elem; ++particle)
+    {
+        const double probability = position_uniform(particle);
+        const auto upper = std::lower_bound(cdf.begin(), cdf.end(), probability);
+        const arma::uword high = static_cast<arma::uword>(upper - cdf.begin());
+        if (high == 0)
+        {
+            IONS->X_p(particle) = density_x(0);
+            continue;
+        }
+        const double fraction = (probability - cdf(high - 1))
+                              / (cdf(high) - cdf(high - 1));
+        IONS->X_p(particle) = density_x(high - 1)
+                            + fraction*(density_x(high) - density_x(high - 1));
+    }
+
+    const arma::vec tpar_x = linspace(
+        params->geometry.LX_min,
+        params->geometry.LX_max,
+        IONS->p_IC.Tpar_NX
+    );
+    const arma::vec tper_x = linspace(
+        params->geometry.LX_min,
+        params->geometry.LX_max,
+        IONS->p_IC.Tper_NX
+    );
+    arma::vec tpar(IONS->NSP, fill::zeros);
+    arma::vec tper(IONS->NSP, fill::zeros);
+    interp1(tpar_x, IONS->p_IC.Tpar_profile, IONS->X_p, tpar);
+    interp1(tper_x, IONS->p_IC.Tper_profile, IONS->X_p, tper);
+    if (!tpar.is_finite() || !tper.is_finite() || tpar.min() <= 0.0 || tper.min() <= 0.0)
+    {
+        if (params->mpi.IS_PARTICLES_ROOT)
+            cerr << "ERROR: IC_type = 2 requires finite, strictly positive temperature "
+                 << "profiles." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -106);
+        return;
+    }
+
+    arma::vec radius = randomVector(2);
+    arma::vec phase = 2.0*M_PI*randomVector(3);
+    const arma::vec vth_per = sqrt(2.0*F_KB*tper/IONS->M);
+    const arma::vec v2 = vth_per % sqrt(-log(1.0 - radius)) % cos(phase);
+    const arma::vec v3 = vth_per % sqrt(-log(1.0 - radius)) % sin(phase);
+
+    radius = randomVector(4);
+    phase = 2.0*M_PI*randomVector(5);
+    const arma::vec vth_par = sqrt(2.0*F_KB*tpar/IONS->M);
+    const arma::vec v1 = vth_par % sqrt(-log(1.0 - radius)) % sin(phase);
+
+    IONS->V_p.col(0) = v1;
+    IONS->V_p.col(1) = sqrt(square(v2) + square(v3));
+}
+
 
 double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, double X, double V3, double V2, double V1)
 {

@@ -41,6 +41,8 @@ class initDist_TYP
     void uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS);
 
     void nonuniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS);
+
+    void profile_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS);
 };
 
 #endif
