@@ -950,7 +950,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = CS->eField*fields->EX_m.subvec(iIndex,fIndex);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( CS->eField*fields->EX_m.subvec(iIndex,fIndex) );
 				saveToHDF5(group_field, name, &fvec_values);
@@ -967,7 +967,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = CS->bField*fields->BX_m.subvec(iIndex,fIndex);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( CS->bField*fields->BX_m.subvec(iIndex,fIndex) );
 				saveToHDF5(group_field, name, &fvec_values);
@@ -983,7 +983,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = fields->dBX_m.subvec(iIndex,fIndex)*CS->bField/CS->length;
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( fields->dBX_m.subvec(iIndex,fIndex)*CS->bField/CS->length );
 				saveToHDF5(group_field, name, &fvec_values);
@@ -999,7 +999,7 @@ void HDF_TYP::saveFieldsVariables(const params_TYP * params, fields_TYP * fields
 				name = "x";
 				#ifdef HDF5_DOUBLE
 				vec_values = fields->ddBX_m.subvec(iIndex,fIndex)*CS->bField/pow(CS->length,2);
-				saveToHDF5(group_ionSpecies, name, &vec_values);
+				saveToHDF5(group_field, name, &vec_values);
 				#elif defined HDF5_FLOAT
 				fvec_values = conv_to<fvec>::from( fields->ddBX_m.subvec(iIndex,fIndex)*CS->bField/pow(CS->length,2) );
 				saveToHDF5(group_field, name, &fvec_values);
