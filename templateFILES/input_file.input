@@ -2,6 +2,7 @@
 // =============================================================================
 mpisForFields               2
 quietStart                  1
+randomSeed                  -1
 numberOfParticleSpecies     1
 numberOfTracerSpecies       0
 advanceParticleMethod       1

@@ -212,6 +212,11 @@ void init_TYP::readInputFile(params_TYP * params)
         params->quietStart = false;
     }
 
+    const auto randomSeed = parametersStringMap.find("randomSeed");
+    params->randomSeed = randomSeed == parametersStringMap.end()
+                       ? -1
+                       : stoi(randomSeed->second);
+
     params->numberOfParticleSpecies = stoi( parametersStringMap["numberOfParticleSpecies"] );
     params->numberOfTracerSpecies   = stoi( parametersStringMap["numberOfTracerSpecies"] );
     params->advanceParticleMethod   = stoi( parametersStringMap["advanceParticleMethod"] );
@@ -294,6 +299,15 @@ void init_TYP::readInputFile(params_TYP * params)
 
     if(params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
+        cout << "+ Random seed: ";
+        if (params->randomSeed >= 0)
+        {
+            cout << params->randomSeed << endl;
+        }
+        else
+        {
+            cout << "entropy" << endl;
+        }
         cout << "READING INPUT FILE COMPLETED" << endl;
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n";
     }
@@ -516,11 +530,10 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
 
     // Guard the field-line (lmag) profile-length contract:
     // ====================================================
-    // PICOS assumes each profile is sampled uniformly on [LX_min, LX_max] with exactly
-    // BX_NX/Te_NX points and reconstructs the grid spacing from that count (see
-    // initializeFields() and the A/ds derivation below). It never reads a companion grid
-    // file, so this guard can verify sample count but not coordinate uniformity. The
-    // external field-line preprocessor is responsible for uniform sampling.
+    // Every one-column profile is sampled at N inclusive, uniformly spaced nodes on
+    // [LX_min, LX_max]. PICOS never reads a companion coordinate file, so this guard can
+    // verify sample count but not coordinate uniformity. The external field-line
+    // preprocessor is responsible for writing the promised uniform grid.
     if ((int)params->em_IC.Bx_profile.n_elem != params->em_IC.BX_NX)
     {
         if (params->mpi.MPI_DOMAIN_NUMBER == 0)
@@ -536,6 +549,13 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
             cerr << "ERROR: Te profile '" << params->f_IC.Te_fileName << "' has "
                  << params->f_IC.Te_profile.n_elem << " samples but IC_Te_NX = "
                  << params->f_IC.Te_NX << "." << endl;
+        MPI_Abort(MPI_COMM_WORLD, -111);
+    }
+    if (params->em_IC.BX_NX < 3 || params->f_IC.Te_NX < 2)
+    {
+        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+            cerr << "ERROR: B profiles need at least 3 samples and Te profiles need at "
+                 << "least 2 samples on [LX_min, LX_max]." << endl;
         MPI_Abort(MPI_COMM_WORLD, -111);
     }
 
@@ -629,9 +649,15 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
 
     // Derived quantities for IONS:
     // ============================
-    // NR total number of real particles at t = 0:
-    double ds   = params->geometry.LX/params->em_IC.BX_NX;
-    arma::vec A = params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
+    // Integrate the initial number of real particles on the same inclusive profile grid
+    // promised by the input contract. Area follows thin-flux-tube conservation.
+    const int integration_NX = params->em_IC.BX_NX;
+    const arma::vec integration_x = linspace(
+        params->geometry.LX_min, params->geometry.LX_max, integration_NX
+    );
+    const double ds = params->geometry.LX/(integration_NX - 1);
+    const arma::vec A =
+        params->geometry.A_0*(params->em_IC.BX/params->em_IC.Bx_profile);
     double ne   = params->CV.ne;
     double ne0  = params->f_IC.ne;
     double B    = params->CV.B;
@@ -639,8 +665,8 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
 
     for(int ss=0; ss<IONS->size(); ss++)
     {
-        // Ion species density:
-        arma::vec n_ion = ones<vec>(params->em_IC.BX_NX);
+        // Ion species density on the integration grid:
+        arma::vec n_ion = ones<vec>(integration_NX);
 
         // Density fraction:
         double f = IONS->at(ss).p_IC.densityFraction;
@@ -655,13 +681,33 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
         {
             n_ion *= ne0*f;
         }
-        else
+        else if (IONS->at(ss).p_IC.densityFraction_NX == integration_NX)
         {
             n_ion = IONS->at(ss).p_IC.densityFraction_profile;
         }
+        else
+        {
+            const arma::vec density_x = linspace(
+                params->geometry.LX_min,
+                params->geometry.LX_max,
+                IONS->at(ss).p_IC.densityFraction_NX
+            );
+            interp1(
+                density_x,
+                IONS->at(ss).p_IC.densityFraction_profile,
+                integration_x,
+                n_ion
+            );
+        }
 
-        // Number of real particles represented by particles of "ss" species:
-        IONS->at(ss).NR = sum(n_ion%A)*ds;
+        // Number of real particles represented by particles of "ss" species. Use the
+        // trapezoidal rule because the input grid includes both physical endpoints.
+        const arma::vec integrand = n_ion%A;
+        IONS->at(ss).NR = ds*(
+            0.5*integrand(0)
+            + sum(integrand.subvec(1, integration_NX - 2))
+            + 0.5*integrand(integration_NX - 1)
+        );
 
         // Characteristic frequencies:
         IONS->at(ss).Q     = Q;
@@ -959,7 +1005,7 @@ void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fiel
     {
         if (params->mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
         {
-            initDist_TYP initDist(params);
+            initDist_TYP initDist(params, ss);
 
             switch (IONS->at(ss).p_IC.IC_type)
             {
@@ -988,11 +1034,13 @@ void init_TYP::initializeIons(const params_TYP * params, const CS_TYP * CS, fiel
 
             if (params->quietStart)
             {
-                cout << "+ Using quiet start: YES" << endl;
+                cout << "+ Particle loading: uniform positions and characteristic-temperature Maxwellian (quietStart = 1)" << endl;
+                cout << "+ Ion profile files shape initial loading: NO" << endl;
             }
             else
             {
-                cout << "+ Using quiet start: NO" << endl;
+                cout << "+ Particle loading: profile-shaped Metropolis-Hastings (quietStart = 0)" << endl;
+                cout << "+ Ion profile files shape initial loading: YES" << endl;
             }
 
             cout << "+ Super-particles used in simulation: " << IONS->at(ss).NSP*params->mpi.MPIS_PARTICLES << endl;
@@ -1018,45 +1066,29 @@ void init_TYP::initializeElectrons(const params_TYP * params, const CS_TYP * CS,
 
     // Print to terminal:
     // ==================
-	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << endl << "* * * * * * * * * * * * INITIALIZING ELECTRON FLUID * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
     }
 
     // Number of mesh points with ghost cells included:
-    int NX(params->mesh.NX_IN_SIM + 2);
+    const int NX(params->mesh.NX_IN_SIM + 2);
 
     // Allocate memory to the mesh-defined electron temperature:
     electrons->Te_m.zeros(NX);
 
-    //Interpolate at mesh points:
-    // ==========================
-    // Query points:
-    arma::vec xq = zeros(NX);
-    arma::vec yq = zeros(NX);
-    for(int ii=0; ii<NX; ii++)
-    {
-        xq(ii) = (double)ii*params->mesh.DX - (0.5*params->mesh.DX) + params->geometry.LX_min;
-    }
-
-    // Sample points:
-    int Te_NX  = params->f_IC.Te_NX;
-
-    // Spatial increment for external data:
-    double dX = params->mesh.LX/((double)(Te_NX - 2));
-    arma::vec xt = zeros(Te_NX);
-    arma::vec yt = zeros(Te_NX);
-    for(int ii=0; ii<Te_NX; ii++)
-    {
-        xt(ii) = (double)ii*dX - (0.5*dX) + params->geometry.LX_min;
-    }
-
-    // Te profile:
-    // ===========
-    arma::vec Te = params->f_IC.Te_profile;
-    yt = Te;
-    interp1(xt,yt,xq,yq);
-    electrons->Te_m = yq;
+    // Profiles contain N inclusive, uniformly spaced physical samples on
+    // [LX_min, LX_max]. Interpolate only to physical cell centers, then fill the
+    // simulation ghost cells from their nearest physical neighbors.
+    const int Te_NX = params->f_IC.Te_NX;
+    const arma::vec xt = linspace(
+        params->geometry.LX_min, params->geometry.LX_max, Te_NX
+    );
+    arma::vec yq = zeros(params->mesh.NX_IN_SIM);
+    interp1(xt, params->f_IC.Te_profile, params->mesh.nodesX, yq);
+    electrons->Te_m.subvec(1, NX - 2) = yq;
+    electrons->Te_m(0) = electrons->Te_m(1);
+    electrons->Te_m(NX - 1) = electrons->Te_m(NX - 2);
 
     // Print to terminal:
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
@@ -1069,7 +1101,7 @@ void init_TYP::initializeElectrons(const params_TYP * params, const CS_TYP * CS,
 
     // Print to terminal:
     // ==================
-	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * ELECTRON FLUID INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
     }
@@ -1084,13 +1116,13 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 
     // Print to terminal:
     // ==================
-	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << endl << "* * * * * * * * * * * * INITIALIZING ELECTROMAGNETIC FIELDS * * * * * * * * * * * * * * * * * *" << endl;
     }
 
     // Number of mesh points with ghost cells included:
-    int NX(params->mesh.NX_IN_SIM + 2);
+    const int NX(params->mesh.NX_IN_SIM + 2);
 
     // Allocate memory to fields:
     fields->zeros(NX);
@@ -1102,58 +1134,49 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
     }
     else
     {
-        //Interpolate at mesh points:
-        // ==========================
-        // Query points:
-        arma::vec xq = zeros(NX);
-        arma::vec yq = zeros(NX);
-        for(int ii=0; ii<NX; ii++)
-        {
-            xq(ii) = (double)ii*params->mesh.DX - (0.5*params->mesh.DX) + params->geometry.LX_min;
-        }
-
-        // Sample points:
-        int BX_NX  = params->em_IC.BX_NX;
-
-        // Spatial increment for external data:
-        double dX = params->mesh.LX/((double)(BX_NX - 2));
-        arma::vec xt = zeros(BX_NX);
-        arma::vec yt = zeros(BX_NX);
-        for(int ii=0; ii<BX_NX; ii++)
-        {
-            xt(ii) = (double)ii*dX - (0.5*dX) + params->geometry.LX_min;
-        }
+        // Profiles contain N inclusive, uniformly spaced physical samples on
+        // [LX_min, LX_max]. Interpolate only to physical cell centers. Ghost cells are
+        // boundary copies and are not extra samples in the public input contract.
+        const int BX_NX = params->em_IC.BX_NX;
+        const double dX = params->mesh.LX/(BX_NX - 1);
+        const arma::vec xt = linspace(
+            params->geometry.LX_min, params->geometry.LX_max, BX_NX
+        );
+        arma::vec yq = zeros(params->mesh.NX_IN_SIM);
+        const arma::vec BX = params->em_IC.Bx_profile;
 
         // BX profile:
         // ===========
-        arma::vec BX = params->em_IC.Bx_profile;
-        yt = BX;
-        interp1(xt,yt,xq,yq);
-        fields->BX_m = yq;
-    
-        // dBX profile:
-        // ===========
-        arma::vec dBX(BX_NX,1);
-        dBX.subvec(1,BX_NX-2) = (BX.subvec(2,BX_NX-1) - BX.subvec(0,BX_NX-3))/(2*dX);
-        dBX(0)       = dBX(1);
-        dBX(BX_NX-1) = dBX(BX_NX-2);
-        yt = dBX;
-        interp1(xt,yt,xq,yq);
-        fields->dBX_m = yq;
+        interp1(xt, BX, params->mesh.nodesX, yq);
+        fields->BX_m.subvec(1, NX - 2) = yq;
+
+        // dBX profile. Use centered differences internally and second-order one-sided
+        // differences at the two physical endpoints.
+        // ======================================================================
+        arma::vec dBX(BX_NX, fill::zeros);
+        dBX.subvec(1, BX_NX - 2) =
+            (BX.subvec(2, BX_NX - 1) - BX.subvec(0, BX_NX - 3))/(2*dX);
+        dBX(0) = (-3*BX(0) + 4*BX(1) - BX(2))/(2*dX);
+        dBX(BX_NX - 1) =
+            (3*BX(BX_NX - 1) - 4*BX(BX_NX - 2) + BX(BX_NX - 3))/(2*dX);
+        interp1(xt, dBX, params->mesh.nodesX, yq);
+        fields->dBX_m.subvec(1, NX - 2) = yq;
 
         // ddBX profile:
-        // ============
-        // diff(.,2) returns BX_NX-2 values; element k is the 2nd difference centered at
-        // node k+1, so it must be written to subvec(1, BX_NX-2) (not subvec(0, BX_NX-3)),
-        // mirroring the dBX assignment above. The old half-cell misalignment is fixed here.
-        arma::vec ddBX(BX_NX,1);
-        ddBX.subvec(1,BX_NX-2) = diff(params->em_IC.Bx_profile,2)/(dX*dX);
-        ddBX(0)       = ddBX(1);
-        ddBX(BX_NX-1) = ddBX(BX_NX-2);
+        // =============
+        arma::vec ddBX(BX_NX, fill::zeros);
+        ddBX.subvec(1, BX_NX - 2) = diff(BX, 2)/(dX*dX);
+        ddBX(0) = ddBX(1);
+        ddBX(BX_NX - 1) = ddBX(BX_NX - 2);
+        interp1(xt, ddBX, params->mesh.nodesX, yq);
+        fields->ddBX_m.subvec(1, NX - 2) = yq;
 
-        yt = ddBX;
-        interp1(xt,yt,xq,yq);
-        fields->ddBX_m = yq;
+        // Fill simulation ghost cells from the nearest physical values.
+        for (arma::vec * profile : {&fields->BX_m, &fields->dBX_m, &fields->ddBX_m})
+        {
+            (*profile)(0) = (*profile)(1);
+            (*profile)(NX - 1) = (*profile)(NX - 2);
+        }
     }
 
     // Print to terminal:
@@ -1168,7 +1191,7 @@ void init_TYP::initializeFields(params_TYP * params, fields_TYP * fields)
 
     // Print to terminal:
     // ==================
-	if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+    if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * ELECTROMAGNETIC FIELDS INITIALIZED  * * * * * * * * * * * * * * * * * *" << endl;
     }

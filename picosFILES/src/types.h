@@ -603,6 +603,9 @@ struct params_TYP
 	// Flag for using a quiet start
 	bool quietStart;
 
+	// Base seed for every stochastic operator; a negative value selects entropy.
+	int randomSeed = -1;
+
 	double smoothingParameter;
 	double simulationTime; // In units of the shorter ion gyro-period in the simulation
 	double currentTime = 0;

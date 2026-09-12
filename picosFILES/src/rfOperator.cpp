@@ -1,4 +1,8 @@
 #include "rfOperator.h"
+#include "parallel_random.hpp"
+
+#include <cstdint>
+#include <random>
 
 #ifndef HAS_STD_BESSEL
 #include <boost/math/special_functions/bessel.hpp>
@@ -260,19 +264,28 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
     }
     */
 
-    // Seed the random number generator:
-    std::default_random_engine generator(params->mpi.MPI_DOMAIN_NUMBER+1);
-
-    // Create uniform random number generator in [0,1]:
-    std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0);
+    const auto invocation = static_cast<std::uint64_t>(std::llround(
+        params->currentTime/(params->DT*CS->time)));
+    std::random_device entropy;
+    const auto baseSeed = params->randomSeed >= 0
+        ? static_cast<std::uint64_t>(params->randomSeed) + 500000001ULL
+          + 1000003ULL*params->mpi.MPI_DOMAIN_NUMBER
+          + 10000019ULL*invocation
+        : (static_cast<std::uint64_t>(entropy()) << 32) ^ entropy();
 
     for (int ss=0; ss<IONS->size();ss++)
     {
         int NSP = IONS->at(ss).NSP;
         int Ma  = IONS->at(ss).M;
 
-        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution) firstprivate(generator)
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, baseSeed)
         {
+            const auto seed = baseSeed
+                            + 100000007ULL*static_cast<std::uint64_t>(ss)
+                            + 10007ULL*picos::random::thread();
+            std::mt19937_64 generator(seed);
+            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0);
+
             #pragma omp for
             for(int ii=0; ii<NSP; ii++)
             {

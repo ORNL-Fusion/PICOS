@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <concepts>
+#include <cstdint>
 #include <random>
 #include <vector>
 

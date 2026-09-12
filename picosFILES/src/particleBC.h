@@ -83,6 +83,7 @@ public:
     dot_buffer dot_;
 
     particleBC_TYP();
+    explicit particleBC_TYP(const params_TYP &params);
 
     void applyParticleReinjection(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
 };

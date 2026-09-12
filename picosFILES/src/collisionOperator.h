@@ -94,7 +94,13 @@ private:
 
 public:
     coll_operator_TYP() :
-    randoms(picos::random::instances<short, uniform, 0, 1> (device())) {}
+    randoms(picos::random::instances<short, uniform, 0, 1>(device())) {}
+
+    explicit coll_operator_TYP(const params_TYP &params) :
+    randoms(picos::random::instances<short, uniform, 0, 1>(
+        params.randomSeed >= 0
+            ? static_cast<std::uint_fast64_t>(params.randomSeed) + 200000001ULL
+            : device())) {}
 
     void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons);
 

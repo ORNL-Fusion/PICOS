@@ -1,6 +1,9 @@
 #include "initDistribution.h"
 
-initDist_TYP::initDist_TYP(const params_TYP * params)
+#include <random>
+
+initDist_TYP::initDist_TYP(const params_TYP * params, const unsigned int speciesIndex) :
+speciesIndex(speciesIndex)
 {
 
 }
@@ -9,26 +12,39 @@ initDist_TYP::initDist_TYP(const params_TYP * params)
 //This function creates a Maxwellian velocity distribution for IONS with a homogeneous spatial distribution.
 void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS)
 {
-    // Uniformely distribute positions along domain:
-    arma_rng::set_seed_random();
-    IONS->X_p = params->geometry.LX_min + randu<vec>(IONS->NSP)*(params->geometry.LX_max - params->geometry.LX_min);
+    const auto randomVector = [params, this, IONS](const std::uint64_t stream) {
+        if (params->randomSeed >= 0)
+        {
+            const auto seed = static_cast<std::uint64_t>(params->randomSeed)
+                            + 1000003ULL*params->mpi.MPI_DOMAIN_NUMBER
+                            + 10000019ULL*speciesIndex
+                            + 10007ULL*stream;
+            arma_rng::set_seed(seed);
+        }
+        else
+        {
+            arma_rng::set_seed_random();
+        }
+        return randu<vec>(IONS->NSP);
+    };
+
+    // Independently seeded streams keep common particles aligned when two
+    // otherwise identical decks happen to request different particle counts.
+    IONS->X_p = params->geometry.LX_min
+              + randomVector(1)*(params->geometry.LX_max - params->geometry.LX_min);
 
     // Maxwellian distribution for the velocity using Box-Muller:
-    //arma_rng::set_seed_random();
-	arma::vec R = randu(IONS->NSP);
-	//arma_rng::set_seed_random();
-	arma::vec phi = 2.0*M_PI*randu<vec>(IONS->NSP);
+    arma::vec R = randomVector(2);
+    arma::vec phi = 2.0*M_PI*randomVector(3);
 
-	arma::vec V2 = IONS->VTper*sqrt( -log(1.0 - R) ) % cos(phi);
-	arma::vec V3 = IONS->VTper*sqrt( -log(1.0 - R) ) % sin(phi);
+    arma::vec V2 = IONS->VTper*sqrt( -log(1.0 - R) ) % cos(phi);
+    arma::vec V3 = IONS->VTper*sqrt( -log(1.0 - R) ) % sin(phi);
     arma::vec V4 = sqrt( pow(V2,2) + pow(V3,2) );
 
-	//arma_rng::set_seed_random();
-	R = randu<vec>(IONS->NSP);
-	//arma_rng::set_seed_random();
-	phi = 2.0*M_PI*randu<vec>(IONS->NSP);
+    R = randomVector(4);
+    phi = 2.0*M_PI*randomVector(5);
 
-	arma::vec V1 = IONS->VTpar*sqrt( -log(1.0 - R) ) % sin(phi);
+    arma::vec V1 = IONS->VTpar*sqrt( -log(1.0 - R) ) % sin(phi);
 
     // Assign velocities:
     IONS->V_p.col(0) = V1;
@@ -115,7 +131,20 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
 
     // Seed the random number generator:
     // ================================
-    std::default_random_engine generator( (params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000 );
+    std::uint64_t seed;
+    if (params->randomSeed >= 0)
+    {
+        seed = static_cast<std::uint64_t>(params->randomSeed)
+             + 1000003ULL*params->mpi.MPI_DOMAIN_NUMBER
+             + 10000019ULL*speciesIndex
+             + 90007ULL;
+    }
+    else
+    {
+        std::random_device entropy;
+        seed = (static_cast<std::uint64_t>(entropy()) << 32) ^ entropy();
+    }
+    std::mt19937_64 generator(seed);
 
     // Create uniform random number generator in [0,1]:
     // ================================================

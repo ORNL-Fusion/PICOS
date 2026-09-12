@@ -54,12 +54,6 @@ int main(int argc, char* argv[])
     // Electromagnetic fields:
     fields_TYP fields;
 
-    // Collision operator object:
-    coll_operator_TYP coll_operator;
-
-    // Particle boundary condition operator:
-    particleBC_TYP particleBC;
-
     // UNITS object:
     units_TYP units;
 
@@ -70,6 +64,10 @@ int main(int argc, char* argv[])
     // =========================================================================
     // Load data from input file:
     init.readInputFile(&params);
+
+    // Construct stochastic operators after the optional deck seed is known.
+    coll_operator_TYP coll_operator(params);
+    particleBC_TYP particleBC(params);
 
     // Read "ions_properties.ion" and populate "IONS" vector
     init.readIonPropertiesFile(&params, &IONS);

@@ -7,6 +7,7 @@
 #include <string>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
 
 #define ARMA_ALLOW_FAKE_GCC
 #include <armadillo>
@@ -29,12 +30,13 @@ class initDist_TYP
     //arma::vec b3; // Unitary vector perpendicular to b1 and b2
 
     arma::vec x_profile;
+    unsigned int speciesIndex;
 
     double target(const params_TYP * params, ionSpecies_TYP * IONS, double X, double V3, double V2, double V1);
 
     public:
 
-    initDist_TYP(const params_TYP * params);
+    initDist_TYP(const params_TYP * params, unsigned int speciesIndex);
 
     void uniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS);
 

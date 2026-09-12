@@ -163,7 +163,10 @@ void PIC_TYP::smooth(arma::vec &v, double as) const
 
 // Constructor:
 PIC_TYP::PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons) :
-randoms(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device()))
+randoms(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>>(
+    params.randomSeed >= 0
+        ? static_cast<std::uint_fast64_t>(params.randomSeed) + 100000001ULL
+        : device()))
 {
 	// Get latest mesh-defined values from FIELDS ranks:
 	// =================================================

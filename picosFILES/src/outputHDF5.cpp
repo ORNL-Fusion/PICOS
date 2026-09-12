@@ -300,6 +300,10 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(outputFile, name, &params->mpi.MPIS_FIELDS);
         name.clear();
 
+        name = "randomSeed";
+        saveToHDF5(outputFile, name, &params->randomSeed);
+        name.clear();
+
         // Fundamental scales group
         Group * group_scales = new Group( outputFile->createGroup( "/scales" ) );
 

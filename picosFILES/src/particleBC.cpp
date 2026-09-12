@@ -9,6 +9,17 @@ dot_({0, 0, 0, 0, 0, 0}),
 randoms_2pi(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device())),
 randoms_one(picos::random::instances<double, uniform, 0.0, 1.0> (device())){}
 
+particleBC_TYP::particleBC_TYP(const params_TYP &params) :
+dot_({0, 0, 0, 0, 0, 0}),
+randoms_2pi(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>>(
+    params.randomSeed >= 0
+        ? static_cast<std::uint_fast64_t>(params.randomSeed) + 300000001ULL
+        : device())),
+randoms_one(picos::random::instances<double, uniform, 0.0, 1.0>(
+    params.randomSeed >= 0
+        ? static_cast<std::uint_fast64_t>(params.randomSeed) + 400000001ULL
+        : device())) {}
+
 // =============================================================================
 void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const
 {
