@@ -599,6 +599,10 @@ void fields_solver_TYP::advanceEfieldReformulatedPoisson(const params_TYP * para
 			{
 				fields->Phi_m(ii) = fields->Phi_m(ii - 1) - 0.5*(fields->EX_m(ii) + fields->EX_m(ii - 1))*dx;
 			}
+			if (params->em_IC.poissonBCModel == POISSON_BC_SHEATH)
+			{
+				fields->Phi_m(params->mesh.NX_IN_SIM + 1) = poissonBoundaryPotential(params, true);
+			}
 		}
 
 		#ifdef CHECKS_ON

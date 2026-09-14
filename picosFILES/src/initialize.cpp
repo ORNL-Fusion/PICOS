@@ -82,6 +82,40 @@ namespace
         throw runtime_error(message);
     }
 
+    void validateKineticElectrostaticBoundaries(const params_TYP * params, const vector<ionSpecies_TYP> * IONS)
+    {
+        if (!isKineticElectrostaticFieldSolve(params->SW.fieldSolveModel) ||
+            params->em_IC.poissonBCModel != POISSON_BC_PERIODIC)
+        {
+            return;
+        }
+
+        bool hasOpenParticleBoundary = false;
+        for (const ionSpecies_TYP& ion : *IONS)
+        {
+            if (ion.SPECIES == 1 && ion.p_BC.BC_type != 3)
+            {
+                hasOpenParticleBoundary = true;
+                break;
+            }
+        }
+        if (!hasOpenParticleBoundary)
+        {
+            return;
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+        {
+            cerr << "PICOS++ INPUT ERROR: kinetic electrostatic field solve with "
+                 << "Poisson_BCModel=1 is periodic, but at least one kinetic species "
+                 << "uses a non-periodic particle boundary. Use Poisson_BCModel=2 "
+                 << "for open/sheath MPEX runs, or set BC_type=3 for every species "
+                 << "for a periodic test." << endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, -114);
+    }
+
     double readHdf5ScalarDouble(H5::H5File& file, const string& datasetName)
     {
         H5::DataSet dataset = file.openDataSet(datasetName);
@@ -870,6 +904,8 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
         }
 
     }//Iteration over ion species
+
+    validateKineticElectrostaticBoundaries(params, IONS);
 
     // Print to terminal:
     // ==================

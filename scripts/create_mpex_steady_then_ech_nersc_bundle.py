@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import stat
 import tarfile
@@ -88,6 +89,14 @@ def write_executable(path: Path, text: str) -> None:
     path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def append_or_replace_key(text: str, key: str, value: str) -> str:
+    pattern = re.compile(rf"^({re.escape(key)}\s+).*$", re.MULTILINE)
+    updated, count = pattern.subn(rf"\g<1>{value}", text)
+    if count == 0:
+        updated = text.rstrip() + f"\n{key:<30} {value}\n"
+    return updated
+
+
 def copy_case_inputs(root: Path, case: BundleCase, source_dir: Path) -> None:
     case_dir = root / case.subdir
     input_dir = case_dir / "inputFiles"
@@ -96,7 +105,11 @@ def copy_case_inputs(root: Path, case: BundleCase, source_dir: Path) -> None:
         src = source_dir / name
         if not src.is_file():
             raise FileNotFoundError(f"Missing generated input file: {src}")
-        shutil.copy2(src, input_dir / name)
+        if name.startswith("input_file_") and name.endswith(".input"):
+            text = append_or_replace_key(src.read_text(), "Poisson_BCModel", "2")
+            (input_dir / name).write_text(text)
+        else:
+            shutil.copy2(src, input_dir / name)
 
 
 def assert_contains(path: Path, required: list[str]) -> None:
@@ -113,6 +126,7 @@ def validate_case_inputs(root: Path) -> None:
         [
             "SW_EfieldSolve              1",
             "SW_fieldSolveModel          2",
+            "Poisson_BCModel             2",
             "SW_Collisions               1",
             "SW_RFheating                0",
             "SW_pairSource               1",
@@ -137,6 +151,7 @@ def validate_case_inputs(root: Path) -> None:
         [
             "SW_EfieldSolve              1",
             "SW_fieldSolveModel          2",
+            "Poisson_BCModel             2",
             "SW_Collisions               1",
             "SW_RFheating                0",
             "SW_pairSource               1",
@@ -171,6 +186,7 @@ def validate_case_inputs(root: Path) -> None:
             [
                 "SW_EfieldSolve              1",
                 "SW_fieldSolveModel          2",
+                "Poisson_BCModel             2",
                 "SW_Collisions               1",
                 "SW_RFheating                1",
                 "SW_RFheatingIons            0",
