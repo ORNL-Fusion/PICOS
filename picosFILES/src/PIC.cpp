@@ -4,14 +4,14 @@
 
 namespace
 {
-bool relativisticElectronLimitEnabled(const params_TYP &params, const ionSpecies_TYP &species)
+bool kineticElectronSpeedLimitEnabled(const ionSpecies_TYP &species)
 {
-	return params.SW.relativisticElectrons == 1 && species.Z < 0.0;
+	return species.Z < 0.0;
 }
 
-void enforceRelativisticElectronSpeedLimit(const params_TYP &params, ionSpecies_TYP &species, int ii)
+void enforceKineticElectronSpeedLimit(const params_TYP &params, ionSpecies_TYP &species, int ii)
 {
-	if (!relativisticElectronLimitEnabled(params, species))
+	if (!kineticElectronSpeedLimitEnabled(species))
 	{
 		return;
 	}
@@ -535,7 +535,7 @@ void PIC_TYP::advanceParticlesBorisFullOrbit(const params_TYP &params, fields_TY
 			ion.V_p(ii,0) = vx;
 			ion.V_p(ii,1) = vy;
 			ion.V_p(ii,2) = vz;
-			enforceRelativisticElectronSpeedLimit(params, ion, ii);
+			enforceKineticElectronSpeedLimit(params, ion, ii);
 
 			const double Bmag = sqrt(Bx*Bx + By*By + Bz*Bz);
 			const double vper = hypot(ion.V_p(ii,1), ion.V_p(ii,2));
@@ -694,7 +694,7 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
                 ion.X_p(ii)   = Z1[0];
                 ion.V_p(ii,0) = Z1[1]; // vpar
                 ion.V_p(ii,1) = Z1[2]; // vper
-                enforceRelativisticElectronSpeedLimit(params, ion, ii);
+                enforceKineticElectronSpeedLimit(params, ion, ii);
                 ion.mu_p(ii)  = 0.5*Ma*ion.V_p(ii,1)*ion.V_p(ii,1)/EM[1] ; // mu
 
 			} // End of parallel region

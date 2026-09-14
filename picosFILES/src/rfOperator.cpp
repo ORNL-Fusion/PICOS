@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <exception>
 #include <limits>
+#include <random>
 
 #ifndef HAS_STD_BESSEL
 #include <boost/math/special_functions/bessel.hpp>
@@ -138,6 +140,89 @@ double perpendicularKineticEnergy(double mass, double vpar, double vper, bool re
     const double totalEnergy = kineticEnergyFromSpeed(mass, sqrt(speed2), true);
     return totalEnergy*(vper*vper/speed2);
 }
+
+double particleSpeedForRf(const params_TYP * params, const ionSpecies_TYP& species, int ii)
+{
+    double speed2 = species.V_p(ii,0)*species.V_p(ii,0) + species.V_p(ii,1)*species.V_p(ii,1);
+    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+    {
+        speed2 += species.V_p(ii,2)*species.V_p(ii,2);
+    }
+    return (std::isfinite(speed2) && speed2 > 0.0) ? sqrt(speed2) : 0.0;
+}
+
+void scaleParticleVelocityForRf(const params_TYP * params, ionSpecies_TYP& species, int ii, double scale)
+{
+    if (!std::isfinite(scale) || scale <= 0.0)
+    {
+        species.V_p(ii,0) = 0.0;
+        species.V_p(ii,1) = 0.0;
+        if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+        {
+            species.V_p(ii,2) = 0.0;
+        }
+        return;
+    }
+
+    species.V_p(ii,0) *= scale;
+    species.V_p(ii,1) *= scale;
+    if (params->advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && species.V_p.n_cols > 2)
+    {
+        species.V_p(ii,2) *= scale;
+    }
+}
+
+void enforceRfParticleLimits(
+    const params_TYP * params,
+    ionSpecies_TYP& species,
+    int ii,
+    double mass,
+    const RF_SPECIES_TYP& rf,
+    bool relativistic)
+{
+    if (mass <= double_zero)
+    {
+        return;
+    }
+
+    double speed = particleSpeedForRf(params, species, ii);
+    if (speed <= double_zero)
+    {
+        return;
+    }
+
+    double maxSpeed = F_C_DS*(1.0 - 1.0e-9);
+    if (rf.maxVelocityFractionC > 0.0)
+    {
+        maxSpeed = std::min(maxSpeed, rf.maxVelocityFractionC);
+    }
+    if (rf.maxParticleEnergy > 0.0)
+    {
+        maxSpeed = std::min(maxSpeed, speedFromKineticEnergy(mass, rf.maxParticleEnergy, relativistic));
+    }
+
+    if (!std::isfinite(maxSpeed) || maxSpeed <= double_zero)
+    {
+        return;
+    }
+    if (speed > maxSpeed)
+    {
+        scaleParticleVelocityForRf(params, species, ii, maxSpeed/speed);
+    }
+}
+
+std::uint32_t rfRngSeed(const params_TYP * params, int speciesIndex)
+{
+    const double normalizedTime = (params->DT > double_zero) ? params->currentTime/params->DT : 0.0;
+    const auto step = static_cast<std::uint32_t>(std::llround(normalizedTime));
+    std::uint32_t seed = 2166136261u;
+    seed ^= static_cast<std::uint32_t>(params->mpi.MPI_DOMAIN_NUMBER + 1);
+    seed *= 16777619u;
+    seed ^= static_cast<std::uint32_t>(speciesIndex + 1);
+    seed *= 16777619u;
+    seed ^= step + 0x9e3779b9u;
+    return seed;
+}
 }
 
 RF_Operator_TYP::RF_Operator_TYP(params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
@@ -248,8 +333,8 @@ void RF_Operator_TYP::checkResNumAndFlag_AllSpecies(params_TYP * params, CS_TYP 
             }
             else
             {
-                // true: argument negative; false: otherwise (positive or zero)
-                isResonant = signbit(resNum*resNum_);
+                isResonant = std::isfinite(resNum) && std::isfinite(resNum_) &&
+                    ((resNum < 0.0 && resNum_ > 0.0) || (resNum > 0.0 && resNum_ < 0.0));
             }
 
             // Flag particles in resonance:
@@ -490,12 +575,6 @@ void RF_Operator_TYP::calculatePowerPerUnitErf_AllSpecies(params_TYP * params, C
 
 void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * CS, fields_TYP * fields, vector<ionSpecies_TYP> * IONS)
 {
-    // Seed the random number generator:
-    std::default_random_engine generator(params->mpi.MPI_DOMAIN_NUMBER+1);
-
-    // Create uniform random number generator in [0,1]:
-    std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0);
-
     for (int ss=0; ss<IONS->size();ss++)
     {
         if (!rfHeatingActiveForSpecies(params, CS, IONS->at(ss)))
@@ -525,8 +604,17 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
         double maxParticleEnergy = rf.maxParticleEnergy;
         double maxVelocityFractionC = rf.maxVelocityFractionC;
 
-        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, uniform_distribution, maxEnergyGainFraction, maxParticleEnergy, maxVelocityFractionC, F_C_DS) firstprivate(generator, relativistic)
+        const std::uint32_t baseSeed = rfRngSeed(params, ss);
+
+        #pragma omp parallel default(none) shared(params, IONS, ss, CS, E_rf, NSP, Ma, cout, maxEnergyGainFraction, maxParticleEnergy, maxVelocityFractionC, F_C_DS, baseSeed, rf) firstprivate(relativistic)
         {
+            int threadId = 0;
+            #ifdef _OPENMP
+            threadId = omp_get_thread_num();
+            #endif
+            std::mt19937 generator(baseSeed + 104729u*static_cast<std::uint32_t>(threadId + 1));
+            std::uniform_real_distribution<double> localUniform(0.0, 1.0);
+
             #pragma omp for
             for(int ii=0; ii<NSP; ii++)
             {
@@ -549,13 +637,29 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
 
                     // Calculate mean RF energy kick:
                     double mean_dKE_per = mean_udKE_per*pow(E_rf,2);
+                    if (!std::isfinite(vpar) || !std::isfinite(vper) ||
+                        !std::isfinite(mean_udKE_per) || !std::isfinite(doppler) ||
+                        !std::isfinite(E_rf) || !std::isfinite(KE_per) ||
+                        !std::isfinite(KE_total_before) || !std::isfinite(mean_dKE_per))
+                    {
+                        enforceRfParticleLimits(params, IONS->at(ss), ii, Ma, rf, relativistic);
+                        IONS->at(ss).dE3(ii) = 0.0;
+                        continue;
+                    }
+                    mean_dKE_per = std::max(0.0, mean_dKE_per);
 
                     // Random number between 0 and 1:
-                    double randomNumber = uniform_distribution(generator);
+                    double randomNumber = localUniform(generator);
                     double Rm = (2*randomNumber - 1);
 
                     // Monte-Carlo operaton in kinetic energy:
                     double dKE_per = mean_dKE_per + Rm*sqrt(2*KE_per*mean_dKE_per);
+                    if (!std::isfinite(dKE_per))
+                    {
+                        enforceRfParticleLimits(params, IONS->at(ss), ii, Ma, rf, relativistic);
+                        IONS->at(ss).dE3(ii) = 0.0;
+                        continue;
+                    }
                     if (maxEnergyGainFraction > 0.0)
                     {
                         const double referenceEnergy = std::max(KE_per, params->f_IC.Te);
@@ -656,8 +760,13 @@ void RF_Operator_TYP::ApplyRfOperator_AllSpecies( params_TYP * params, CS_TYP * 
                         IONS->at(ss).V_p(ii,1) = vper;
                     }
 
+                    enforceRfParticleLimits(params, IONS->at(ss), ii, Ma, rf, relativistic);
+                    const double KE_total_after = kineticEnergyFromSpeed(
+                        Ma, particleSpeedForRf(params, IONS->at(ss), ii), relativistic);
+
                     // Energy increments:
-                    IONS->at(ss).dE3(ii) = dKE;
+                    IONS->at(ss).dE3(ii) = std::isfinite(KE_total_after) ?
+                        (KE_total_after - KE_total_before) : 0.0;
 
                 } // f3
 

@@ -42,6 +42,22 @@ double particleParallelKineticEnergy(const params_TYP &params, const ionSpecies_
     }
     return particleKineticEnergy(params, species, ii)*species.V_p(ii,0)*species.V_p(ii,0)/speed2;
 }
+
+void resetRfHistory(ionSpecies_TYP &species, int ii)
+{
+    if (ii < 0)
+    {
+        return;
+    }
+    const arma::uword index = static_cast<arma::uword>(ii);
+    if (index < species.f3.n_elem) species.f3(index) = 0;
+    if (index < species.dE3.n_elem) species.dE3(index) = 0.0;
+    if (index < species.resNum.n_elem) species.resNum(index) = 0.0;
+    if (index < species.resNum_.n_elem) species.resNum_(index) = 0.0;
+    if (index < species.udErf.n_elem) species.udErf(index) = 0.0;
+    if (index < species.doppler.n_elem) species.doppler(index) = 0.0;
+    if (index < species.udE3.n_elem) species.udE3(index) = 0.0;
+}
 }
 
 particleBC_TYP::particleBC_TYP() :
@@ -476,6 +492,7 @@ void particleBC_TYP::injectParticleFromPairSource(int ii, double xBirth, double 
     ION.f2(ii) = 0;
     ION.dE1(ii) = 0.0;
     ION.dE2(ii) = 0.0;
+    resetRfHistory(ION, ii);
 }
 
 void particleBC_TYP::deactivatePairSourceCandidate(int ii, const params_TYP &params, ionSpecies_TYP &ION) const
@@ -492,6 +509,7 @@ void particleBC_TYP::deactivatePairSourceCandidate(int ii, const params_TYP &par
     ION.dE1(ii) = 0.0;
     ION.dE2(ii) = 0.0;
     ION.dE5(ii) = 0.0;
+    resetRfHistory(ION, ii);
     if (ii < static_cast<int>(ION.mu_p.n_elem))
     {
         ION.mu_p(ii) = 0.0;
@@ -844,4 +862,5 @@ void particleBC_TYP::particleReinjection(const int ii, const params_TYP &params,
 //        //IONS->a_p(ii) = 1;
 //    }
 
+    resetRfHistory(ION, ii);
 }
