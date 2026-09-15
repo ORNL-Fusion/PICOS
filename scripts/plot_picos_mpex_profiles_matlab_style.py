@@ -106,6 +106,9 @@ def find_input_file(input_dir: Path | None, case_name: str) -> Path | None:
     exact = input_dir / f"input_file_{case_name}.input"
     if exact.exists():
         return exact
+    untagged = input_dir / "input_file.input"
+    if untagged.exists():
+        return untagged
     matches = sorted(input_dir.glob("input_file_*.input"))
     return matches[0] if matches else None
 

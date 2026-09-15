@@ -10,6 +10,7 @@ the input files required for each case.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import shutil
@@ -23,6 +24,14 @@ from pathlib import Path
 STEADY_TAG = "mpex_scenario14_ex8_steady_2ms_p262144_coll_mpexprof_nersc_nonrel"
 SMOKE_TAG = "mpex_scenario14_ex8_steady_interactive_1ms_p32768_coll_mpexprof_nersc_nonrel"
 RUN_ROOT_NAME = "PICOS_NERSC_MPEX_steady_then_ech_restart2ms_seeded_z0source"
+MPEX_NE = "5.0000000000000000e+19"
+MPEX_TEMP = "1.5000000000000000e+01"
+MPEX_SOURCE_RATE = "6.0000000000000000e+22"
+MPEX_SOURCE_CENTER = "0.0000000000000000e+00"
+MPEX_SOURCE_SIGMA = "2.9999999999999999e-01"
+MPEX_PROFILE_N = 200
+MPEX_ZMIN = -2.0
+MPEX_ZMAX = 8.0
 
 
 @dataclass(frozen=True)
@@ -91,10 +100,81 @@ def write_executable(path: Path, text: str) -> None:
 
 def append_or_replace_key(text: str, key: str, value: str) -> str:
     pattern = re.compile(rf"^({re.escape(key)}\s+).*$", re.MULTILINE)
-    updated, count = pattern.subn(rf"\g<1>{value}", text)
+    lines = []
+    count = 0
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            count += 1
+            if count == 1:
+                lines.append(f"{match.group(1)}{value}")
+        else:
+            lines.append(line)
+    updated = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
     if count == 0:
         updated = text.rstrip() + f"\n{key:<30} {value}\n"
     return updated
+
+
+def normalize_mpex_input(text: str) -> str:
+    """Use paper-style steady-state ICs without editing checked-in decks."""
+    replacements = {
+        "Poisson_BCModel": "2",
+        "quietStart": "1",
+        "CV_ne": MPEX_NE,
+        "CV_Te": MPEX_TEMP,
+        "CV_Tpar": MPEX_TEMP,
+        "CV_Tper": MPEX_TEMP,
+        "IC_ne": MPEX_NE,
+        "IC_Te": MPEX_TEMP,
+        "IC_Tpar": MPEX_TEMP,
+        "IC_Tper": MPEX_TEMP,
+        "pairSource_rate": MPEX_SOURCE_RATE,
+        "pairSource_mean_x": MPEX_SOURCE_CENTER,
+        "pairSource_sigma_x": MPEX_SOURCE_SIGMA,
+        "pairSource_positionMode": "0",
+        "pairSource_weightMode": "1",
+        "pairSource_Ti_birth": MPEX_TEMP,
+        "pairSource_Te_birth": MPEX_TEMP,
+        "filtersPerIterationFields": "3",
+        "filtersPerIterationIons": "3",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace_key(text, key, value)
+    return text
+
+
+def normalize_mpex_ions(text: str) -> str:
+    replacements = {
+        "BC_type_1": "1",
+        "BC_type_2": "1",
+        "BC_T_1": MPEX_TEMP,
+        "BC_T_2": MPEX_TEMP,
+        "BC_mean_x_1": MPEX_SOURCE_CENTER,
+        "BC_mean_x_2": MPEX_SOURCE_CENTER,
+        "BC_sigma_x_1": MPEX_SOURCE_SIGMA,
+        "BC_sigma_x_2": MPEX_SOURCE_SIGMA,
+        "BC_G_1": MPEX_SOURCE_RATE,
+        "BC_G_2": MPEX_SOURCE_RATE,
+        "IC_weightScale_1": "1.0000000000000000e+00",
+        "IC_weightScale_2": "1.0000000000000000e+00",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace_key(text, key, value)
+    return text
+
+
+def paper_profile_text(name: str) -> str | None:
+    if name.endswith(("_ne_norm.txt", "_te_norm.txt", "_ti_norm.txt")):
+        return "\n".join(["1.0000000000000000e+00"] * MPEX_PROFILE_N) + "\n"
+    if name.endswith("_pair_source_norm.txt"):
+        values = []
+        for ii in range(MPEX_PROFILE_N):
+            x = MPEX_ZMIN + (MPEX_ZMAX - MPEX_ZMIN) * ii / max(MPEX_PROFILE_N - 1, 1)
+            values.append(math.exp(-0.5 * ((x - 0.0) / 0.3) ** 2))
+        vmax = max(values) if values else 1.0
+        return "\n".join(f"{value / vmax:.16e}" for value in values) + "\n"
+    return None
 
 
 def copy_case_inputs(root: Path, case: BundleCase, source_dir: Path) -> None:
@@ -106,10 +186,15 @@ def copy_case_inputs(root: Path, case: BundleCase, source_dir: Path) -> None:
         if not src.is_file():
             raise FileNotFoundError(f"Missing generated input file: {src}")
         if name.startswith("input_file_") and name.endswith(".input"):
-            text = append_or_replace_key(src.read_text(), "Poisson_BCModel", "2")
-            (input_dir / name).write_text(text)
+            (input_dir / name).write_text(normalize_mpex_input(src.read_text()))
+        elif name.startswith("ions_properties_") and name.endswith(".ion"):
+            (input_dir / name).write_text(normalize_mpex_ions(src.read_text()))
         else:
-            shutil.copy2(src, input_dir / name)
+            profile_text = paper_profile_text(name)
+            if profile_text is None:
+                shutil.copyfile(src, input_dir / name)
+            else:
+                (input_dir / name).write_text(profile_text)
 
 
 def assert_contains(path: Path, required: list[str]) -> None:
@@ -131,12 +216,15 @@ def validate_case_inputs(root: Path) -> None:
             "SW_RFheating                0",
             "SW_pairSource               1",
             "IC_weightScale              1.0000000000000000e+00",
-            "CV_ne                       1.0000000000000000e+19",
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
             "CV_Te                       1.5000000000000000e+01",
-            "IC_ne                       1.0000000000000000e+19",
+            f"IC_ne                       {MPEX_NE}",
             "IC_Te                       1.5000000000000000e+01",
             "restart_enabled             0",
             "pairSource_mean_x           0.0000000000000000e+00",
+            f"pairSource_sigma_x          {MPEX_SOURCE_SIGMA}",
+            f"pairSource_rate             {MPEX_SOURCE_RATE}",
             "pairSource_positionMode     0",
             "pairSource_weightMode       1",
             "pairSource_Ti_birth         1.5000000000000000e+01",
@@ -156,12 +244,15 @@ def validate_case_inputs(root: Path) -> None:
             "SW_RFheating                0",
             "SW_pairSource               1",
             "IC_weightScale              1.0000000000000000e+00",
-            "CV_ne                       1.0000000000000000e+19",
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
             "CV_Te                       1.5000000000000000e+01",
-            "IC_ne                       1.0000000000000000e+19",
+            f"IC_ne                       {MPEX_NE}",
             "IC_Te                       1.5000000000000000e+01",
             "restart_enabled             0",
             "pairSource_mean_x           0.0000000000000000e+00",
+            f"pairSource_sigma_x          {MPEX_SOURCE_SIGMA}",
+            f"pairSource_rate             {MPEX_SOURCE_RATE}",
             "pairSource_positionMode     0",
             "pairSource_weightMode       1",
             "pairSource_Ti_birth         1.5000000000000000e+01",
@@ -173,6 +264,10 @@ def validate_case_inputs(root: Path) -> None:
         [
             "BC_mean_x_1                   0.0000000000000000e+00",
             "BC_mean_x_2                   0.0000000000000000e+00",
+            f"BC_sigma_x_1                  {MPEX_SOURCE_SIGMA}",
+            f"BC_sigma_x_2                  {MPEX_SOURCE_SIGMA}",
+            f"BC_G_1                        {MPEX_SOURCE_RATE}",
+            f"BC_G_2                        {MPEX_SOURCE_RATE}",
             "IC_weightScale_1              1.0000000000000000e+00",
             "IC_weightScale_2              1.0000000000000000e+00",
         ],
@@ -193,12 +288,15 @@ def validate_case_inputs(root: Path) -> None:
                 "SW_RFheatingElectrons       1",
                 "SW_pairSource               1",
                 "IC_weightScale              1.0000000000000000e+00",
-                "CV_ne                       1.0000000000000000e+19",
+                "quietStart                  1",
+                f"CV_ne                       {MPEX_NE}",
                 "CV_Te                       1.5000000000000000e+01",
-                "IC_ne                       1.0000000000000000e+19",
+                f"IC_ne                       {MPEX_NE}",
                 "IC_Te                       1.5000000000000000e+01",
                 "restart_enabled             0",
                 "pairSource_mean_x           0.0000000000000000e+00",
+                f"pairSource_sigma_x          {MPEX_SOURCE_SIGMA}",
+                f"pairSource_rate             {MPEX_SOURCE_RATE}",
                 "pairSource_positionMode     0",
                 "pairSource_weightMode       1",
                 "pairSource_Ti_birth         1.5000000000000000e+01",
@@ -211,6 +309,10 @@ def validate_case_inputs(root: Path) -> None:
             [
                 "BC_mean_x_1                   0.0000000000000000e+00",
                 "BC_mean_x_2                   0.0000000000000000e+00",
+                f"BC_sigma_x_1                  {MPEX_SOURCE_SIGMA}",
+                f"BC_sigma_x_2                  {MPEX_SOURCE_SIGMA}",
+                f"BC_G_1                        {MPEX_SOURCE_RATE}",
+                f"BC_G_2                        {MPEX_SOURCE_RATE}",
                 "IC_weightScale_1              1.0000000000000000e+00",
                 "IC_weightScale_2              1.0000000000000000e+00",
             ],
@@ -457,7 +559,7 @@ def readme_text() -> str:
     This bundle runs a two-stage PICOS++ workflow on Perlmutter CPU nodes.
 
     Stage 1 is a 2 ms plasma steady-state run initialized with finite
-    `n_e = n_i = 1e19 m^-3` and `T_e = T_i = 15 eV`, with collisions,
+    `n_e = n_i = 5e19 m^-3` and `T_e = T_i = 15 eV`, with collisions,
     coupled ion-electron pair source, and the reformulated Poisson field solve
     enabled, but ECH off.
     Stage 2 restarts from the last steady-state HDF5 snapshot and runs three

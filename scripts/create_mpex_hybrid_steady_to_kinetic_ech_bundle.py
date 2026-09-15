@@ -12,6 +12,7 @@ electron ECH stage from those profiles.
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import shutil
 import stat
@@ -25,6 +26,14 @@ STEADY_SOURCE_TAG = "mpex_scenario14_ex8_steady_interactive_1ms_p32768_coll_mpex
 ECH_SOURCE_TAG = "mpex_scenario14_ex8_well_min_65p588ghz_target8_p262144_100us_coll_mpexprof_nersc_nonrel"
 STEADY_TAG = "mpex_scenario14_ex8_hybrid_steady_1ms_p32768_coll_mpexprof_nersc_nonrel"
 ECH_TAG = "mpex_scenario14_ex8_kinetic_from_hybrid_well_min_65p588ghz_100us_coll_mpexprof_nersc_nonrel"
+MPEX_NE = "5.0000000000000000e+19"
+MPEX_TEMP = "1.5000000000000000e+01"
+MPEX_SOURCE_RATE = "6.0000000000000000e+22"
+MPEX_SOURCE_CENTER = "0.0000000000000000e+00"
+MPEX_SOURCE_SIGMA = "2.9999999999999999e-01"
+MPEX_PROFILE_N = 200
+MPEX_ZMIN = -2.0
+MPEX_ZMAX = 8.0
 
 
 def repo_root() -> Path:
@@ -46,10 +55,78 @@ def replace_key(text: str, key: str, value: str, *, required: bool = True) -> st
 
 
 def append_or_replace(text: str, key: str, value: str) -> str:
-    updated = replace_key(text, key, value, required=False)
-    if updated == text:
+    pattern = re.compile(rf"^({re.escape(key)}\s+).*$", re.MULTILINE)
+    lines = []
+    count = 0
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            count += 1
+            if count == 1:
+                lines.append(f"{match.group(1)}{value}")
+        else:
+            lines.append(line)
+    updated = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+    if count == 0:
         updated = text.rstrip() + f"\n{key:<30} {value}\n"
     return updated
+
+
+def normalize_mpex_input(text: str) -> str:
+    replacements = {
+        "quietStart": "1",
+        "CV_ne": MPEX_NE,
+        "CV_Te": MPEX_TEMP,
+        "CV_Tpar": MPEX_TEMP,
+        "CV_Tper": MPEX_TEMP,
+        "IC_ne": MPEX_NE,
+        "IC_Te": MPEX_TEMP,
+        "IC_Tpar": MPEX_TEMP,
+        "IC_Tper": MPEX_TEMP,
+        "pairSource_rate": MPEX_SOURCE_RATE,
+        "pairSource_mean_x": MPEX_SOURCE_CENTER,
+        "pairSource_sigma_x": MPEX_SOURCE_SIGMA,
+        "pairSource_positionMode": "0",
+        "pairSource_weightMode": "1",
+        "pairSource_Ti_birth": MPEX_TEMP,
+        "pairSource_Te_birth": MPEX_TEMP,
+        "filtersPerIterationFields": "3",
+        "filtersPerIterationIons": "3",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace(text, key, value)
+    return text
+
+
+def normalize_mpex_ions(text: str) -> str:
+    replacements = {
+        "BC_T_1": MPEX_TEMP,
+        "BC_T_2": MPEX_TEMP,
+        "BC_mean_x_1": MPEX_SOURCE_CENTER,
+        "BC_mean_x_2": MPEX_SOURCE_CENTER,
+        "BC_sigma_x_1": MPEX_SOURCE_SIGMA,
+        "BC_sigma_x_2": MPEX_SOURCE_SIGMA,
+        "BC_G_1": MPEX_SOURCE_RATE,
+        "BC_G_2": MPEX_SOURCE_RATE,
+        "IC_weightScale_1": "1.0000000000000000e+00",
+        "IC_weightScale_2": "1.0000000000000000e+00",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace(text, key, value)
+    return text
+
+
+def paper_profile_text(name: str) -> str | None:
+    if name.endswith(("_ne_norm.txt", "_te_norm.txt", "_ti_norm.txt")):
+        return "\n".join(["1.0000000000000000e+00"] * MPEX_PROFILE_N) + "\n"
+    if name.endswith("_pair_source_norm.txt"):
+        values = []
+        for ii in range(MPEX_PROFILE_N):
+            x = MPEX_ZMIN + (MPEX_ZMAX - MPEX_ZMIN) * ii / max(MPEX_PROFILE_N - 1, 1)
+            values.append(math.exp(-0.5 * ((x - 0.0) / 0.3) ** 2))
+        vmax = max(values) if values else 1.0
+        return "\n".join(f"{value / vmax:.16e}" for value in values) + "\n"
+    return None
 
 
 def read_input(input_dir: Path, tag: str) -> str:
@@ -86,7 +163,7 @@ def truncate_after_species_one(ion_text: str) -> str:
 
 
 def steady_input(input_dir: Path) -> str:
-    text = read_input(input_dir, STEADY_SOURCE_TAG)
+    text = normalize_mpex_input(read_input(input_dir, STEADY_SOURCE_TAG))
     text = replace_key(text, "numberOfParticleSpecies", "1")
     text = replace_key(text, "SW_fieldSolveModel", "0")
     text = replace_key(text, "Poisson_BCModel", "2")
@@ -107,13 +184,17 @@ def steady_input(input_dir: Path) -> str:
 def steady_ions(input_dir: Path) -> str:
     text = truncate_after_species_one(read_ions(input_dir, STEADY_SOURCE_TAG))
     # Use main-branch optimized source rate scale as the hybrid preconditioner.
-    text = replace_key(text, "BC_G_1", "3.0000000000000000e+21")
+    text = replace_key(text, "BC_G_1", MPEX_SOURCE_RATE)
+    text = replace_key(text, "BC_T_1", MPEX_TEMP)
     text = replace_key(text, "BC_type_1", "1")
+    text = replace_key(text, "BC_mean_x_1", MPEX_SOURCE_CENTER)
+    text = replace_key(text, "BC_sigma_x_1", MPEX_SOURCE_SIGMA)
+    text = append_or_replace(text, "IC_weightScale_1", "1.0000000000000000e+00")
     return text
 
 
 def ech_input(input_dir: Path) -> str:
-    text = read_input(input_dir, ECH_SOURCE_TAG)
+    text = normalize_mpex_input(read_input(input_dir, ECH_SOURCE_TAG))
     text = replace_key(text, "Poisson_BCModel", "2")
     text = replace_key(text, "SW_RFheating", "1")
     text = replace_key(text, "SW_RFheatingIons", "0")
@@ -141,7 +222,7 @@ def ech_input(input_dir: Path) -> str:
 
 
 def ech_ions(input_dir: Path) -> str:
-    text = read_ions(input_dir, ECH_SOURCE_TAG)
+    text = normalize_mpex_ions(read_ions(input_dir, ECH_SOURCE_TAG))
     replacements = {
         "IC_Tper_fileName_1": f"{ECH_TAG}_ti_norm_from_hybrid.txt",
         "IC_Tpar_fileName_1": f"{ECH_TAG}_ti_norm_from_hybrid.txt",
@@ -168,7 +249,11 @@ def write_case(case_dir: Path, input_text: str, ion_text: str, source_input_dir:
     for name in sorted(referenced_input_files(input_text, ion_text)):
         src = source_input_dir / name
         if src.is_file():
-            shutil.copy2(src, input_dir / name)
+            profile_text = paper_profile_text(name)
+            if profile_text is None:
+                shutil.copyfile(src, input_dir / name)
+            else:
+                (input_dir / name).write_text(profile_text)
     write_executable(case_dir / "run_case_common_nersc.sh", common_script())
     write_executable(case_dir / "run_case_nersc_interactive.sh", interactive_case_script(case_dir.name))
 
@@ -210,7 +295,7 @@ def converter_script() -> str:
         parser.add_argument("--steady-hdf5", required=True, type=Path)
         parser.add_argument("--ech-input-dir", required=True, type=Path)
         parser.add_argument("--n", type=int, default=200)
-        parser.add_argument("--cv-ne", type=float, default=1.0e19)
+        parser.add_argument("--cv-ne", type=float, default=5.0e19)
         parser.add_argument("--ti-base", type=float, default=15.0)
         parser.add_argument("--te-base", type=float, default=15.0)
         parser.add_argument("--b-base", type=float, default=1.3584640814139803)
@@ -396,7 +481,9 @@ def readme_text() -> str:
     Workflow:
 
     1. `hybrid_steady_1ms`: one kinetic D+ species with fluid electrons,
-       generalized Ohm field solve, collisions on, RF off.
+       flat `n/T` initial profiles, `n_e=n_i=5e19 m^-3`,
+       `T_e=T_i=15 eV`, `G=6e22 s^-1` at `z=0`, generalized Ohm
+       field solve, collisions on, RF off.
     2. `make_kinetic_ic_from_hybrid_steady.py`: converts the final hybrid mesh
        density, Ti, Te, and B profiles into normalized IC files.
     3. `kinetic_well_min_ech100us`: kinetic D+ plus kinetic electrons, ECH on
@@ -441,13 +528,23 @@ def validate(root: Path) -> None:
     checks = {
         "steady input": [
             "numberOfParticleSpecies     1",
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
+            f"IC_ne                       {MPEX_NE}",
             "SW_fieldSolveModel          0",
             "SW_pairSource               0",
             "SW_RFheating                0",
             "Te_m",
         ],
-        "steady ion": ["BC_G_1                        3.0000000000000000e+21"],
+        "steady ion": [
+            f"BC_G_1                        {MPEX_SOURCE_RATE}",
+            f"BC_sigma_x_1                  {MPEX_SOURCE_SIGMA}",
+            "BC_mean_x_1                   0.0000000000000000e+00",
+        ],
         "ech input": [
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
+            f"IC_ne                       {MPEX_NE}",
             "SW_RFheating                1",
             "SW_RFheatingElectrons       1",
             "SW_RFheatingIons            0",

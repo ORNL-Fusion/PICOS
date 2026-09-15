@@ -74,7 +74,7 @@ def input_deck(tag: str) -> str:
         // PICOS main-vs-PICOS_ECH MPEX Scenario 14 source comparison.
         // Common physics: one D+ guiding-center kinetic species, fluid
         // electrons, Ohm-law electric field, collisions on, RF off, and the
-        // legacy warm source centered at z=0.
+        // legacy warm source centered at the helicon source location z=0.
         // This deck intentionally uses only main-branch input keywords, with
         // SW_Bohm and Bohm_* included, so the main and PICOS_ECH branches run
         // the same hybrid model.
@@ -87,7 +87,7 @@ def input_deck(tag: str) -> str:
 
         // Characteristic values:
         // =============================================================================
-        CV_ne                       1.0000000000000000e+19
+        CV_ne                       5.0000000000000000e+19
         CV_Te                       1.5000000000000000e+01
         CV_B                        1.3079603575279184e+00
         CV_Tpar                     1.5000000000000000e+01
@@ -128,7 +128,7 @@ def input_deck(tag: str) -> str:
 
         // Electron fluid/profile initial conditions:
         // =============================================================================
-        IC_ne                       1.0000000000000000e+19
+        IC_ne                       5.0000000000000000e+19
         IC_Te                       1.5000000000000000e+01
         IC_Te_NX                    200
         IC_Te_fileName              MPEX_Tper_norm_scenario_14.txt
@@ -175,7 +175,8 @@ def ion_deck() -> str:
         """
         // PICOS main-vs-PICOS_ECH MPEX Scenario 14 species deck.
         // Species 1 is D+. The source is the legacy warm plasma source
-        // centered at z=0 for this hybrid main-branch compatibility test.
+        // centered at the helicon source location z=0 for this hybrid
+        // main-branch compatibility test.
         // =============================================================================
         SPECIES1                      1
         NPC1                          2500
@@ -202,8 +203,8 @@ def ion_deck() -> str:
         BC_E_1                        0.0
         BC_eta_1                      45
         BC_mean_x_1                   0.0000000000000000e+00
-        BC_sigma_x_1                  4.0000000000000002e-01
-        BC_G_1                        1.0000000000000000e+22
+        BC_sigma_x_1                  2.9999999999999999e-01
+        BC_G_1                        6.0000000000000000e+22
         BC_G_fileName_1               G_profile.txt
         BC_G_NS_1                     200
         """
@@ -464,7 +465,7 @@ def populate_case(root: Path, case: CompareCase, profile_dir: Path) -> None:
         src = profile_dir / name
         if not src.is_file():
             raise FileNotFoundError(src)
-        shutil.copy2(src, input_dir / name)
+        shutil.copyfile(src, input_dir / name)
     write_vector(input_dir / "G_profile.txt", [1.0] * 200)
     write_vector(input_dir / "Prf_profile.txt", [0.0] * 200)
     write_executable(case_dir / "run_case_common_nersc.sh", common_script(case))
@@ -497,7 +498,7 @@ def main() -> int:
 
     write_executable(root / "submit_both_nersc.sh", submit_script())
     write_executable(root / "run_both_interactive.sh", run_both_interactive_script())
-    shutil.copy2(repo_root() / "scripts" / "analyze_nersc_main_vs_ech_source_compare.py", root)
+    shutil.copyfile(repo_root() / "scripts" / "analyze_nersc_main_vs_ech_source_compare.py", root / "analyze_nersc_main_vs_ech_source_compare.py")
     (root / "README.md").write_text(textwrap.dedent(readme_text()).lstrip())
     create_archive(root, archive)
 

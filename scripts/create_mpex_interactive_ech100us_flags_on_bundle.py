@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import shutil
 import stat
@@ -21,6 +22,14 @@ DEFAULT_STEADY_HDF5 = (
     f"/pscratch/sd/a/atul19/picosRuns/MPEX_ECH_runs/{RUN_ROOT_NAME}/"
     "steady_interactive_1ms/run/picosFILES/outputFiles/HDF5"
 )
+MPEX_NE = "5.0000000000000000e+19"
+MPEX_TEMP = "1.5000000000000000e+01"
+MPEX_SOURCE_RATE = "6.0000000000000000e+22"
+MPEX_SOURCE_CENTER = "0.0000000000000000e+00"
+MPEX_SOURCE_SIGMA = "2.9999999999999999e-01"
+MPEX_PROFILE_N = 200
+MPEX_ZMIN = -2.0
+MPEX_ZMAX = 8.0
 
 
 def repo_root() -> Path:
@@ -39,6 +48,83 @@ def replace_key(text: str, key: str, value: str) -> str:
     if count == 0:
         raise RuntimeError(f"Could not replace key {key}")
     return updated
+
+
+def append_or_replace_key(text: str, key: str, value: str) -> str:
+    pattern = re.compile(rf"^({re.escape(key)}\s+).*$", re.MULTILINE)
+    lines = []
+    count = 0
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            count += 1
+            if count == 1:
+                lines.append(f"{match.group(1)}{value}")
+        else:
+            lines.append(line)
+    updated = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+    if count == 0:
+        updated = text.rstrip() + f"\n{key:<30} {value}\n"
+    return updated
+
+
+def normalize_mpex_input(text: str) -> str:
+    replacements = {
+        "quietStart": "1",
+        "CV_ne": MPEX_NE,
+        "CV_Te": MPEX_TEMP,
+        "CV_Tpar": MPEX_TEMP,
+        "CV_Tper": MPEX_TEMP,
+        "IC_ne": MPEX_NE,
+        "IC_Te": MPEX_TEMP,
+        "IC_Tpar": MPEX_TEMP,
+        "IC_Tper": MPEX_TEMP,
+        "pairSource_rate": MPEX_SOURCE_RATE,
+        "pairSource_mean_x": MPEX_SOURCE_CENTER,
+        "pairSource_sigma_x": MPEX_SOURCE_SIGMA,
+        "pairSource_positionMode": "0",
+        "pairSource_weightMode": "1",
+        "pairSource_Ti_birth": MPEX_TEMP,
+        "pairSource_Te_birth": MPEX_TEMP,
+        "filtersPerIterationFields": "3",
+        "filtersPerIterationIons": "3",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace_key(text, key, value)
+    return text
+
+
+def normalize_mpex_ions(text: str) -> str:
+    replacements = {
+        "BC_type_1": "1",
+        "BC_type_2": "1",
+        "BC_T_1": MPEX_TEMP,
+        "BC_T_2": MPEX_TEMP,
+        "BC_mean_x_1": MPEX_SOURCE_CENTER,
+        "BC_mean_x_2": MPEX_SOURCE_CENTER,
+        "BC_sigma_x_1": MPEX_SOURCE_SIGMA,
+        "BC_sigma_x_2": MPEX_SOURCE_SIGMA,
+        "BC_G_1": MPEX_SOURCE_RATE,
+        "BC_G_2": MPEX_SOURCE_RATE,
+        "IC_weightScale_1": "1.0000000000000000e+00",
+        "IC_weightScale_2": "1.0000000000000000e+00",
+    }
+    for key, value in replacements.items():
+        text = append_or_replace_key(text, key, value)
+    return text
+
+
+def paper_profile_text(name: str) -> str | None:
+    if name.endswith(("_ne_norm.txt", "_te_norm.txt", "_ti_norm.txt")):
+        return "\n".join(["1.0000000000000000e+00"] * MPEX_PROFILE_N) + "\n"
+    if name.endswith("_pair_source_norm.txt"):
+        values = []
+        for ii in range(MPEX_PROFILE_N):
+            x = MPEX_ZMIN + (MPEX_ZMAX - MPEX_ZMIN) * ii / max(MPEX_PROFILE_N - 1, 1)
+            values.append(math.exp(-0.5 * ((x - 0.0) / 0.3) ** 2))
+        vmax = max(values) if values else 1.0
+        return "\n".join(f"{value / vmax:.16e}" for value in values) + "\n"
+    return None
 
 
 def referenced_input_files(*texts: str) -> set[str]:
@@ -64,16 +150,18 @@ def read_ions(input_dir: Path, tag: str) -> str:
 
 def steady_input(input_dir: Path) -> str:
     text = read_input(input_dir, STEADY_TAG)
-    return replace_key(text, "Poisson_BCModel", "2")
+    text = replace_key(text, "Poisson_BCModel", "2")
+    return normalize_mpex_input(text)
 
 
 def steady_ions(input_dir: Path) -> str:
-    return read_ions(input_dir, STEADY_TAG)
+    return normalize_mpex_ions(read_ions(input_dir, STEADY_TAG))
 
 
 def ech_input(input_dir: Path) -> str:
     text = read_input(input_dir, ECH_SOURCE_TAG)
     text = replace_key(text, "Poisson_BCModel", "2")
+    text = normalize_mpex_input(text)
     text = replace_key(text, "restart_enabled", "1")
     text = replace_key(text, "restart_path", DEFAULT_STEADY_HDF5)
     text = replace_key(text, "restart_snapshot", "-1")
@@ -82,7 +170,7 @@ def ech_input(input_dir: Path) -> str:
 
 
 def ech_ions(input_dir: Path) -> str:
-    text = read_ions(input_dir, ECH_SOURCE_TAG)
+    text = normalize_mpex_ions(read_ions(input_dir, ECH_SOURCE_TAG))
     text = replace_key(text, "NPC1", "41")
     text = replace_key(text, "NPC2", "165")
     return text
@@ -97,7 +185,11 @@ def write_case(case_dir: Path, input_text: str, ion_text: str, source_input_dir:
         src = source_input_dir / name
         if not src.is_file():
             raise FileNotFoundError(src)
-        shutil.copy2(src, input_dir / name)
+        profile_text = paper_profile_text(name)
+        if profile_text is None:
+            shutil.copyfile(src, input_dir / name)
+        else:
+            (input_dir / name).write_text(profile_text)
     write_executable(case_dir / "run_case_common_nersc.sh", common_script())
     write_executable(case_dir / "run_case_nersc_interactive.sh", interactive_case_script(case_dir.name))
 
@@ -257,7 +349,8 @@ def readme_text() -> str:
     This bundle is interactive-only and contains only:
 
     - `steady_interactive_1ms`: kinetic D+ plus kinetic electrons, collisions
-      and pair source on, ECH off, 1 ms.
+      and pair source on, flat `n/T` initial profiles, `n_e=n_i=5e19 m^-3`,
+      `T_e=T_i=15 eV`, `G=6e22 s^-1`, ECH off, 1 ms.
     - `well_min_interactive_100us`: restart from the steady case, electron ECH
       on, ion RF off, 100 us.
 
@@ -307,9 +400,21 @@ def validate(root: Path) -> None:
     ech = (root / "well_min_interactive_100us/inputFiles/input_file.input").read_text()
     ions = (root / "well_min_interactive_100us/inputFiles/ions_properties.ion").read_text()
     required = {
-        "steady": ["Poisson_BCModel             2", "SW_RFheating                0", "restart_enabled             0"],
+        "steady": [
+            "Poisson_BCModel             2",
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
+            f"IC_ne                       {MPEX_NE}",
+            f"pairSource_rate             {MPEX_SOURCE_RATE}",
+            "SW_RFheating                0",
+            "restart_enabled             0",
+        ],
         "ech": [
             "Poisson_BCModel             2",
+            "quietStart                  1",
+            f"CV_ne                       {MPEX_NE}",
+            f"IC_ne                       {MPEX_NE}",
+            f"pairSource_rate             {MPEX_SOURCE_RATE}",
             "SW_RFheating                1",
             "SW_RFheatingElectrons       1",
             "SW_RFheatingIons            0",
@@ -317,7 +422,14 @@ def validate(root: Path) -> None:
             "restart_continueTime        1",
             DEFAULT_STEADY_HDF5,
         ],
-        "ions": ["NPC1                          41", "NPC2                          165", "Z2                            -1"],
+        "ions": [
+            "NPC1                          41",
+            "NPC2                          165",
+            "Z2                            -1",
+            f"BC_G_1                        {MPEX_SOURCE_RATE}",
+            f"BC_G_2                        {MPEX_SOURCE_RATE}",
+            f"BC_sigma_x_2                  {MPEX_SOURCE_SIGMA}",
+        ],
     }
     for label, text in (("steady", steady), ("ech", ech), ("ions", ions)):
         missing = [item for item in required[label] if item not in text]

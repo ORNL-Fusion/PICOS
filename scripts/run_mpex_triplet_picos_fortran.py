@@ -136,6 +136,8 @@ def compare_command(args: argparse.Namespace, case: Case, out_dir: Path, smooth:
         f"{args.source_z:.16e}",
         "--source-sigma",
         f"{args.source_sigma:.16e}",
+        "--profile-model",
+        args.profile_model,
         "--profile-ne-floor-fraction",
         f"{args.profile_ne_floor_fraction:.16e}",
         "--profile-te-floor-ev",
@@ -338,15 +340,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--electron-gyro-timestep-limiter", type=int, choices=[0, 1], default=0)
     parser.add_argument("--electron-plasma-timestep-limiter", type=int, choices=[0, 1], default=0)
     parser.add_argument("--reformulated-poisson-quasineutral", type=int, choices=[0, 1], default=1)
-    parser.add_argument("--source-rate", type=float, default=1.0e23)
+    parser.add_argument("--source-rate", type=float, default=6.0e22)
     parser.add_argument("--source-z", type=float, default=0.0)
-    parser.add_argument("--source-sigma", type=float, default=0.15)
+    parser.add_argument("--source-sigma", type=float, default=0.3)
+    parser.add_argument("--profile-model", choices=["paper-steady", "analytic-proxy"], default="paper-steady")
     parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV used for ne/Te/RF-shape deck files.")
     parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF used for the pair-source z profile.")
     parser.add_argument("--profile-ne-floor-fraction", type=float, default=0.05)
     parser.add_argument("--profile-te-floor-ev", type=float, default=0.5)
     parser.add_argument("--use-density-as-source", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=1)
     parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
     parser.add_argument("--restart-path", type=Path, default=None)
     parser.add_argument("--restart-snapshot", type=int, default=-1)

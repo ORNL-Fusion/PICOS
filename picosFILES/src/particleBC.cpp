@@ -596,20 +596,17 @@ void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const 
 
     if (explicitWeightMode)
     {
-        double globalIonSlots = static_cast<double>(ionCandidates.size());
-        double globalElectronSlots = static_cast<double>(electronCandidates.size());
-        MPI_Allreduce(MPI_IN_PLACE, &globalIonSlots, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
-        MPI_Allreduce(MPI_IN_PLACE, &globalElectronSlots, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+        const size_t localPairSlots = min(ionCandidates.size(), electronCandidates.size());
+        double globalPairSlots = static_cast<double>(localPairSlots);
+        MPI_Allreduce(MPI_IN_PLACE, &globalPairSlots, 1, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
 
-        const double requestedIonPairs =
-            pairSourceRequestedPairsThisStep(params, globalIonSlots, pairSourceBacklogIonPairs_);
-        const double requestedElectronPairs =
-            pairSourceRequestedPairsThisStep(params, globalElectronSlots, pairSourceBacklogElectronPairs_);
+        const double requestedPairs =
+            pairSourceRequestedPairsThisStep(params, globalPairSlots, pairSourceBacklogIonPairs_);
         const double maxWeight = max(params.pairSource.maxParticleWeight, double_zero);
         const double ionCharge = fabs(ion.Z);
         const double electronCharge = fabs(electron.Z);
 
-        if ((globalIonSlots > 0.0 || globalElectronSlots > 0.0) &&
+        if (globalPairSlots > 0.0 &&
             (ion.NCP <= double_zero || electron.NCP <= double_zero ||
              ionCharge <= double_zero || electronCharge <= double_zero))
         {
@@ -620,55 +617,55 @@ void particleBC_TYP::applyPairSourceReinjection(const params_TYP &params, const 
             MPI_Abort(params.mpi.COMM, -112);
         }
 
-        const double ionWeight = (requestedIonPairs > 0.0 && globalIonSlots > 0.0) ?
-                                 min(requestedIonPairs/(ion.NCP*globalIonSlots), maxWeight) :
-                                 0.0;
-        const double electronWeight = (requestedElectronPairs > 0.0 && globalElectronSlots > 0.0) ?
-                                      min(requestedElectronPairs*ionCharge/(electronCharge*electron.NCP*globalElectronSlots),
-                                          maxWeight) :
-                                      0.0;
-
-        for (size_t kk=0; kk<ionCandidates.size(); kk++)
+        double ionWeight = 0.0;
+        double electronWeight = 0.0;
+        double actualPairs = 0.0;
+        if (requestedPairs > 0.0 && globalPairSlots > 0.0 && maxWeight > double_zero)
         {
-            const int ii = ionCandidates[kk];
-            if (ionWeight <= double_zero)
+            const double requestedPairsPerSlot = requestedPairs/globalPairSlots;
+            const double ionPairsPerSlotCap = maxWeight*ion.NCP;
+            const double electronPairsPerSlotCap = maxWeight*electron.NCP*electronCharge/ionCharge;
+            const double pairsPerSlot =
+                min(requestedPairsPerSlot, min(ionPairsPerSlotCap, electronPairsPerSlotCap));
+            ionWeight = pairsPerSlot/ion.NCP;
+            electronWeight = pairsPerSlot*ionCharge/(electronCharge*electron.NCP);
+            actualPairs = pairsPerSlot*globalPairSlots;
+        }
+
+        for (size_t kk=0; kk<localPairSlots; kk++)
+        {
+            const int ionParticle = ionCandidates[kk];
+            const int electronParticle = electronCandidates[kk];
+            if (ionWeight <= double_zero || electronWeight <= double_zero)
             {
-                deactivatePairSourceCandidate(ii, params, ion);
+                deactivatePairSourceCandidate(ionParticle, params, ion);
+                deactivatePairSourceCandidate(electronParticle, params, electron);
                 continue;
             }
             const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
-            injectParticleFromPairSource(ii, xBirth, ionWeight,
+            injectParticleFromPairSource(ionParticle, xBirth, ionWeight,
                                          params.pairSource.ionT, params.pairSource.ionE,
                                          params.pairSource.ionEta, params, ion,
                                          rand_2pi, rand_one);
-        }
-
-        for (size_t kk=0; kk<electronCandidates.size(); kk++)
-        {
-            const int ii = electronCandidates[kk];
-            if (electronWeight <= double_zero)
-            {
-                deactivatePairSourceCandidate(ii, params, electron);
-                continue;
-            }
-            const double xBirth = samplePairSourcePosition(params, rand_2pi, rand_one);
-            injectParticleFromPairSource(ii, xBirth, electronWeight,
+            injectParticleFromPairSource(electronParticle, xBirth, electronWeight,
                                          params.pairSource.electronT, params.pairSource.electronE,
                                          params.pairSource.electronEta, params, electron,
                                          rand_2pi, rand_one);
         }
 
-        if (requestedIonPairs > 0.0 && globalIonSlots > 0.0)
+        for (size_t kk=localPairSlots; kk<ionCandidates.size(); kk++)
         {
-            const double actualIonPairs = min(requestedIonPairs, ionWeight*ion.NCP*globalIonSlots);
-            consumePairSourceBacklog(params, actualIonPairs, pairSourceBacklogIonPairs_);
+            deactivatePairSourceCandidate(ionCandidates[kk], params, ion);
         }
-        if (requestedElectronPairs > 0.0 && globalElectronSlots > 0.0)
+        for (size_t kk=localPairSlots; kk<electronCandidates.size(); kk++)
         {
-            const double actualElectronPairs =
-                min(requestedElectronPairs,
-                    electronWeight*electron.NCP*globalElectronSlots*electronCharge/ionCharge);
-            consumePairSourceBacklog(params, actualElectronPairs, pairSourceBacklogElectronPairs_);
+            deactivatePairSourceCandidate(electronCandidates[kk], params, electron);
+        }
+
+        if (requestedPairs > 0.0 && globalPairSlots > 0.0)
+        {
+            consumePairSourceBacklog(params, actualPairs, pairSourceBacklogIonPairs_);
+            pairSourceBacklogElectronPairs_ = pairSourceBacklogIonPairs_;
         }
 
         return;

@@ -37,7 +37,9 @@ def numeric_keys(handle: h5py.File) -> list[str]:
 def first_dataset(handle: h5py.File, candidates: list[str]) -> np.ndarray | None:
     for path in candidates:
         if path in handle:
-            return np.asarray(handle[path], dtype=float).reshape(-1)
+            node = handle[path]
+            if isinstance(node, h5py.Dataset):
+                return np.asarray(node, dtype=float).reshape(-1)
     return None
 
 

@@ -173,22 +173,34 @@ def mpex_proxy_profiles(args: argparse.Namespace, z_profile: np.ndarray, resonan
     """Build normalized profile shapes for the MPEX ECH decks.
 
     If a HERMES axial CSV is supplied, ne/Te/RF-power shapes are interpolated
-    from it.  Otherwise a smooth analytic proxy is used.  The output arrays are
-    dimensionless shapes; the input deck scalar values set physical units.
+    from it.  Otherwise the default is a paper-style flat RF-off initial
+    profile so the source/loss system builds the MPEX axial profile dynamically.
+    The older smooth analytic proxy can still be selected with
+    ``--profile-model analytic-proxy``.  The output arrays are dimensionless
+    shapes; the input deck scalar values set physical units.
     """
-    source = "analytic MPEX-like proxy"
-    ne_shape = 0.08 + 0.70 * np.exp(-0.5 * np.square((z_profile - 1.7) / 0.55))
-    ne_shape += 0.35 * np.exp(-0.5 * np.square((z_profile - 2.8) / 1.75))
-    ne_shape += 0.16 / (1.0 + np.exp(-(z_profile - 3.8) / 0.7))
-    ne_shape = normalize_shape(ne_shape, args.profile_ne_floor_fraction)
-
-    te_eV = args.profile_te_floor_ev + (args.te_ev - args.profile_te_floor_ev) * (
-        0.15 + 0.85 * np.exp(-0.5 * np.square((z_profile - 2.55) / 0.95))
-    )
-    te_shape = np.clip(te_eV / max(args.te_ev, 1.0e-12), args.profile_te_floor_ev / max(args.te_ev, 1.0e-12), None)
+    source = "paper-style flat RF-off initial profile"
+    ne_shape = np.ones_like(z_profile)
+    te_shape = np.ones_like(z_profile)
     ti_shape = np.ones_like(z_profile)
     rf_shape = gaussian_shape(z_profile, resonance_z, 0.45)
     source_shape = gaussian_shape(z_profile, args.source_z, args.source_sigma)
+
+    if args.profile_model == "analytic-proxy":
+        source = "analytic MPEX-like proxy"
+        ne_shape = 0.08 + 0.70 * np.exp(-0.5 * np.square((z_profile - 1.7) / 0.55))
+        ne_shape += 0.35 * np.exp(-0.5 * np.square((z_profile - 2.8) / 1.75))
+        ne_shape += 0.16 / (1.0 + np.exp(-(z_profile - 3.8) / 0.7))
+        ne_shape = normalize_shape(ne_shape, args.profile_ne_floor_fraction)
+
+        te_eV = args.profile_te_floor_ev + (args.te_ev - args.profile_te_floor_ev) * (
+            0.15 + 0.85 * np.exp(-0.5 * np.square((z_profile - 2.55) / 0.95))
+        )
+        te_shape = np.clip(
+            te_eV / max(args.te_ev, 1.0e-12),
+            args.profile_te_floor_ev / max(args.te_ev, 1.0e-12),
+            None,
+        )
 
     if args.plasma_profile_csv is not None and args.plasma_profile_csv.is_file():
         data = np.genfromtxt(args.plasma_profile_csv, delimiter=",", names=True, dtype=None, encoding=None)
@@ -1020,7 +1032,7 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--physical-time", type=float, default=2.0e-5)
     parser.add_argument("--output-count", type=int, default=1, help="Number of PICOS output intervals over the requested physical time; the initial t=0 snapshot is also written.")
-    parser.add_argument("--ne-m3", type=float, default=1.0e19)
+    parser.add_argument("--ne-m3", type=float, default=5.0e19)
     parser.add_argument("--te-ev", type=float, default=15.0)
     parser.add_argument("--ti-ev", type=float, default=15.0)
     parser.add_argument("--b-scale", type=float, default=None, help="Multiplier applied to the checked-in scenario-14 B profile before normalization.")
@@ -1067,15 +1079,21 @@ def main() -> int:
     parser.add_argument("--rf-window-end", type=float, default=None, help="End of active RF heating window in meters; defaults to --z-max.")
     parser.add_argument("--target-z", type=float, default=None, help="Target marker position in meters; defaults to --z-max.")
     parser.add_argument("--boundary-type", type=int, default=1)
-    parser.add_argument("--source-rate", type=float, default=1.0e23)
+    parser.add_argument("--source-rate", type=float, default=6.0e22)
     parser.add_argument("--source-z", type=float, default=0.0)
-    parser.add_argument("--source-sigma", type=float, default=0.15)
+    parser.add_argument("--source-sigma", type=float, default=0.3)
+    parser.add_argument(
+        "--profile-model",
+        choices=["paper-steady", "analytic-proxy"],
+        default="paper-steady",
+        help="paper-steady starts from flat n/T profiles and lets the source/loss balance form the MPEX profile; analytic-proxy preserves the older prescribed proxy profiles.",
+    )
     parser.add_argument("--plasma-profile-csv", type=Path, default=None, help="Optional axial profile CSV with z_m, Ne_m3, Te_eV, and optionally q_W_m2 columns.")
     parser.add_argument("--source-particles-nc", type=Path, default=None, help="Optional helicon source-particle NetCDF; the z histogram is used as the pair-source profile.")
     parser.add_argument("--profile-ne-floor-fraction", type=float, default=0.05, help="Minimum density-shape value as a fraction of the profile peak.")
     parser.add_argument("--profile-te-floor-ev", type=float, default=0.5, help="Minimum Te used when building normalized Te profile files.")
     parser.add_argument("--use-density-as-source", action=argparse.BooleanOptionalAction, default=False, help="Use the density profile shape as the pair-source shape when no source particle file is provided.")
-    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--quiet-start", type=int, choices=[0, 1], default=1)
     parser.add_argument("--ic-weight-scale", type=float, default=1.0, help="Initial physical weight multiplier for computational markers. Use 0 for source-only startup.")
     parser.add_argument("--pair-source", type=int, choices=[0, 1], default=1)
     parser.add_argument("--pair-source-weight-mode", type=int, choices=[0, 1], default=1, help="0 uses legacy BC_G weighting; 1 uses explicit pairSource_rate weighting.")
