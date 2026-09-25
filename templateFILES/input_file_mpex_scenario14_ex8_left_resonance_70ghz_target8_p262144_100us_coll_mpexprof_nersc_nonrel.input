@@ -134,8 +134,8 @@ RF_ion_Prf_NS                   200
 RF_electron_Prf                      3.0000000000000000e+05
 RF_electron_n_harmonic               2
 RF_electron_freq                     7.0000000000000000e+10
-RF_electron_x1                       2.6854403690000002e+00
-RF_electron_x2                       8.0000000000000000e+00
+RF_electron_x1                       2.6000000000000001e+00
+RF_electron_x2                       2.7999999999999998e+00
 RF_electron_t_ON                     0.0
 RF_electron_t_OFF                    1.0430367059868452e+03
 RF_electron_kpar                     5.8640000000000000e+03
