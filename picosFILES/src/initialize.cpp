@@ -73,11 +73,13 @@ namespace
 
     void abortRestart(const params_TYP * params, const string& message, const int code)
     {
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (params->mpi.MPI_DOMAIN_NUMBER == 0)
-        {
-            cerr << "PICOS++ RESTART ERROR: " << message << endl;
-        }
+        // Restart failures are often rank-local (for example, a missing or
+        // malformed per-rank particle file).  A barrier here deadlocks the
+        // failing rank against ranks that are still loading, and restricting
+        // output to rank zero hides the useful exception.  Report the rank
+        // that actually failed and abort immediately.
+        cerr << "PICOS++ RESTART ERROR on MPI rank "
+             << params->mpi.MPI_DOMAIN_NUMBER << ": " << message << endl;
         MPI_Abort(MPI_COMM_WORLD, code);
         throw runtime_error(message);
     }
@@ -543,14 +545,48 @@ void init_TYP::readInputFile(params_TYP * params)
         getInt("SW_electronGyroTimeStepLimiter", defaultElectronGyroLimiter);
     params->SW.electronPlasmaTimeStepLimiter =
         getInt("SW_electronPlasmaTimeStepLimiter", defaultElectronPlasmaLimiter);
+	params->SW.kineticElectronQuasiNeutralProjection =
+		getInt("SW_kineticElectronQuasiNeutralProjection", 0);
+	params->kineticElectronQuasiNeutralIterations =
+		getInt("kineticElectronQuasiNeutralIterations", 2);
+	params->kineticElectronQuasiNeutralRelaxation =
+		getDouble("kineticElectronQuasiNeutralRelaxation", 1.0);
+	params->kineticElectronQuasiNeutralMaxScale =
+		getDouble("kineticElectronQuasiNeutralMaxScale", 4.0);
+	params->kineticElectronQuasiNeutralDensityFloor =
+		getDouble("kineticElectronQuasiNeutralDensityFloor", 1.0e-4);
+	if (params->kineticElectronQuasiNeutralIterations < 1 ||
+	    params->kineticElectronQuasiNeutralRelaxation <= 0.0 ||
+	    params->kineticElectronQuasiNeutralRelaxation > 1.0 ||
+	    params->kineticElectronQuasiNeutralMaxScale < 1.0 ||
+	    params->kineticElectronQuasiNeutralDensityFloor < 0.0)
+	{
+		cout << "ERROR: invalid kinetic-electron quasineutral projection controls" << endl;
+		MPI_Abort(MPI_COMM_WORLD,-116);
+	}
 	params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
 	params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
 	params->SW.collisionConservationProjection = getInt("SW_collisionConservationProjection", 0);
 	params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
+	params->SW.Bohm          = getInt("SW_Bohm", 0);
 	params->SW.pairSource    = getInt("SW_pairSource", 0);
 	params->SW.relativisticElectrons = getInt("SW_relativisticElectrons", 0);
 	params->SW.advancePos    = stoi( parametersStringMap["SW_advancePos"] );
 	params->SW.linearSolve   = stoi( parametersStringMap["SW_linearSolve"] );
+	params->bohm.type        = getInt("Bohm_type", 2);
+	params->bohm.edgeCells   = getInt("Bohm_edgeCells", 4);
+	params->bohm.tOn         = getDouble("Bohm_t_ON", 0.0);
+	params->bohm.gammaI      = getDouble("Bohm_gamma_i", 3.0);
+	if (params->SW.Bohm == 1 && params->bohm.type != 2)
+	{
+		cout << "ERROR: only Bohm_type=2 (subsonic-only sonic outflow) is supported" << endl;
+		MPI_Abort(MPI_COMM_WORLD,-115);
+	}
+	if (params->SW.Bohm == 1 && params->bohm.edgeCells < 1)
+	{
+		cout << "ERROR: Bohm_edgeCells must be positive" << endl;
+		MPI_Abort(MPI_COMM_WORLD,-115);
+	}
 	params->collOperType = getInt("CollOperType", COLLISION_OPERATOR_BOOZER_KIM);
 	params->collisionRandomSeed = getInt("collisionRandomSeed", -1);
 	if (params->collOperType != COLLISION_OPERATOR_BOOZER &&
@@ -566,6 +602,8 @@ void init_TYP::readInputFile(params_TYP * params)
     params->restart.path = getString("restart_path", "");
     params->restart.snapshot = getInt("restart_snapshot", -1);
     params->restart.continueTime = getInt("restart_continueTime", 0);
+    params->restart.initializeMissingSpecies = getInt("restart_initializeMissingSpecies", 0);
+    params->restart.cloneMissingSpeciesFrom = getInt("restart_cloneMissingSpeciesFrom", 0);
     params->restart.particleFilePrefix = getString("restart_particleFilePrefix", "PARTICLES_FILE_");
     params->restart.fieldsFilePrefix = getString("restart_fieldsFilePrefix", "FIELDS_FILE_");
     params->restart.fieldsFileName = getString("restart_fieldsFileName", "");
@@ -587,6 +625,7 @@ void init_TYP::readInputFile(params_TYP * params)
     params->em_IC.phiRight      = getDouble("IC_phiRight", 0.0);
     params->em_IC.poissonBCModel = getInt("Poisson_BCModel", POISSON_BC_DIRICHLET);
     params->em_IC.sheathCoefficient = getDouble("Poisson_sheathCoefficient", 3.0);
+    params->em_IC.sheathCurrentBalance = getInt("Poisson_sheathCurrentBalance", 0);
     params->em_IC.reformulatedPoissonLambda = getDouble("ReformulatedPoisson_lambda", -1.0);
     params->em_IC.reformulatedPoissonQuasiNeutral = getInt("ReformulatedPoisson_quasiNeutral", 0);
 
@@ -1097,6 +1136,7 @@ void init_TYP::calculateDerivedQuantities(params_TYP * params, vector<ionSpecies
     params->ionLarmorRadius = IONS->at(referenceIonSpecies).LarmorRadius;
     params->ionSkinDepth    = IONS->at(referenceIonSpecies).SkinDepth;
     params->ionGyroPeriod   = IONS->at(referenceIonSpecies).GyroPeriod;
+	params->bohm.tOn         *= params->ionGyroPeriod;
 
     // RF start and end time:
     // ======================
@@ -1711,6 +1751,56 @@ void init_TYP::loadRestartState(params_TYP * params, fields_TYP * fields, vector
 
                 if (!hdf5PathExists(particleFile, xDataset) || !hdf5PathExists(particleFile, vDataset))
                 {
+                    if (params->restart.cloneMissingSpeciesFrom > 0)
+                    {
+                        const int sourceIndex = params->restart.cloneMissingSpeciesFrom - 1;
+                        if (sourceIndex < 0 || sourceIndex >= static_cast<int>(IONS->size()) ||
+                            sourceIndex == static_cast<int>(ss) ||
+                            IONS->at(sourceIndex).X_p.n_elem == 0)
+                        {
+                            throw runtime_error("restart_cloneMissingSpeciesFrom does not identify an already-loaded species");
+                        }
+
+                        ionSpecies_TYP& target = IONS->at(ss);
+                        const ionSpecies_TYP& source = IONS->at(sourceIndex);
+                        const arma::mat initializedVelocity = target.V_p;
+                        const unsigned int copies = std::max(1U, static_cast<unsigned int>(
+                            std::llround(target.NSP/static_cast<double>(source.X_p.n_elem))));
+                        const unsigned int particleCount = copies*source.X_p.n_elem;
+                        const double weightScale = std::abs(source.Q)*source.NCP/
+                            (copies*std::abs(target.Q)*target.NCP);
+
+                        target.NSP = static_cast<double>(particleCount);
+                        target.nSupPartOutput = particleCount;
+                        target.pctSupPartOutput = 100.0;
+                        allocateParticleDefinedIonArrays(params, &target);
+                        for (unsigned int ii=0; ii<particleCount; ii++)
+                        {
+                            const unsigned int sourceParticle = ii % source.X_p.n_elem;
+                            target.X_p(ii) = source.X_p(sourceParticle);
+                            target.a_p(ii) = source.a_p(sourceParticle)*weightScale;
+                            if (initializedVelocity.n_rows > 0)
+                            {
+                                target.V_p.row(ii) = initializedVelocity.row(ii % initializedVelocity.n_rows);
+                            }
+                        }
+                        if (params->mpi.IS_PARTICLES_ROOT)
+                        {
+                            cout << "WARNING: restart snapshot has no particle state for species "
+                                 << (ss + 1) << "; cloned charge-balanced positions from species "
+                                 << (sourceIndex + 1) << " with " << copies << " velocity samples per marker" << endl;
+                        }
+                        continue;
+                    }
+                    if (params->restart.initializeMissingSpecies == 1)
+                    {
+                        if (params->mpi.IS_PARTICLES_ROOT)
+                        {
+                            cout << "WARNING: restart snapshot has no particle state for species "
+                                 << (ss + 1) << "; retaining its input-deck initialization" << endl;
+                        }
+                        continue;
+                    }
                     throw runtime_error("Restart requires X_p and V_p under " + speciesGroup);
                 }
 

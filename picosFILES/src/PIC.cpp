@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <atomic>
+#include <cmath>
 
 #include "PIC.h"
 
@@ -265,6 +267,16 @@ PIC_TYP::PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vecto
 	extrapolateMoments_AllSpecies(params,CS,fields,IONS);
     extrapolateMoments_AllSpecies(params,CS,fields,IONS);
     extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+	if (params.SW.kineticElectronQuasiNeutralProjection == 1)
+	{
+		for (int projectionIteration=0;
+		     projectionIteration<params.kineticElectronQuasiNeutralIterations;
+		     projectionIteration++)
+		{
+			enforceKineticElectronQuasiNeutrality(params, IONS);
+			extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+		}
+	}
 
 //	if (params.mpi.IS_PARTICLES_ROOT)
 //	{
@@ -442,6 +454,96 @@ void PIC_TYP::calculateF(const params_TYP &params, const ionSpecies_TYP &IONS, c
     method(qa, Ma, EM, ZN, F);
 }
 
+void PIC_TYP::enforceKineticElectronQuasiNeutrality(const params_TYP &params,
+                                                     vector<ionSpecies_TYP> &IONS) const
+{
+	if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR ||
+	    params.SW.kineticElectronQuasiNeutralProjection == 0)
+	{
+		return;
+	}
+
+	const int meshSize = params.mesh.NX_IN_SIM + 2;
+	arma::vec positiveChargeDensity(meshSize, arma::fill::zeros);
+	arma::vec negativeChargeDensity(meshSize, arma::fill::zeros);
+	for (const ionSpecies_TYP &species : IONS)
+	{
+		if (species.Z > 0.0)
+		{
+			positiveChargeDensity += species.Z*species.n_m;
+		}
+		else if (species.Z < 0.0)
+		{
+			negativeChargeDensity += fabs(species.Z)*species.n_m;
+		}
+	}
+
+	const double peakTarget = positiveChargeDensity.max();
+	const double densityFloor = params.kineticElectronQuasiNeutralDensityFloor*peakTarget;
+	const double maxScale = params.kineticElectronQuasiNeutralMaxScale;
+	const double minScale = 1.0/maxScale;
+	const double relaxation = params.kineticElectronQuasiNeutralRelaxation;
+	arma::vec scale(meshSize, arma::fill::ones);
+	for (int ii=1; ii<meshSize-1; ii++)
+	{
+		if (positiveChargeDensity(ii) > densityFloor && negativeChargeDensity(ii) > densityFloor)
+		{
+			const double ratio = positiveChargeDensity(ii)/negativeChargeDensity(ii);
+			scale(ii) = std::clamp(1.0 + relaxation*(ratio - 1.0), minScale, maxScale);
+		}
+	}
+	arma::vec particleScaleField(params.mesh.NX_IN_SIM + 4, arma::fill::ones);
+	particleScaleField.subvec(1, params.mesh.NX_IN_SIM + 2) = scale;
+	fill4Ghosts(particleScaleField);
+
+	for (ionSpecies_TYP &species : IONS)
+	{
+		if (species.Z >= 0.0)
+		{
+			continue;
+		}
+		double localBefore[2] = {arma::accu(species.a_p), 0.0};
+		for (int ii=0; ii<species.NSP; ii++)
+		{
+			localBefore[1] += species.a_p(ii)*arma::dot(species.V_p.row(ii), species.V_p.row(ii));
+		}
+		double globalBefore[2] = {0.0, 0.0};
+		MPI_Allreduce(localBefore, globalBefore, 2, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+		const int particleCount = species.NSP;
+		#pragma omp parallel for default(none) shared(species, particleScaleField, particleCount)
+		for (int ii=0; ii<particleCount; ii++)
+		{
+			const int ix = species.mn(ii) + 2;
+			const double particleScale = species.wxl(ii)*particleScaleField(ix-1) +
+			                             species.wxc(ii)*particleScaleField(ix) +
+			                             species.wxr(ii)*particleScaleField(ix+1);
+			species.a_p(ii) *= particleScale;
+		}
+
+		double localAfter[2] = {arma::accu(species.a_p), 0.0};
+		for (int ii=0; ii<species.NSP; ii++)
+		{
+			localAfter[1] += species.a_p(ii)*arma::dot(species.V_p.row(ii), species.V_p.row(ii));
+		}
+		double globalAfter[2] = {0.0, 0.0};
+		MPI_Allreduce(localAfter, globalAfter, 2, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+		if (globalBefore[0] > double_zero && globalBefore[1] > double_zero &&
+		    globalAfter[0] > double_zero && globalAfter[1] > double_zero)
+		{
+			const double beforeSpecificEnergy = globalBefore[1]/globalBefore[0];
+			const double afterSpecificEnergy = globalAfter[1]/globalAfter[0];
+			const double velocityScale = sqrt(beforeSpecificEnergy/afterSpecificEnergy);
+			species.V_p *= velocityScale;
+			for (int ii=0; ii<species.NSP; ii++)
+			{
+				const double vper = perpendicularSpeed(species, ii, params);
+				species.mu_p(ii) = 0.5*species.M*vper*vper/std::max(species.BX_p(ii), double_zero);
+			}
+		}
+	}
+}
+
 double PIC_TYP::perpendicularSpeed(const ionSpecies_TYP &ION, int ii, const params_TYP &params)
 {
 	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
@@ -577,8 +679,9 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
 
 			// Ion mass:
 			const double Ma = ion.M;
+			std::atomic<int> invalidParticleCount{0};
 
-			#pragma omp parallel for default(none) shared(params, fields, DT, ion, Ma, std::cout) firstprivate(NSP, F_C_DS)
+			#pragma omp parallel for default(none) shared(params, fields, DT, ion, Ma, invalidParticleCount, std::cout) firstprivate(NSP, F_C_DS)
             for(int ii=0;ii<NSP;ii++)
             {
                 // Start RK4 solution:
@@ -675,12 +778,30 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
                     Z0[2] + (dZ1[2] + 2*(dZ2[2] + dZ3[2]) + dZ4[2])/6
                 };
 
-				if ( isnan(ZN[0]) || isnan(ZN[1]) || isnan(ZN[2]) )
+				const bool finiteState =
+					std::isfinite(Z1[0]) && std::isfinite(Z1[1]) && std::isfinite(Z1[2]);
+				if (!finiteState)
 				{
-					cout << "Z0(0) = " << Z0[0] << endl;
-					cout << "Z1(0) = " << Z1[0] << endl;
-					cout << "Z1(1) = " << Z1[1] << endl;
-					cout << "Z1(2) = " << Z1[2] << endl;
+					const int failureIndex = invalidParticleCount.fetch_add(1);
+					if (failureIndex == 0)
+					{
+						#pragma omp critical(picos_nonfinite_particle)
+						{
+							cout << "ERROR: non-finite RK4 particle state"
+							     << " rank=" << params.mpi.MPI_DOMAIN_NUMBER
+							     << " time_s=" << params.currentTime
+							     << " particle=" << ii
+							     << " charge=" << ion.Q
+							     << " mass=" << Ma << endl;
+							cout << "  Z0=" << Z0[0] << "," << Z0[1] << "," << Z0[2] << endl;
+							cout << "  dZ1=" << dZ1[0] << "," << dZ1[1] << "," << dZ1[2] << endl;
+							cout << "  dZ2=" << dZ2[0] << "," << dZ2[1] << "," << dZ2[2] << endl;
+							cout << "  dZ3=" << dZ3[0] << "," << dZ3[1] << "," << dZ3[2] << endl;
+							cout << "  dZ4=" << dZ4[0] << "," << dZ4[1] << "," << dZ4[2] << endl;
+							cout << "  EM4=" << EM[0] << "," << EM[1] << "," << EM[2] << endl;
+						}
+					}
+					continue;
 				}
 
 				// Interpolate fields at new particle position:
@@ -699,6 +820,13 @@ void PIC_TYP::advanceParticles(const params_TYP &params, fields_TYP &fields, vec
                 ion.mu_p(ii)  = 0.5*Ma*ion.V_p(ii,1)*ion.V_p(ii,1)/EM[1] ; // mu
 
 			} // End of parallel region
+			if (invalidParticleCount.load() != 0)
+			{
+				cout << "ERROR: aborting after " << invalidParticleCount.load()
+				     << " non-finite particle updates on rank "
+				     << params.mpi.MPI_DOMAIN_NUMBER << endl;
+				MPI_Abort(MPI_COMM_WORLD, -120);
+			}
 		} //structure to iterate over all the ion species.
 	}
 }

@@ -427,6 +427,7 @@ struct em_IC_TYP
 	double phiRight;
 	int poissonBCModel;
 	double sheathCoefficient;
+	int sheathCurrentBalance;
 	double reformulatedPoissonLambda;
 	int reformulatedPoissonQuasiNeutral;
 	string EX_fileName;
@@ -448,6 +449,7 @@ struct em_IC_TYP
 		phiRight = 0;
 		poissonBCModel = POISSON_BC_DIRICHLET;
 		sheathCoefficient = 3.0;
+		sheathCurrentBalance = 0;
 		reformulatedPoissonLambda = -1.0;
 		reformulatedPoissonQuasiNeutral = 0;
 		EX_NX  = 0;
@@ -484,10 +486,12 @@ struct SW_TYP
 	int Collisions;
 	int collisionConservationProjection;
 	int RFheating;
+	int Bohm;
 	int pairSource;
 	int relativisticElectrons;
 	int electronGyroTimeStepLimiter;
 	int electronPlasmaTimeStepLimiter;
+	int kineticElectronQuasiNeutralProjection;
 	int linearSolve;
 	int advancePos;
 
@@ -499,15 +503,29 @@ struct SW_TYP
 		Collisions    = 0;
 		collisionConservationProjection = 0;
 		RFheating     = 0;
+		Bohm          = 0;
 		pairSource    = 0;
 		relativisticElectrons = 0;
 		electronGyroTimeStepLimiter = 0;
 		electronPlasmaTimeStepLimiter = 0;
+		kineticElectronQuasiNeutralProjection = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
 	}
 
 	};
+
+// Define sonic/Bohm outflow controls:
+// =============================================================================
+struct bohm_TYP
+{
+	int type;
+	int edgeCells;
+	double tOn;
+	double gammaI;
+
+	bohm_TYP() : type(2), edgeCells(4), tOn(0.0), gammaI(3.0) {}
+};
 
 	//  Define structure to store coupled electron-ion source parameters:
 	// =============================================================================
@@ -791,6 +809,8 @@ struct restart_TYP
 	int enabled;
 	int snapshot;
 	int continueTime;
+	int initializeMissingSpecies;
+	int cloneMissingSpeciesFrom;
 	double startTime;
 	string path;
 	string particleFilePrefix;
@@ -802,6 +822,8 @@ struct restart_TYP
 		enabled = 0;
 		snapshot = -1;
 		continueTime = 0;
+		initializeMissingSpecies = 0;
+		cloneMissingSpeciesFrom = 0;
 		startTime = 0.0;
 		path = "";
 		particleFilePrefix = "PARTICLES_FILE_";
@@ -883,12 +905,19 @@ struct params_TYP
 	// Coupled electron-ion source conditions:
 	pairSource_TYP pairSource;
 
+	// Sonic/Bohm outflow condition:
+	bohm_TYP bohm;
+
 	// Collision operator selection:
 	int collOperType;
 	int collisionRandomSeed;
 
 	int filtersPerIterationFields;
 	int filtersPerIterationIons;
+	int kineticElectronQuasiNeutralIterations;
+	double kineticElectronQuasiNeutralRelaxation;
+	double kineticElectronQuasiNeutralMaxScale;
+	double kineticElectronQuasiNeutralDensityFloor;
 
 	double ionLarmorRadius;
 	double ionSkinDepth;
@@ -913,6 +942,10 @@ struct params_TYP
 		velocityDistributionModel = VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN;
 		initialConditionRandomSeed = -1;
 		initialConditionWeightScale = 1.0;
+		kineticElectronQuasiNeutralIterations = 2;
+		kineticElectronQuasiNeutralRelaxation = 1.0;
+		kineticElectronQuasiNeutralMaxScale = 4.0;
+		kineticElectronQuasiNeutralDensityFloor = 1.0e-4;
 	}
 };
 

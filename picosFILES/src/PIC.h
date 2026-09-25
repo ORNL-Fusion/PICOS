@@ -107,6 +107,8 @@ protected:
 
 	void interpolateElectrons_AllSpecies(const params_TYP &params, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons) const;
 
+	void enforceKineticElectronQuasiNeutrality(const params_TYP &params, vector<ionSpecies_TYP> &IONS) const;
+
   	void extrapolateMoments_AllSpecies(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const;
 
 };

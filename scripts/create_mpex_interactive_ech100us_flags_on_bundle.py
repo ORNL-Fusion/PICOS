@@ -151,7 +151,11 @@ def read_ions(input_dir: Path, tag: str) -> str:
 def steady_input(input_dir: Path) -> str:
     text = read_input(input_dir, STEADY_TAG)
     text = replace_key(text, "Poisson_BCModel", "2")
-    return normalize_mpex_input(text)
+    text = normalize_mpex_input(text)
+    text = replace_key(text, "SW_RFheating", "0")
+    text = replace_key(text, "SW_RFheatingIons", "0")
+    text = replace_key(text, "SW_RFheatingElectrons", "0")
+    return text
 
 
 def steady_ions(input_dir: Path) -> str:

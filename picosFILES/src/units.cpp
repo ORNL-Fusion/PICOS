@@ -471,6 +471,7 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 	params->ionLarmorRadius /= CS->length;
 	params->ionSkinDepth /= CS->length;
 	params->ionGyroPeriod /= CS->time;
+	params->bohm.tOn /= CS->time;
 
 	// Mesh quantities:
 	// ----------------

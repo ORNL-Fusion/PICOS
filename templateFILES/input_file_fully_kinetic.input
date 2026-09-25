@@ -60,6 +60,10 @@ restart_enabled             0
 restart_path                none
 restart_snapshot            -1
 restart_continueTime        0
+// Set only for a hybrid-to-kinetic handoff whose checkpoint has no electron particles.
+restart_initializeMissingSpecies 0
+// Alternatively, clone positions/charge weights from a loaded 1-based species.
+restart_cloneMissingSpeciesFrom 0
 restart_particleFilePrefix  PARTICLES_FILE_
 restart_fieldsFilePrefix    FIELDS_FILE_
 
@@ -75,6 +79,7 @@ IC_phiLeft                  0.0
 IC_phiRight                 0.0
 Poisson_BCModel             1
 Poisson_sheathCoefficient   3.0
+Poisson_sheathCurrentBalance 0
 ReformulatedPoisson_lambda  -1.0
 ReformulatedPoisson_quasiNeutral 0
 

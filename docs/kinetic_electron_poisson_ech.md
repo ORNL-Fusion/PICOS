@@ -38,9 +38,12 @@ Poisson_BCModel             0   // Dirichlet phiLeft/phiRight
 Poisson_BCModel             1   // periodic electrostatic potential
 Poisson_BCModel             2   // simple sheath-shifted wall potential
 Poisson_sheathCoefficient   3.0
+Poisson_sheathCurrentBalance 0  // 1: weighted zero-current logical sheath
 ```
 
-For `Poisson_BCModel=2`, low parallel-energy kinetic electrons reflect from the sheath barrier instead of immediately being counted as boundary losses.
+For `Poisson_BCModel=2`, low parallel-energy kinetic electrons reflect from the sheath barrier instead of immediately being counted as boundary losses. With `Poisson_sheathCurrentBalance=0`, the barrier has the fixed analytic floor `Poisson_sheathCoefficient*Te`. With `Poisson_sheathCurrentBalance=1`, PICOS++ instead sorts the outgoing weighted electron markers by parallel energy independently at both walls and chooses the cutoff that matches the outgoing ion charge. Unmatched ion charge is carried to later time steps so sparse macroparticle crossings do not create a secular wall current.
+
+The current-balanced sheath enforces global ambipolar wall loss; it does not by itself enforce pointwise quasineutrality. The reformulated solver now uses the required centered second-time-derivative update and an integration constant consistent with both wall potentials. With the present explicit particle push, however, local Gauss-law/quasineutral preservation is not guaranteed. Treat long fully kinetic open-field-line steady states as validation cases until a charge-conserving coupled AP particle-field discretization is implemented.
 
 For the reformulated Poisson model from `/Users/78k/Downloads/Reformulated Poissons equation.pdf`, add:
 
@@ -448,3 +451,16 @@ Main next items:
 4. Add real open-field Poisson/sheath boundary conditions tied to wall currents.
 5. Keep the 1D-2V guiding-center path as the validated baseline while deciding whether any target physics really requires the optional 1D-3V or multidimensional full-orbit extension.
 ```
+For a hybrid-to-kinetic handoff, set `restart_initializeMissingSpecies 1` so
+species absent from the hybrid checkpoint (normally kinetic electrons) retain
+their input-deck initialization.  The default is `0`, which keeps ordinary
+restarts strict and fails if any configured species is absent.  Supply an
+electron initial-density profile derived from the hybrid checkpoint and use
+`quietStart 0` when that nonuniform profile must be sampled.
+
+For a locally charge-balanced transition, `restart_cloneMissingSpeciesFrom 1`
+clones the loaded ion-marker positions into every missing species and rescales
+their marker weights to match charge.  The missing species keeps independently
+sampled input-deck velocities.  This is preferable to profile sampling for a
+short kinetic-electron ECH handoff because it removes deposition noise at the
+transition.  The option is disabled by default.

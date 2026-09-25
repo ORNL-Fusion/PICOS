@@ -75,6 +75,7 @@ void pair_source_unit_test() {
     params.mesh.DX = 0.1;
     params.pairSource.ionSpecies = 0;
     params.pairSource.electronSpecies = 1;
+    params.pairSource.weightMode = PAIR_SOURCE_WEIGHT_EXPLICIT_RATE;
     params.pairSource.rate = 100.0;
     params.pairSource.mean_x = 0.5;
     params.pairSource.sigma_x = 0.0;
@@ -90,7 +91,7 @@ void pair_source_unit_test() {
     CS_TYP cs;
     std::vector<ionSpecies_TYP> species(2);
     allocate_test_species(species[0], 1.0, 10.0);
-    allocate_test_species(species[1], -1.0, 10.0);
+    allocate_test_species(species[1], -1.0, 40.0);
     species[0].X_p(0) = -0.1;
     species[0].X_p(1) = 0.5;
     species[1].X_p(0) = 1.1;
@@ -99,16 +100,178 @@ void pair_source_unit_test() {
     particleBC_TYP bc;
     bc.applyParticleReinjection(params, cs, fields, species);
 
-    const double expectedWeight = params.pairSource.rate*params.DT/species[0].NCP;
+    const double expectedIonWeight = params.pairSource.rate*params.DT/species[0].NCP;
+    const double expectedElectronWeight = params.pairSource.rate*params.DT/species[1].NCP;
     assert(std::abs(species[0].X_p(0) - params.pairSource.mean_x) < 1.0e-15);
     assert(std::abs(species[1].X_p(0) - params.pairSource.mean_x) < 1.0e-15);
     assert(std::abs(species[0].X_p(0) - species[1].X_p(0)) < 1.0e-15);
-    assert(std::abs(species[0].a_p(0) - expectedWeight) < 1.0e-15);
-    assert(std::abs(species[1].a_p(0) - expectedWeight) < 1.0e-15);
+    assert(std::abs(species[0].a_p(0) - expectedIonWeight) < 1.0e-15);
+    assert(std::abs(species[1].a_p(0) - expectedElectronWeight) < 1.0e-15);
     assert(std::abs(species[0].Z*species[0].NCP*species[0].a_p(0) +
                     species[1].Z*species[1].NCP*species[1].a_p(0)) < 1.0e-15);
     assert(species[0].f1(0) == 0 && species[0].f2(0) == 0);
     assert(species[1].f1(0) == 0 && species[1].f2(0) == 0);
+
+    // With a fixed physical source rate, halving DT must halve the number of
+    // physical pairs injected while preserving charge balance for unequal NCP.
+    params.DT *= 0.5;
+    std::vector<ionSpecies_TYP> half_step_species(2);
+    allocate_test_species(half_step_species[0], 1.0, 10.0);
+    allocate_test_species(half_step_species[1], -1.0, 40.0);
+    half_step_species[0].X_p(0) = -0.1;
+    half_step_species[0].X_p(1) = 0.5;
+    half_step_species[1].X_p(0) = 1.1;
+    half_step_species[1].X_p(1) = 0.5;
+    particleBC_TYP half_step_bc;
+    half_step_bc.applyParticleReinjection(params, cs, fields, half_step_species);
+    const double full_step_pairs = species[0].NCP*species[0].a_p(0);
+    const double half_step_ion_pairs = half_step_species[0].NCP*half_step_species[0].a_p(0);
+    const double half_step_electron_pairs = half_step_species[1].NCP*half_step_species[1].a_p(0);
+    assert(std::abs(half_step_ion_pairs - 0.5*full_step_pairs) < 1.0e-15);
+    assert(std::abs(half_step_electron_pairs - half_step_ion_pairs) < 1.0e-15);
+}
+
+void reformulated_logical_sheath_unit_test() {
+    params_TYP params;
+    params.mpi.COMM = MPI_COMM_WORLD;
+    params.mpi.COMM_COLOR = PARTICLES_MPI_COLOR;
+    params.mpi.IS_PARTICLES_ROOT = true;
+    params.SW.fieldSolveModel = FIELD_SOLVE_REFORMULATED_POISSON;
+    params.SW.pairSource = 0;
+    params.em_IC.poissonBCModel = POISSON_BC_SHEATH;
+    params.em_IC.sheathCoefficient = 3.0;
+    params.f_IC.Te = F_E_DS;
+    params.advanceParticleMethod = PARTICLE_PUSH_GC_VPER;
+    params.DT = 0.01;
+    params.geometry.LX_min = 0.0;
+    params.geometry.LX_max = 1.0;
+    params.geometry.LX = 1.0;
+    params.mesh.DX = 0.1;
+    params.mesh.NX_IN_SIM = 10;
+
+    fields_TYP fields;
+    fields.Phi_m.zeros(params.mesh.NX_IN_SIM + 2);
+    CS_TYP cs;
+    std::vector<ionSpecies_TYP> species(1);
+    allocate_test_species(species[0], -1.0, 1.0);
+    species[0].X_p(0) = -0.01;
+    species[0].X_p(1) = 0.5;
+    species[0].V_p(0,0) = -0.1;
+
+    particleBC_TYP bc;
+    bc.applyParticleReinjection(params, cs, fields, species);
+
+    assert(std::abs(species[0].X_p(0) - 0.25*params.mesh.DX) < 1.0e-15);
+    assert(std::abs(species[0].V_p(0,0) - 0.1) < 1.0e-15);
+    assert(species[0].f1(0) == 0 && species[0].f2(0) == 0);
+    assert(std::abs(species[0].a_p(0) - 1.0) < 1.0e-15);
+}
+
+void current_balanced_logical_sheath_unit_test() {
+    params_TYP params;
+    params.mpi.COMM = MPI_COMM_WORLD;
+    MPI_Comm_size(MPI_COMM_WORLD, &params.mpi.COMM_SIZE);
+    params.mpi.COMM_COLOR = PARTICLES_MPI_COLOR;
+    params.mpi.IS_PARTICLES_ROOT = true;
+    params.SW.fieldSolveModel = FIELD_SOLVE_REFORMULATED_POISSON;
+    params.SW.pairSource = 0;
+    params.em_IC.poissonBCModel = POISSON_BC_SHEATH;
+    params.em_IC.sheathCurrentBalance = 1;
+    params.advanceParticleMethod = PARTICLE_PUSH_GC_VPER;
+    params.DT = 0.01;
+    params.geometry.LX_min = 0.0;
+    params.geometry.LX_max = 1.0;
+    params.geometry.LX = 1.0;
+    params.mesh.DX = 0.1;
+    params.mesh.NX_IN_SIM = 10;
+
+    fields_TYP fields;
+    fields.Phi_m.zeros(params.mesh.NX_IN_SIM + 2);
+    CS_TYP cs;
+    std::vector<ionSpecies_TYP> species(2);
+    allocate_test_species(species[0], 1.0, 2.0);
+    allocate_test_species(species[1], -1.0, 2.0);
+
+    // One ion carries two units of outgoing charge.  Of the two equal-weight
+    // electrons, only the higher-energy one should pass the logical sheath.
+    species[0].X_p(0) = -0.01;
+    species[0].X_p(1) = 0.5;
+    species[1].X_p(0) = -0.01;
+    species[1].X_p(1) = -0.01;
+    species[1].V_p(0,0) = -0.1;
+    species[1].V_p(1,0) = -1.0;
+
+    particleBC_TYP bc;
+    bc.applyParticleReinjection(params, cs, fields, species);
+
+    assert(std::abs(species[1].X_p(0) - 0.25*params.mesh.DX) < 1.0e-15);
+    assert(species[1].V_p(0,0) > 0.0);
+    assert(std::abs(species[1].X_p(1) - 0.25*params.mesh.DX) > 1.0e-12);
+
+    // Verify that ion charge is carried across particle-sparse steps.  First
+    // lose an ion with no electron candidate, then present one equal-charge
+    // electron on the following step; it must be transmitted, not reflected.
+    std::vector<ionSpecies_TYP> sparseSpecies(2);
+    allocate_test_species(sparseSpecies[0], 1.0, 2.0);
+    allocate_test_species(sparseSpecies[1], -1.0, 2.0);
+    sparseSpecies[0].X_p(0) = -0.01;
+    sparseSpecies[0].X_p(1) = 0.5;
+    sparseSpecies[1].X_p.fill(0.5);
+    particleBC_TYP sparseBc;
+    sparseBc.applyParticleReinjection(params, cs, fields, sparseSpecies);
+
+    sparseSpecies[0].X_p.fill(0.5);
+    sparseSpecies[1].X_p(0) = -0.01;
+    sparseSpecies[1].X_p(1) = 0.5;
+    sparseSpecies[1].V_p(0,0) = -0.1;
+    sparseBc.applyParticleReinjection(params, cs, fields, sparseSpecies);
+    assert(std::abs(sparseSpecies[1].X_p(0) - 0.25*params.mesh.DX) > 1.0e-12);
+}
+
+void sonic_bohm_outflow_unit_test() {
+    params_TYP params;
+    params.mpi.COMM = MPI_COMM_WORLD;
+    params.mpi.COMM_COLOR = PARTICLES_MPI_COLOR;
+    params.numberOfParticleSpecies = 1;
+    params.SW.Bohm = 1;
+    params.bohm.type = 2;
+    params.bohm.edgeCells = 1;
+    params.bohm.tOn = 0.0;
+    params.bohm.gammaI = 3.0;
+    params.currentTime = 0.0;
+    params.geometry.LX_min = 0.0;
+    params.geometry.LX_max = 1.0;
+    params.mesh.DX = 0.1;
+    params.mesh.NX_IN_SIM = 10;
+
+    CS_TYP cs;
+    cs.time = 1.0;
+    electrons_TYP electrons;
+    electrons.Te_m.ones(12);
+    electrons.Te_m *= 2.0;
+
+    std::vector<ionSpecies_TYP> species(1);
+    allocate_test_species(species[0], 1.0, 1.0);
+    species[0].M = 2.0;
+    species[0].X_p(0) = 0.05;
+    species[0].X_p(1) = 0.95;
+    species[0].V_p(0,0) = -0.25; // subsonic left outflow
+    species[0].V_p(1,0) = 2.0;   // supersonic right outflow
+
+    particleBC_TYP bc;
+    bc.enforceSonicBohmOutflow(params, cs, electrons, species);
+
+    // With Te/Mi = 1 and zero parallel thermal spread, cs = 1.
+    assert(std::abs(species[0].V_p(0,0) + 1.0) < 1.0e-14);
+    assert(std::abs(species[0].V_p(1,0) - 2.0) < 1.0e-14);
+
+    // Reverse which side is subsonic: the supersonic left side must remain
+    // unchanged and the subsonic right side must be shifted to +cs.
+    species[0].V_p(0,0) = -2.0;
+    species[0].V_p(1,0) = 0.25;
+    bc.enforceSonicBohmOutflow(params, cs, electrons, species);
+    assert(std::abs(species[0].V_p(0,0) + 2.0) < 1.0e-14);
+    assert(std::abs(species[0].V_p(1,0) - 1.0) < 1.0e-14);
 }
 }
 
@@ -124,6 +287,9 @@ template<std::floating_point T> void run_tests() {
         coll_operator_TYP opt;
         opt.unit_test();
         pair_source_unit_test();
+        reformulated_logical_sheath_unit_test();
+        current_balanced_logical_sheath_unit_test();
+        sonic_bohm_outflow_unit_test();
         guiding_center_mirror_force_unit_test();
     }
 }

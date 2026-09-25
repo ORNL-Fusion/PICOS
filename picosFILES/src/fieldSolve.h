@@ -52,6 +52,8 @@ class fields_solver_TYP
     arma::vec stressDifference;
     arma::vec divStressDifference;
     arma::vec plasmaFrequencySquared;
+    arma::vec previousReformulatedEX;
+    bool reformulatedHistoryInitialized;
 
   	// Grid cell increment
   	double dx;

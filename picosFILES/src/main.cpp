@@ -210,9 +210,23 @@ int main(int argc, char* argv[])
             PIC.interpolateElectrons_AllSpecies(params,IONS,electrons);
         }
 
+        // Enforce the Bohm criterion only for subsonic outflow.  Supersonic
+        // boundary flow is left unchanged.
+        particleBC.enforceSonicBohmOutflow(params, CS, electrons, IONS);
+
         // Calculate ion moments:
         // =====================================================================
         PIC.extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+		if (params.SW.kineticElectronQuasiNeutralProjection == 1)
+		{
+			for (int projectionIteration=0;
+			     projectionIteration<params.kineticElectronQuasiNeutralIterations;
+			     projectionIteration++)
+			{
+				PIC.enforceKineticElectronQuasiNeutrality(params, IONS);
+				PIC.extrapolateMoments_AllSpecies(params,CS,fields,IONS);
+			}
+		}
 
         // Apply collision operator:
         // =====================================================================

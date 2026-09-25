@@ -45,6 +45,7 @@ private:
 	void consumePairSourceBacklog(const params_TYP &params, double actualPairs, double &backlog);
 	double pairSourceBacklogIonPairs_;
 	double pairSourceBacklogElectronPairs_;
+	std::array<double,2> sheathElectronChargeCredit_;
 
 	template <size_t S>
 	static void MPI_AllreduceDouble(const params_TYP &params, double *v)
@@ -77,7 +78,9 @@ private:
         MPI_AllreduceDouble<2> (params,S.data());
     }
 
-    void checkBoundaryAndFlag(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const;
+    void checkBoundaryAndFlag(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
+
+    void enforceCurrentBalancedLogicalSheath(const params_TYP &params, vector<ionSpecies_TYP> &IONS);
 
     void getFluxesAcrossBoundaries(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
 
@@ -101,6 +104,9 @@ public:
     particleBC_TYP();
 
     void applyParticleReinjection(const params_TYP &params, const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS);
+
+    void enforceSonicBohmOutflow(const params_TYP &params, const CS_TYP &CS,
+                                 const electrons_TYP &electrons, vector<ionSpecies_TYP> &IONS) const;
 };
 
 #endif

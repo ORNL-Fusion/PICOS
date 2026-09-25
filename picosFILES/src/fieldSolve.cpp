@@ -39,6 +39,8 @@ fields_solver_TYP::fields_solver_TYP(const params_TYP * params, CS_TYP * CS)
     stressDifference.zeros(NX_T);
     divStressDifference.zeros(NX_T);
     plasmaFrequencySquared.zeros(NX_T);
+    previousReformulatedEX.zeros(NX_T);
+    reformulatedHistoryInitialized = false;
 }
 
 // Fill ghost cells:
@@ -430,6 +432,15 @@ void fields_solver_TYP::advanceEfieldReformulatedPoisson(const params_TYP * para
 		unsigned int fIndex = params->mpi.fIndex;
 
 		const arma::vec previousEX = fields->EX_m;
+		if (!reformulatedHistoryInitialized)
+		{
+			// The restart format stores E but not dE/dt.  Use a zero initial
+			// derivative for the first reformulated step; subsequent steps use
+			// the full centered second-time-derivative history.
+			previousReformulatedEX = previousEX;
+			reformulatedHistoryInitialized = true;
+		}
+		const arma::vec olderEX = previousReformulatedEX;
 
 		ionDensity.zeros();
 		electronDensity.zeros();
@@ -547,8 +558,48 @@ void fields_solver_TYP::advanceEfieldReformulatedPoisson(const params_TYP * para
 			else
 			{
 				plasmaFrequencySquared(ii) = densityDenominator/lambda2;
+				const double dt2 = params->DT*params->DT;
 				const double rhs = divStressDifference(ii)/lambda2;
-				fields->EX_m(ii) = (previousEX(ii) + params->DT*rhs)/(1.0 + params->DT*plasmaFrequencySquared(ii));
+				fields->EX_m(ii) = (2.0*previousEX(ii) - olderEX(ii) + dt2*rhs)/
+				                   (1.0 + dt2*plasmaFrequencySquared(ii));
+			}
+		}
+
+		if (params->em_IC.poissonBCModel != POISSON_BC_PERIODIC)
+		{
+			// The 1-D reformulated equation determines E only up to a spatially
+			// uniform integration constant.  Choose that constant so integrating
+			// E=-d(phi)/dx produces both requested wall potentials.  Previously
+			// phi was integrated from the left and the right endpoint was merely
+			// overwritten, leaving E inconsistent with the boundary condition.
+			const int N = params->mesh.NX_IN_SIM;
+			const double targetIntegral = poissonBoundaryPotential(params, false) -
+			                              poissonBoundaryPotential(params, true);
+			double fieldIntegral = 0.0;
+			double responseIntegral = 0.0;
+			for (int ii=1; ii<=N; ii++)
+			{
+				const double densityDenominator = max(ionDensity(ii) + electronDensity(ii)/epsilon, double_zero);
+				const double dt2 = params->DT*params->DT;
+				const double response = quasiNeutral ?
+					1.0/densityDenominator :
+					(dt2/lambda2)/(1.0 + dt2*densityDenominator/lambda2);
+				const double weight = (ii == 1 || ii == N) ? 1.5 : 1.0;
+				fieldIntegral += weight*fields->EX_m(ii)*dx;
+				responseIntegral += weight*response*dx;
+			}
+			if (responseIntegral > double_zero)
+			{
+				const double integrationConstant = (targetIntegral - fieldIntegral)/responseIntegral;
+				for (int ii=1; ii<=N; ii++)
+				{
+					const double densityDenominator = max(ionDensity(ii) + electronDensity(ii)/epsilon, double_zero);
+					const double dt2 = params->DT*params->DT;
+					const double response = quasiNeutral ?
+						1.0/densityDenominator :
+						(dt2/lambda2)/(1.0 + dt2*densityDenominator/lambda2);
+					fields->EX_m(ii) += integrationConstant*response;
+				}
 			}
 		}
 
@@ -612,6 +663,8 @@ void fields_solver_TYP::advanceEfieldReformulatedPoisson(const params_TYP * para
 			MPI_Abort(params->mpi.MPI_TOPO, -110);
 		}
 		#endif
+
+		previousReformulatedEX = previousEX;
 	}
 
 	// Send E and reconstructed Phi to PARTICLE ranks for pusher and sheath diagnostics.

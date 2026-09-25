@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <unordered_set>
 
 #include "particleBC.h"
 
@@ -64,11 +65,12 @@ particleBC_TYP::particleBC_TYP() :
 dot_({0, 0, 0, 0, 0, 0, 0}),
 pairSourceBacklogIonPairs_(0.0),
 pairSourceBacklogElectronPairs_(0.0),
+sheathElectronChargeCredit_({0.0, 0.0}),
 randoms_2pi(picos::random::instances<double, uniform, 0.0, 2*numbers::pi_v<double>> (device())),
 randoms_one(picos::random::instances<double, uniform, 0.0, 1.0> (device())){}
 
 // =============================================================================
-void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS) const
+void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS)
 {
     if (params.mpi.COMM_COLOR == PARTICLES_MPI_COLOR)
     {
@@ -77,17 +79,27 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
             // Particle loop:
             // ==================================
             const int iie = ion.NSP;
-            #pragma omp parallel for default(none) shared(params, fields, ion, iie)
+            #pragma omp parallel for default(none) shared(params, fields, ion, iie) firstprivate(F_E_DS)
             for(int ii=0; ii<iie; ii++)
             {
                 // left boundary:
                 if (ion.X_p(ii) <= params.geometry.LX_min)
                 {
-                    if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
+                    if (params.em_IC.sheathCurrentBalance == 0 &&
+                        isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
                         params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
                         ion.Z < 0.0)
                     {
-                        const double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(1) - fields.Phi_m(0));
+                        double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(1) - fields.Phi_m(0));
+                        if (params.SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+                        {
+                            // The reformulated model does not resolve the Debye sheath.
+                            // Enforce the configured logical-sheath cutoff instead of
+                            // allowing a noisy first-cell potential to remove cold electrons.
+                            const double logicalSheathBarrier = abs(ion.Q)*
+                                params.em_IC.sheathCoefficient*params.f_IC.Te/F_E_DS;
+                            barrier = max(barrier, logicalSheathBarrier);
+                        }
                         const double parallelEnergy = particleParallelKineticEnergy(params, ion, ii);
                         if (parallelEnergy < barrier)
                         {
@@ -110,12 +122,19 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
                 // Right boundary:
                 if (ion.X_p(ii) >= params.geometry.LX_max)
                 {
-                    if (isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
+                    if (params.em_IC.sheathCurrentBalance == 0 &&
+                        isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
                         params.em_IC.poissonBCModel == POISSON_BC_SHEATH &&
                         ion.Z < 0.0)
                     {
                         const int N = params.mesh.NX_IN_SIM;
-                        const double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(N) - fields.Phi_m(N + 1));
+                        double barrier = abs(ion.Q)*max(0.0, fields.Phi_m(N) - fields.Phi_m(N + 1));
+                        if (params.SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+                        {
+                            const double logicalSheathBarrier = abs(ion.Q)*
+                                params.em_IC.sheathCoefficient*params.f_IC.Te/F_E_DS;
+                            barrier = max(barrier, logicalSheathBarrier);
+                        }
                         const double parallelEnergy = particleParallelKineticEnergy(params, ion, ii);
                         if (parallelEnergy < barrier)
                         {
@@ -139,8 +158,189 @@ void particleBC_TYP::checkBoundaryAndFlag(const params_TYP &params,const CS_TYP 
 
         } // species loop
 
+        if (params.em_IC.sheathCurrentBalance != 0 &&
+            isKineticElectrostaticFieldSolve(params.SW.fieldSolveModel) &&
+            params.em_IC.poissonBCModel == POISSON_BC_SHEATH)
+        {
+            enforceCurrentBalancedLogicalSheath(params, IONS);
+        }
+
     } // Particle MPI guard
 
+}
+
+// Choose a logical-sheath electron cutoff independently at each end plate so
+// that the transmitted electron charge is as close as possible to the outgoing
+// ion charge during the current particle step.  This is the weighted-particle
+// form of the standard zero-current logical sheath: energetic tail electrons
+// pass, while lower-parallel-energy electrons are reflected.  All particle
+// ranks assemble the same small list of boundary candidates and therefore
+// obtain identical cutoffs without rank-dependent decisions.
+void particleBC_TYP::enforceCurrentBalancedLogicalSheath(const params_TYP &params,
+                                                          vector<ionSpecies_TYP> &IONS)
+{
+    struct sheathCandidate_TYP
+    {
+        int side;
+        int rank;
+        int species;
+        int particle;
+        double energy;
+        double charge;
+    };
+
+    std::array<double,2> localIonCharge = {0.0, 0.0};
+    std::vector<double> localCandidates;
+
+    for (int ss=0; ss<static_cast<int>(IONS.size()); ss++)
+    {
+        const ionSpecies_TYP &species = IONS[ss];
+        const double chargePerWeight = fabs(species.Z)*species.NCP;
+        if (species.Z > 0.0)
+        {
+            for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+            {
+                if (species.f1(ii) == 1) localIonCharge[0] += chargePerWeight*species.a_p(ii);
+                if (species.f2(ii) == 1) localIonCharge[1] += chargePerWeight*species.a_p(ii);
+            }
+        }
+        else if (species.Z < 0.0)
+        {
+            for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+            {
+                int side = -1;
+                if (species.f1(ii) == 1) side = 0;
+                else if (species.f2(ii) == 1) side = 1;
+                if (side >= 0)
+                {
+                    localCandidates.push_back(static_cast<double>(side));
+                    localCandidates.push_back(particleParallelKineticEnergy(params, species, ii));
+                    localCandidates.push_back(chargePerWeight*species.a_p(ii));
+                    localCandidates.push_back(static_cast<double>(params.mpi.COMM_RANK));
+                    localCandidates.push_back(static_cast<double>(ss));
+                    localCandidates.push_back(static_cast<double>(ii));
+                }
+            }
+        }
+    }
+
+    MPI_Allreduce(MPI_IN_PLACE, localIonCharge.data(), 2, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+    for (int side=0; side<2; side++)
+    {
+        // Ion charge that could not be matched in a particle-sparse time step
+        // remains available to transmit electrons on a later step.  A signed
+        // credit also compensates a one-macroparticle overshoot.
+        sheathElectronChargeCredit_[side] += localIonCharge[side];
+    }
+
+    const int localValueCount = static_cast<int>(localCandidates.size());
+    std::vector<int> valueCounts(params.mpi.COMM_SIZE, 0);
+    MPI_Allgather(&localValueCount, 1, MPI_INT, valueCounts.data(), 1, MPI_INT, params.mpi.COMM);
+
+    std::vector<int> displacements(params.mpi.COMM_SIZE, 0);
+    int globalValueCount = 0;
+    for (int rr=0; rr<params.mpi.COMM_SIZE; rr++)
+    {
+        displacements[rr] = globalValueCount;
+        globalValueCount += valueCounts[rr];
+    }
+    std::vector<double> globalCandidates(static_cast<size_t>(globalValueCount));
+    MPI_Allgatherv(localCandidates.data(), localValueCount, MPI_DOUBLE,
+                   globalCandidates.data(), valueCounts.data(), displacements.data(),
+                   MPI_DOUBLE, params.mpi.COMM);
+
+    std::array<double,2> transmitted = {0.0, 0.0};
+    std::unordered_set<unsigned long long> acceptedLocalParticles;
+    for (int side=0; side<2; side++)
+    {
+        std::vector<sheathCandidate_TYP> candidates;
+        for (int jj=0; jj+5<globalValueCount; jj+=6)
+        {
+            if (static_cast<int>(globalCandidates[jj]) == side && globalCandidates[jj + 2] > 0.0)
+            {
+                candidates.push_back({side,
+                                      static_cast<int>(globalCandidates[jj + 3]),
+                                      static_cast<int>(globalCandidates[jj + 4]),
+                                      static_cast<int>(globalCandidates[jj + 5]),
+                                      globalCandidates[jj + 1],
+                                      globalCandidates[jj + 2]});
+            }
+        }
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const sheathCandidate_TYP &a, const sheathCandidate_TYP &b)
+                  {
+                      if (a.energy != b.energy) return a.energy > b.energy;
+                      if (a.rank != b.rank) return a.rank < b.rank;
+                      if (a.species != b.species) return a.species < b.species;
+                      return a.particle < b.particle;
+                  });
+
+        if (candidates.empty())
+        {
+            continue;
+        }
+
+        size_t accepted = 0;
+        double transmittedCharge = 0.0;
+        const double targetCharge = max(0.0, sheathElectronChargeCredit_[side]);
+        double bestError = fabs(targetCharge);
+        for (size_t kk=0; kk<candidates.size(); kk++)
+        {
+            transmittedCharge += candidates[kk].charge;
+            const double error = fabs(transmittedCharge - targetCharge);
+            if (error <= bestError)
+            {
+                bestError = error;
+                accepted = kk + 1;
+            }
+        }
+
+        for (size_t kk=0; kk<accepted; kk++)
+        {
+            transmitted[side] += candidates[kk].charge;
+            if (candidates[kk].rank == params.mpi.COMM_RANK)
+            {
+                const unsigned long long key =
+                    (static_cast<unsigned long long>(static_cast<unsigned int>(candidates[kk].species)) << 32) |
+                    static_cast<unsigned int>(candidates[kk].particle);
+                acceptedLocalParticles.insert(key);
+            }
+        }
+    }
+
+    for (int side=0; side<2; side++) sheathElectronChargeCredit_[side] -= transmitted[side];
+
+    for (int ss=0; ss<static_cast<int>(IONS.size()); ss++)
+    {
+        ionSpecies_TYP &species = IONS[ss];
+        if (species.Z >= 0.0) continue;
+        for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+        {
+            int side = -1;
+            if (species.f1(ii) == 1) side = 0;
+            else if (species.f2(ii) == 1) side = 1;
+            if (side < 0) continue;
+            const unsigned long long key =
+                (static_cast<unsigned long long>(static_cast<unsigned int>(ss)) << 32) |
+                static_cast<unsigned int>(ii);
+            if (acceptedLocalParticles.count(key) != 0) continue;
+
+            if (side == 0)
+            {
+                species.X_p(ii) = params.geometry.LX_min + 0.25*params.mesh.DX;
+                species.V_p(ii,0) = fabs(species.V_p(ii,0));
+                species.f1(ii) = 0;
+                species.dE1(ii) = 0.0;
+            }
+            else
+            {
+                species.X_p(ii) = params.geometry.LX_max - 0.25*params.mesh.DX;
+                species.V_p(ii,0) = -fabs(species.V_p(ii,0));
+                species.f2(ii) = 0;
+                species.dE2(ii) = 0.0;
+            }
+        }
+    }
 }
 
 // =============================================================================
@@ -257,6 +457,154 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
         MPI_AllreduceDouble<4> (params,&dot_.N1);
 
     } // Particle MPI
+}
+
+// Enforce a one-sided Bohm criterion in the configured edge cells.  The
+// parallel distribution is shifted without changing its thermal spread when
+// the outward bulk Mach number is at or below unity.  Supersonic outflow is
+// deliberately untouched.
+// =============================================================================
+void particleBC_TYP::enforceSonicBohmOutflow(const params_TYP &params, const CS_TYP &CS,
+                                             const electrons_TYP &electrons,
+                                             vector<ionSpecies_TYP> &IONS) const
+{
+    if (params.SW.Bohm != 1 || params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR ||
+        params.currentTime < params.bohm.tOn*CS.time)
+    {
+        return;
+    }
+
+    const int edgeCells = max(params.bohm.edgeCells, 1);
+    const double leftLimit = params.geometry.LX_min + edgeCells*params.mesh.DX;
+    const double rightLimit = params.geometry.LX_max - edgeCells*params.mesh.DX;
+
+    auto inEdge = [&](const double x, const int side)
+    {
+        return side == 0 ? x <= leftLimit : x >= rightLimit;
+    };
+
+    auto fluidElectronTemperature = [&](const int side)
+    {
+        if (electrons.Te_m.n_elem == 0)
+        {
+            return 0.0;
+        }
+        const arma::uword firstPhysical = electrons.Te_m.n_elem > static_cast<arma::uword>(params.mesh.NX_IN_SIM) ? 1 : 0;
+        const arma::uword lastPhysical = min(firstPhysical + static_cast<arma::uword>(params.mesh.NX_IN_SIM) - 1,
+                                             electrons.Te_m.n_elem - 1);
+        const arma::uword count = min(static_cast<arma::uword>(edgeCells), lastPhysical - firstPhysical + 1);
+        const arma::uword begin = side == 0 ? firstPhysical : lastPhysical - count + 1;
+        return arma::mean(electrons.Te_m.subvec(begin, begin + count - 1));
+    };
+
+    const int speciesCount = min(params.numberOfParticleSpecies, static_cast<int>(IONS.size()));
+    constexpr int momentsPerEdge = 4;
+    vector<double> edgeMoments(static_cast<size_t>(speciesCount)*2*momentsPerEdge, 0.0);
+    auto momentIndex = [&](const int species, const int side, const int moment)
+    {
+        return static_cast<size_t>((2*species + side)*momentsPerEdge + moment);
+    };
+
+    // Accumulate every species and both end regions into one buffer, then use
+    // one collective per time step.  Keeping this as a single reduction is
+    // important for kinetic-electron runs with many short particle steps.
+    for (int ss=0; ss<speciesCount; ss++)
+    {
+        const ionSpecies_TYP &species = IONS[ss];
+        for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+        {
+            if (species.a_p(ii) <= double_zero)
+            {
+                continue;
+            }
+            const int side = species.X_p(ii) <= leftLimit ? 0 :
+                             (species.X_p(ii) >= rightLimit ? 1 : -1);
+            if (side < 0)
+            {
+                continue;
+            }
+            const double weight = species.NCP*species.a_p(ii)*fabs(species.Z);
+            const double vpar = species.V_p(ii,0);
+            double vper2 = species.V_p(ii,1)*species.V_p(ii,1);
+            if (species.V_p.n_cols > 2)
+            {
+                vper2 += species.V_p(ii,2)*species.V_p(ii,2);
+            }
+            edgeMoments[momentIndex(ss, side, 0)] += weight;
+            edgeMoments[momentIndex(ss, side, 1)] += weight*vpar;
+            edgeMoments[momentIndex(ss, side, 2)] += weight*vpar*vpar;
+            edgeMoments[momentIndex(ss, side, 3)] += weight*vper2;
+        }
+    }
+    MPI_Allreduce(MPI_IN_PLACE, edgeMoments.data(), static_cast<int>(edgeMoments.size()),
+                  MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+    double electronTemperature[2] = {0.0, 0.0};
+    for (int side=0; side<2; side++)
+    {
+        double densityWeightedTemperature = 0.0;
+        double totalWeight = 0.0;
+        for (int ss=0; ss<speciesCount; ss++)
+        {
+            const ionSpecies_TYP &species = IONS[ss];
+            if (species.Z >= 0.0)
+            {
+                continue;
+            }
+            const double weight = edgeMoments[momentIndex(ss, side, 0)];
+            if (weight <= double_zero)
+            {
+                continue;
+            }
+            const double meanVpar = edgeMoments[momentIndex(ss, side, 1)]/weight;
+            const double Tpar = species.M*max(edgeMoments[momentIndex(ss, side, 2)]/weight -
+                                               meanVpar*meanVpar, 0.0);
+            const double Tper = 0.5*species.M*edgeMoments[momentIndex(ss, side, 3)]/weight;
+            densityWeightedTemperature += weight*(Tpar + 2.0*Tper)/3.0;
+            totalWeight += weight;
+        }
+        electronTemperature[side] = totalWeight > double_zero ?
+                                    densityWeightedTemperature/totalWeight :
+                                    fluidElectronTemperature(side);
+    }
+
+    for (int ss=0; ss<speciesCount; ss++)
+    {
+        ionSpecies_TYP &ion = IONS[ss];
+        if (ion.Z <= 0.0 || ion.M <= double_zero)
+        {
+            continue;
+        }
+
+        for (int side=0; side<2; side++)
+        {
+            const double weight = edgeMoments[momentIndex(ss, side, 0)];
+            if (weight <= double_zero)
+            {
+                continue;
+            }
+
+            const double meanVpar = edgeMoments[momentIndex(ss, side, 1)]/weight;
+            const double ionTpar = ion.M*max(edgeMoments[momentIndex(ss, side, 2)]/weight -
+                                              meanVpar*meanVpar, 0.0);
+            const double soundSpeed = sqrt(max(electronTemperature[side] + params.bohm.gammaI*ionTpar, 0.0)/ion.M);
+            const double outwardSign = side == 0 ? -1.0 : 1.0;
+            const double outwardFlow = outwardSign*meanVpar;
+            if (!isfinite(soundSpeed) || soundSpeed <= double_zero || outwardFlow > soundSpeed)
+            {
+                continue;
+            }
+
+            const double velocityShift = outwardSign*soundSpeed - meanVpar;
+            for (int ii=0; ii<static_cast<int>(ion.NSP); ii++)
+            {
+                if (inEdge(ion.X_p(ii), side) && ion.a_p(ii) > double_zero)
+                {
+                    ion.V_p(ii,0) += velocityShift;
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================
