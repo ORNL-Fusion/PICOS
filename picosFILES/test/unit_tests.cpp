@@ -10,8 +10,32 @@
 
 #include "../src/collisionOperator.h"
 #include "../src/particleBC.h"
+#include "../src/PIC.h"
 
 namespace {
+void guiding_center_mirror_force_unit_test() {
+    const double qa = 2.0;
+    const double ma = 4.0;
+    const std::array<double, 3> fields = {3.0, 5.0, 7.0};
+    const std::array<double, 3> state = {0.0, 11.0, 13.0};
+    std::array<double, 3> rhs{};
+
+    PIC_TYP::guidingCenterVperRhs(qa, ma, fields, state, rhs);
+
+    const double expectedParallel =
+        -0.5*state[2]*state[2]*fields[2]/fields[1] + qa*fields[0]/ma;
+    assert(std::abs(rhs[0] - state[1]) < 1.0e-15);
+    assert(std::abs(rhs[1] - expectedParallel) < 1.0e-13);
+    assert(std::abs(rhs[2] - 0.5*state[2]*state[1]*fields[2]/fields[1]) < 1.0e-13);
+
+    // The parallel mirror force depends on v_perpendicular squared and is
+    // therefore unchanged when v_parallel reverses direction.
+    auto reversed = state;
+    reversed[1] *= -1.0;
+    PIC_TYP::guidingCenterVperRhs(qa, ma, fields, reversed, rhs);
+    assert(std::abs(rhs[1] - expectedParallel) < 1.0e-13);
+}
+
 void allocate_test_species(ionSpecies_TYP& species, double z, double ncp) {
     species.Z = z;
     species.Q = z;
@@ -100,6 +124,7 @@ template<std::floating_point T> void run_tests() {
         coll_operator_TYP opt;
         opt.unit_test();
         pair_source_unit_test();
+        guiding_center_mirror_force_unit_test();
     }
 }
 

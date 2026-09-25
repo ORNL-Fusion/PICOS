@@ -37,6 +37,22 @@ void enforceKineticElectronSpeedLimit(const params_TYP &params, ionSpecies_TYP &
 }
 }
 
+void PIC_TYP::guidingCenterVperRhs(const double qa, const double Ma,
+                                  const std::array<double, 3> &EM,
+                                  const std::array<double, 3> &ZN,
+                                  std::array<double, 3> &F)
+{
+    const double E = EM[0];
+    const double B = EM[1];
+    const double dB = EM[2];
+    const double vpar = ZN[1];
+    const double vper = ZN[2];
+
+    F[0] = vpar;
+    F[1] = -0.5*vper*vper*dB/B + (qa/Ma)*E;
+    F[2] = 0.5*vper*vpar*dB/B;
+}
+
 #if 0
 void PIC_TYP::MPI_AllreduceVec(const params_TYP * params, arma::vec * v)
 {
@@ -261,22 +277,7 @@ PIC_TYP::PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vecto
         case 1:
             pre = [](const double EM, const double Ma, const double vper, double &Z0)->void {};
             post = [](const double EM, const double Ma, double &Z1)->void {};
-            method = [](const double qa, const double Ma, const std::array<double, 3> &EM, const std::array<double, 3> &ZN, std::array<double, 3> &F)->void
-            {
-                // Gather fields:
-                const double E    = EM[0];
-                const double B    = EM[1];
-                const double dB   = EM[2];
-
-                // Gather particle states:
-                const double vpar = ZN[1];
-                const double vper = ZN[2];
-
-                // Output:
-                F[0] = vpar;
-                F[2] = 0.5*vper*vpar*dB/B;
-                F[1] = -F[2] + (qa/Ma)*E;
-            };
+            method = guidingCenterVperRhs;
             break;
         case 2:
             pre = [](const double EM, const double Ma, const double vper, double &Z0)->void

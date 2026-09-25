@@ -87,6 +87,13 @@ protected:
 	void calculateDerivedIonMoments(const params_TYP &params, CS_TYP &CS, ionSpecies_TYP &ION) const;
 
   public:
+	// Right-hand side for the (x, v_parallel, v_perpendicular)
+	// guiding-center equations. Public for a focused mirror-force regression
+	// test that does not require MPI or mesh construction.
+	static void guidingCenterVperRhs(double qa, double Ma,
+	                                  const std::array<double, 3> &EM,
+	                                  const std::array<double, 3> &ZN,
+	                                  std::array<double, 3> &F);
 
 	PIC_TYP(const params_TYP &params, CS_TYP &CS, fields_TYP &fields, vector<ionSpecies_TYP> &IONS, electrons_TYP &electrons);
 
