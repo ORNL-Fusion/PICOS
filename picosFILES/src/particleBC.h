@@ -98,6 +98,7 @@ public:
         double N5;
         double E5;
         double P5;
+		double E6;
     };
     dot_buffer dot_;
 

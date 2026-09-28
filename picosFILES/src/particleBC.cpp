@@ -62,7 +62,7 @@ void resetRfHistory(ionSpecies_TYP &species, int ii)
 }
 
 particleBC_TYP::particleBC_TYP() :
-dot_({0, 0, 0, 0, 0, 0, 0}),
+dot_({0, 0, 0, 0, 0, 0, 0, 0}),
 pairSourceBacklogIonPairs_(0.0),
 pairSourceBacklogElectronPairs_(0.0),
 sheathElectronChargeCredit_({0.0, 0.0}),

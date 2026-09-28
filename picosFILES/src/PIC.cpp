@@ -544,6 +544,121 @@ void PIC_TYP::enforceKineticElectronQuasiNeutrality(const params_TYP &params,
 	}
 }
 
+// Match the kinetic-electron thermal spread to the prescribed fluid-electron
+// temperature without changing marker weights or the cell-averaged parallel
+// flow.  The hybrid steady-state closure treats Te as an externally maintained
+// profile; this operator supplies the equivalent, explicit heat reservoir for
+// a kinetic-electron background.  It is intentionally optional so that an ECH
+// restart can evolve the electron distribution freely.
+double PIC_TYP::applyKineticElectronThermostat(const params_TYP &params,
+                                               vector<ionSpecies_TYP> &IONS)
+{
+	if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR ||
+	    params.SW.kineticElectronThermostat == 0)
+	{
+		return 0.0;
+	}
+
+	const int cellCount = params.mesh.NX_IN_SIM;
+	constexpr int momentsPerCell = 5;
+	const double relaxation = params.kineticElectronThermostatRelaxation;
+	double energyChange = 0.0;
+
+	for (ionSpecies_TYP &species : IONS)
+	{
+		if (species.Z >= 0.0 || species.M <= double_zero)
+		{
+			continue;
+		}
+
+		vector<double> moments(static_cast<size_t>(cellCount)*momentsPerCell, 0.0);
+		auto index = [](const int cell, const int moment)
+		{
+			return static_cast<size_t>(cell)*momentsPerCell + moment;
+		};
+
+		for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+		{
+			const double weight = species.NCP*species.a_p(ii);
+			if (weight <= double_zero)
+			{
+				continue;
+			}
+			const int cell = std::clamp(static_cast<int>(species.mn(ii)), 0, cellCount - 1);
+			const double vpar = species.V_p(ii,0);
+			const double vper = perpendicularSpeed(species, ii, params);
+			const double targetTemperature = species.Te_p(ii);
+			moments[index(cell,0)] += weight;
+			moments[index(cell,1)] += weight*vpar;
+			moments[index(cell,2)] += weight*vpar*vpar;
+			moments[index(cell,3)] += weight*vper*vper;
+			moments[index(cell,4)] += weight*targetTemperature;
+		}
+		MPI_Allreduce(MPI_IN_PLACE, moments.data(), static_cast<int>(moments.size()),
+		              MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+		vector<double> meanVpar(cellCount, 0.0);
+		vector<double> parallelScale(cellCount, 1.0);
+		vector<double> perpendicularScale(cellCount, 1.0);
+		for (int cell=0; cell<cellCount; cell++)
+		{
+			const double weight = moments[index(cell,0)];
+			if (weight <= double_zero)
+			{
+				continue;
+			}
+			const double mean = moments[index(cell,1)]/weight;
+			const double parallelVariance =
+				max(moments[index(cell,2)]/weight - mean*mean, 0.0);
+			const double perpendicularMeanSquare = max(moments[index(cell,3)]/weight, 0.0);
+			const double targetTemperature = moments[index(cell,4)]/weight;
+			const double parallelTemperature = species.M*parallelVariance;
+			const double perpendicularTemperature = 0.5*species.M*perpendicularMeanSquare;
+			meanVpar[cell] = mean;
+			if (isfinite(targetTemperature) && targetTemperature > double_zero &&
+			    parallelTemperature > double_zero)
+			{
+				parallelScale[cell] = sqrt(max(0.0, 1.0 + relaxation*
+					(targetTemperature/parallelTemperature - 1.0)));
+			}
+			if (isfinite(targetTemperature) && targetTemperature > double_zero &&
+			    perpendicularTemperature > double_zero)
+			{
+				perpendicularScale[cell] = sqrt(max(0.0, 1.0 + relaxation*
+					(targetTemperature/perpendicularTemperature - 1.0)));
+			}
+
+			const double parallelThermalSquare =
+				max(moments[index(cell,2)] - weight*mean*mean, 0.0);
+			const double initialSpeedSquare = moments[index(cell,2)] + moments[index(cell,3)];
+			const double finalSpeedSquare = weight*mean*mean +
+				parallelScale[cell]*parallelScale[cell]*parallelThermalSquare +
+				perpendicularScale[cell]*perpendicularScale[cell]*moments[index(cell,3)];
+			energyChange += 0.5*species.M*(finalSpeedSquare - initialSpeedSquare);
+		}
+
+		const int particleCount = species.NSP;
+		#pragma omp parallel for default(none) shared(species, params, meanVpar, parallelScale, perpendicularScale, particleCount, cellCount)
+		for (int ii=0; ii<particleCount; ii++)
+		{
+			if (species.a_p(ii) <= double_zero)
+			{
+				continue;
+			}
+			const int cell = std::clamp(static_cast<int>(species.mn(ii)), 0, cellCount - 1);
+			const double mean = meanVpar[cell];
+			species.V_p(ii,0) = mean + parallelScale[cell]*(species.V_p(ii,0) - mean);
+			setPerpendicularSpeed(species, ii, params,
+			                      perpendicularScale[cell]*perpendicularSpeed(species, ii, params));
+			const double vper = perpendicularSpeed(species, ii, params);
+			species.mu_p(ii) = 0.5*species.M*vper*vper/
+			                   std::max(species.BX_p(ii), double_zero);
+		}
+	}
+
+	return params.DT > double_zero ? energyChange/params.DT : 0.0;
+}
+
 double PIC_TYP::perpendicularSpeed(const ionSpecies_TYP &ION, int ii, const params_TYP &params)
 {
 	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)

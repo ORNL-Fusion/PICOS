@@ -45,6 +45,26 @@ For `Poisson_BCModel=2`, low parallel-energy kinetic electrons reflect from the 
 
 The current-balanced sheath enforces global ambipolar wall loss; it does not by itself enforce pointwise quasineutrality. The reformulated solver now uses the required centered second-time-derivative update and an integration constant consistent with both wall potentials. With the present explicit particle push, however, local Gauss-law/quasineutral preservation is not guaranteed. Treat long fully kinetic open-field-line steady states as validation cases until a charge-conserving coupled AP particle-field discretization is implemented.
 
+For a kinetic restart intended to reproduce a hybrid steady background, the
+hybrid electron closure's prescribed temperature represents an external heat
+reservoir.  Its explicit kinetic counterpart is:
+
+```text
+SW_kineticElectronThermostat       1
+kineticElectronThermostatRelaxation 0.05
+```
+
+The thermostat rescales the parallel and perpendicular thermal spreads in each
+cell toward the prescribed `Te_m` profile while preserving marker weights and
+cell-averaged parallel electron flow.  Use it only while preparing or checking
+an ECH-off steady background.  Set `SW_kineticElectronThermostat=0` in the ECH
+stage so the electron distribution and high-energy tail evolve without a
+temperature clamp.  This option makes the hybrid heat-bath assumption explicit;
+it does not claim that a source-only open kinetic plasma is energetically closed.
+The supplied reservoir power is written as `boundary/E6` in each particle HDF5
+output, in watts after output normalization.  This makes the otherwise implicit
+power required by the hybrid prescribed-`Te` closure measurable.
+
 For kinetic collision runs, `SW_collisionSelfConservation=1` (the default)
 restores each species' exact global parallel momentum and kinetic energy after
 its stochastic like-species collision step.  This prevents finite-marker

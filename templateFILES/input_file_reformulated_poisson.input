@@ -42,6 +42,10 @@ SW_Collisions               0
 CollOperType                2
 SW_collisionConservationProjection 0
 collisionRandomSeed        -1
+// Optional hybrid-equivalent heat reservoir for kinetic steady-background generation.
+// Enable only in the ECH-off steady stage; disable for free kinetic/ECH evolution.
+SW_kineticElectronThermostat 0
+kineticElectronThermostatRelaxation 0.05
 SW_RFheating                1
 SW_RFheatingIons            0
 SW_RFheatingElectrons       1

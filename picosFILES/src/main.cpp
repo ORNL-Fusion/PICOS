@@ -235,6 +235,19 @@ int main(int argc, char* argv[])
             coll_operator.ApplyCollisions_AllSpecies(params, CS, IONS, electrons);
         }
 
+		// The hybrid steady-state model prescribes Te and therefore represents an
+		// external electron heat reservoir.  This optional kinetic counterpart
+		// restores only the cell thermal spread; density and parallel flow are
+		// unchanged.  Keep it off during the subsequent ECH evolution.
+		if (params.SW.kineticElectronThermostat == 1)
+		{
+			particleBC.dot_.E6 = PIC.applyKineticElectronThermostat(params, IONS);
+		}
+		else
+		{
+			particleBC.dot_.E6 = 0.0;
+		}
+
         // Apply RF operator:
         // =====================================================================
         if (params.SW.RFheating == 1)

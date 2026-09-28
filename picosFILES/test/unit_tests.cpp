@@ -273,6 +273,38 @@ void sonic_bohm_outflow_unit_test() {
     assert(std::abs(species[0].V_p(0,0) + 2.0) < 1.0e-14);
     assert(std::abs(species[0].V_p(1,0) - 1.0) < 1.0e-14);
 }
+
+void kinetic_electron_thermostat_unit_test() {
+    params_TYP params;
+    params.mpi.COMM = MPI_COMM_WORLD;
+    params.mpi.COMM_COLOR = PARTICLES_MPI_COLOR;
+    params.SW.kineticElectronThermostat = 1;
+    params.kineticElectronThermostatRelaxation = 1.0;
+    params.advanceParticleMethod = PARTICLE_PUSH_GC_VPER;
+    params.mesh.NX_IN_SIM = 1;
+
+    std::vector<ionSpecies_TYP> species(1);
+    allocate_test_species(species[0], -1.0, 1.0);
+    species[0].M = 1.0;
+    species[0].mn.zeros(2);
+    species[0].Te_p.ones(2);
+    species[0].Te_p *= 4.0;
+    species[0].BX_p.ones(2);
+    species[0].mu_p.zeros(2);
+    species[0].V_p(0,0) = 0.0;
+    species[0].V_p(1,0) = 2.0;
+    species[0].V_p.col(1).fill(2.0);
+
+    const double thermostatPower = PIC_TYP::applyKineticElectronThermostat(params, species);
+
+    const double meanVpar = arma::mean(species[0].V_p.col(0));
+    const double Tpar = arma::mean(arma::square(species[0].V_p.col(0) - meanVpar));
+    const double Tper = 0.5*arma::mean(arma::square(species[0].V_p.col(1)));
+    assert(std::abs(meanVpar - 1.0) < 1.0e-14);
+    assert(std::abs(Tpar - 4.0) < 1.0e-14);
+    assert(std::abs(Tper - 4.0) < 1.0e-14);
+    assert(thermostatPower > 0.0);
+}
 }
 
 //------------------------------------------------------------------------------
@@ -290,6 +322,7 @@ template<std::floating_point T> void run_tests() {
         reformulated_logical_sheath_unit_test();
         current_balanced_logical_sheath_unit_test();
         sonic_bohm_outflow_unit_test();
+        kinetic_electron_thermostat_unit_test();
         guiding_center_mirror_force_unit_test();
     }
 }

@@ -547,6 +547,8 @@ void init_TYP::readInputFile(params_TYP * params)
         getInt("SW_electronPlasmaTimeStepLimiter", defaultElectronPlasmaLimiter);
 	params->SW.kineticElectronQuasiNeutralProjection =
 		getInt("SW_kineticElectronQuasiNeutralProjection", 0);
+	params->SW.kineticElectronThermostat =
+		getInt("SW_kineticElectronThermostat", 0);
 	params->kineticElectronQuasiNeutralIterations =
 		getInt("kineticElectronQuasiNeutralIterations", 2);
 	params->kineticElectronQuasiNeutralRelaxation =
@@ -555,13 +557,17 @@ void init_TYP::readInputFile(params_TYP * params)
 		getDouble("kineticElectronQuasiNeutralMaxScale", 4.0);
 	params->kineticElectronQuasiNeutralDensityFloor =
 		getDouble("kineticElectronQuasiNeutralDensityFloor", 1.0e-4);
+	params->kineticElectronThermostatRelaxation =
+		getDouble("kineticElectronThermostatRelaxation", 1.0);
 	if (params->kineticElectronQuasiNeutralIterations < 1 ||
 	    params->kineticElectronQuasiNeutralRelaxation <= 0.0 ||
 	    params->kineticElectronQuasiNeutralRelaxation > 1.0 ||
 	    params->kineticElectronQuasiNeutralMaxScale < 1.0 ||
-	    params->kineticElectronQuasiNeutralDensityFloor < 0.0)
+	    params->kineticElectronQuasiNeutralDensityFloor < 0.0 ||
+	    params->kineticElectronThermostatRelaxation <= 0.0 ||
+	    params->kineticElectronThermostatRelaxation > 1.0)
 	{
-		cout << "ERROR: invalid kinetic-electron quasineutral projection controls" << endl;
+		cout << "ERROR: invalid kinetic-electron projection/thermostat controls" << endl;
 		MPI_Abort(MPI_COMM_WORLD,-116);
 	}
 	params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
