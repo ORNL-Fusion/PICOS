@@ -52,6 +52,13 @@ private:
     void collisionTotals(const params_TYP &params, const CS_TYP &CS,
                          const vector<ionSpecies_TYP> &IONS,
                          double totals[3]) const;
+    void speciesCollisionTotals(const params_TYP &params, const CS_TYP &CS,
+                                const ionSpecies_TYP &species,
+                                double totals[3]) const;
+    void applySelfCollisionConservationProjection(const params_TYP &params,
+                                                  const CS_TYP &CS,
+                                                  ionSpecies_TYP &species,
+                                                  const double initialTotals[3]) const;
     void applyCollisionConservationProjection(const params_TYP &params,
                                               const CS_TYP &CS,
                                               vector<ionSpecies_TYP> &IONS,
@@ -116,6 +123,36 @@ public:
     void ApplyCollisions_AllSpecies(const params_TYP &params, const CS_TYP &CS, vector<ionSpecies_TYP> &IONS, const electrons_TYP &electrons);
 
     void unit_test() {
+        params_TYP conservationParams;
+        conservationParams.mpi.COMM = MPI_COMM_WORLD;
+        CS_TYP conservationScales;
+        conservationScales.mass = 1.0;
+        conservationScales.velocity = 1.0;
+        ionSpecies_TYP conservationSpecies;
+        conservationSpecies.M = 1.0;
+        conservationSpecies.NCP = 1.0;
+        conservationSpecies.NSP = 2;
+        conservationSpecies.a_p.ones(2);
+        conservationSpecies.V_p.zeros(2,2);
+        conservationSpecies.V_p(0,0) = -1.0;
+        conservationSpecies.V_p(1,0) = 1.0;
+        conservationSpecies.V_p.col(1).ones();
+        double expectedTotals[3] = {0.0, 0.0, 0.0};
+        speciesCollisionTotals(conservationParams, conservationScales,
+                               conservationSpecies, expectedTotals);
+        conservationSpecies.V_p.col(0) = 2.0*conservationSpecies.V_p.col(0) + 0.5;
+        conservationSpecies.V_p.col(1) *= 2.0;
+        applySelfCollisionConservationProjection(
+            conservationParams, conservationScales, conservationSpecies,
+            expectedTotals);
+        double projectedTotals[3] = {0.0, 0.0, 0.0};
+        speciesCollisionTotals(conservationParams, conservationScales,
+                               conservationSpecies, projectedTotals);
+        for (int ii=0; ii<3; ii++)
+        {
+            assert(std::abs(projectedTotals[ii]-expectedTotals[ii]) < 1.0e-12);
+        }
+
         const double wx = randoms[picos::random::thread()]();
         const double wy = randoms[picos::random::thread()]();
         double w;

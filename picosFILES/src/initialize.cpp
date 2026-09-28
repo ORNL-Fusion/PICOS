@@ -567,6 +567,9 @@ void init_TYP::readInputFile(params_TYP * params)
 	params->SW.BfieldSolve   = stoi( parametersStringMap["SW_BfieldSolve"] );
 	params->SW.Collisions    = stoi( parametersStringMap["SW_Collisions"] );
 	params->SW.collisionConservationProjection = getInt("SW_collisionConservationProjection", 0);
+	params->SW.collisionSelfSpecies = getInt("SW_collisionSelfSpecies", 1);
+	params->SW.collisionCrossSpecies = getInt("SW_collisionCrossSpecies", 1);
+	params->SW.collisionSelfConservation = getInt("SW_collisionSelfConservation", 1);
 	params->SW.RFheating     = stoi( parametersStringMap["SW_RFheating"] );
 	params->SW.Bohm          = getInt("SW_Bohm", 0);
 	params->SW.pairSource    = getInt("SW_pairSource", 0);
@@ -604,6 +607,7 @@ void init_TYP::readInputFile(params_TYP * params)
     params->restart.continueTime = getInt("restart_continueTime", 0);
     params->restart.initializeMissingSpecies = getInt("restart_initializeMissingSpecies", 0);
     params->restart.cloneMissingSpeciesFrom = getInt("restart_cloneMissingSpeciesFrom", 0);
+    params->restart.matchClonedParallelFlow = getInt("restart_matchClonedParallelFlow", 1);
     params->restart.particleFilePrefix = getString("restart_particleFilePrefix", "PARTICLES_FILE_");
     params->restart.fieldsFilePrefix = getString("restart_fieldsFilePrefix", "FIELDS_FILE_");
     params->restart.fieldsFileName = getString("restart_fieldsFileName", "");
@@ -1782,6 +1786,17 @@ void init_TYP::loadRestartState(params_TYP * params, fields_TYP * fields, vector
                             if (initializedVelocity.n_rows > 0)
                             {
                                 target.V_p.row(ii) = initializedVelocity.row(ii % initializedVelocity.n_rows);
+                                if (params->restart.matchClonedParallelFlow == 1 &&
+                                    target.Z*source.Z < 0.0)
+                                {
+                                    // The independently initialized missing species has zero
+                                    // mean parallel flow.  Add the loaded source marker's
+                                    // parallel velocity so the hybrid-to-kinetic handoff starts
+                                    // approximately current-neutral at every cloned position.
+                                    // The source thermal speed is negligible compared with the
+                                    // electron thermal speed for the intended ion-to-electron clone.
+                                    target.V_p(ii,0) += source.V_p(sourceParticle,0);
+                                }
                             }
                         }
                         if (params->mpi.IS_PARTICLES_ROOT)

@@ -45,6 +45,13 @@ For `Poisson_BCModel=2`, low parallel-energy kinetic electrons reflect from the 
 
 The current-balanced sheath enforces global ambipolar wall loss; it does not by itself enforce pointwise quasineutrality. The reformulated solver now uses the required centered second-time-derivative update and an integration constant consistent with both wall potentials. With the present explicit particle push, however, local Gauss-law/quasineutral preservation is not guaranteed. Treat long fully kinetic open-field-line steady states as validation cases until a charge-conserving coupled AP particle-field discretization is implemented.
 
+For kinetic collision runs, `SW_collisionSelfConservation=1` (the default)
+restores each species' exact global parallel momentum and kinetic energy after
+its stochastic like-species collision step.  This prevents finite-marker
+energy diffusion from producing secular kinetic-electron heating.  The
+diagnostic switches `SW_collisionSelfSpecies` and `SW_collisionCrossSpecies`
+default to `1`; disable one only when isolating collision channels.
+
 For the reformulated Poisson model from `/Users/78k/Downloads/Reformulated Poissons equation.pdf`, add:
 
 ```text
@@ -461,6 +468,9 @@ electron initial-density profile derived from the hybrid checkpoint and use
 For a locally charge-balanced transition, `restart_cloneMissingSpeciesFrom 1`
 clones the loaded ion-marker positions into every missing species and rescales
 their marker weights to match charge.  The missing species keeps independently
-sampled input-deck velocities.  This is preferable to profile sampling for a
+sampled input-deck thermal velocities.  By default,
+`restart_matchClonedParallelFlow 1` adds the cloned opposite-charge source
+marker's parallel velocity so the handoff begins approximately current-neutral;
+set it to `0` only for a deliberately zero-flow missing species.  This is preferable to profile sampling for a
 short kinetic-electron ECH handoff because it removes deposition noise at the
-transition.  The option is disabled by default.
+transition.  Position cloning itself is disabled by default.

@@ -485,6 +485,9 @@ struct SW_TYP
 	int BfieldSolve;
 	int Collisions;
 	int collisionConservationProjection;
+	int collisionSelfSpecies;
+	int collisionCrossSpecies;
+	int collisionSelfConservation;
 	int RFheating;
 	int Bohm;
 	int pairSource;
@@ -502,6 +505,9 @@ struct SW_TYP
 		BfieldSolve   = 0;
 		Collisions    = 0;
 		collisionConservationProjection = 0;
+		collisionSelfSpecies = 1;
+		collisionCrossSpecies = 1;
+		collisionSelfConservation = 1;
 		RFheating     = 0;
 		Bohm          = 0;
 		pairSource    = 0;
@@ -811,6 +817,7 @@ struct restart_TYP
 	int continueTime;
 	int initializeMissingSpecies;
 	int cloneMissingSpeciesFrom;
+	int matchClonedParallelFlow;
 	double startTime;
 	string path;
 	string particleFilePrefix;
@@ -824,6 +831,7 @@ struct restart_TYP
 		continueTime = 0;
 		initializeMissingSpecies = 0;
 		cloneMissingSpeciesFrom = 0;
+		matchClonedParallelFlow = 1;
 		startTime = 0.0;
 		path = "";
 		particleFilePrefix = "PARTICLES_FILE_";

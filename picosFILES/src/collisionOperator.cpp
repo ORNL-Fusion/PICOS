@@ -209,6 +209,77 @@ void coll_operator_TYP::collisionTotals(const params_TYP &params, const CS_TYP &
     MPI_Allreduce(local, totals, 3, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
 }
 
+void coll_operator_TYP::speciesCollisionTotals(const params_TYP &params,
+                                               const CS_TYP &CS,
+                                               const ionSpecies_TYP &species,
+                                               double totals[3]) const
+{
+    double local[3] = {0.0, 0.0, 0.0};
+    const double mass = species.M*CS.mass;
+    const int velocityColumns = species.V_p.n_cols;
+    for (size_t ii=0; ii<species.NSP; ii++)
+    {
+        const double realWeight = species.NCP*species.a_p(ii);
+        const double vx = species.V_p(ii,0)*CS.velocity;
+        double speed2 = vx*vx;
+        for (int jj=1; jj<velocityColumns; jj++)
+        {
+            const double vv = species.V_p(ii,jj)*CS.velocity;
+            speed2 += vv*vv;
+        }
+        local[0] += mass*realWeight;
+        local[1] += mass*realWeight*vx;
+        local[2] += 0.5*mass*realWeight*speed2;
+    }
+    MPI_Allreduce(local, totals, 3, MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+}
+
+void coll_operator_TYP::applySelfCollisionConservationProjection(
+    const params_TYP &params, const CS_TYP &CS, ionSpecies_TYP &species,
+    const double initialTotals[3]) const
+{
+    double currentTotals[3] = {0.0, 0.0, 0.0};
+    speciesCollisionTotals(params, CS, species, currentTotals);
+    const double mass = initialTotals[0];
+    if (!isfinite(mass) || mass <= double_zero ||
+        !isfinite(initialTotals[1]) || !isfinite(initialTotals[2]) ||
+        !isfinite(currentTotals[1]) || !isfinite(currentTotals[2]))
+    {
+        return;
+    }
+
+    const double targetU = initialTotals[1]/mass;
+    const double currentU = currentTotals[1]/mass;
+    const double shift = (targetU-currentU)/CS.velocity;
+    for (size_t ii=0; ii<species.NSP; ii++)
+    {
+        species.V_p(ii,0) += shift;
+    }
+
+    double shiftedTotals[3] = {0.0, 0.0, 0.0};
+    speciesCollisionTotals(params, CS, species, shiftedTotals);
+    const double bulkEnergy = 0.5*mass*targetU*targetU;
+    const double targetThermalEnergy = initialTotals[2]-bulkEnergy;
+    const double shiftedThermalEnergy = shiftedTotals[2]-bulkEnergy;
+    if (!isfinite(targetThermalEnergy) || !isfinite(shiftedThermalEnergy) ||
+        targetThermalEnergy <= double_zero || shiftedThermalEnergy <= double_zero)
+    {
+        return;
+    }
+
+    const double scale = sqrt(targetThermalEnergy/shiftedThermalEnergy);
+    const double targetUNormalized = targetU/CS.velocity;
+    for (size_t ii=0; ii<species.NSP; ii++)
+    {
+        species.V_p(ii,0) = targetUNormalized +
+            scale*(species.V_p(ii,0)-targetUNormalized);
+        for (arma::uword jj=1; jj<species.V_p.n_cols; jj++)
+        {
+            species.V_p(ii,jj) *= scale;
+        }
+    }
+}
+
 void coll_operator_TYP::applyCollisionConservationProjection(const params_TYP &params,
                                                              const CS_TYP &CS,
                                                              vector<ionSpecies_TYP> &IONS,
@@ -297,8 +368,9 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
             collisionTotals(params, CS, IONS, initialCollisionTotals);
         }
 
-        for (ionSpecies_TYP &iona : IONS)
+        for (size_t aa=0; aa<numIonSpecies; aa++)
         {
+            ionSpecies_TYP &iona = IONS[aa];
             // Number of particles is "aa" species:
             // ===================================
             const size_t NSP_a = iona.NSP;
@@ -324,6 +396,18 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
             for (size_t bb=0; bb < bbe; bb++)
             {
+				if ((bb == aa && params.SW.collisionSelfSpecies == 0) ||
+				    (bb != aa && params.SW.collisionCrossSpecies == 0))
+				{
+					continue;
+				}
+				double selfCollisionTotals[3] = {0.0, 0.0, 0.0};
+				const bool conserveSelfCollision =
+					(bb == aa && params.SW.collisionSelfConservation == 1);
+				if (conserveSelfCollision)
+				{
+					speciesCollisionTotals(params, CS, iona, selfCollisionTotals);
+				}
                 // Background species "bb" conditions:
 				// ==================================
 				if (bb < numIonSpecies) // Ions:
@@ -476,6 +560,12 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
                     } // "ii" particle loop
                 }
+
+				if (conserveSelfCollision)
+				{
+					applySelfCollisionConservationProjection(
+						params, CS, iona, selfCollisionTotals);
+				}
 
             } // "bb" species loop
 
