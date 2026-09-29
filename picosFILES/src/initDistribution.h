@@ -30,8 +30,6 @@ class initDist_TYP
 
     arma::vec x_profile;
 
-    double target(const params_TYP * params, ionSpecies_TYP * IONS, double X, double V3, double V2, double V1);
-
     public:
 
     initDist_TYP(const params_TYP * params);

@@ -64,147 +64,37 @@ void initDist_TYP::uniform_maxwellianDistribution(const params_TYP * params, ion
     }
 }
 
-double initDist_TYP::target(const params_TYP * params,  ionSpecies_TYP * IONS, double X, double V3, double V2, double V1)
-{
-    // Profile for interpolation:
-    arma::vec x_profile    = IONS->p_IC.x_profile;
-    arma::vec Tpar_profile = IONS->p_IC.Tpar_profile;
-    arma::vec Tper_profile = IONS->p_IC.Tper_profile;
-    arma::vec densityFraction_profile = IONS->p_IC.densityFraction_profile;
-
-    // Uncompress the density:
-    arma::vec Bx_profile = params->em_IC.Bx_profile;
-    double Bx0 = params->em_IC.BX;
-    densityFraction_profile = densityFraction_profile%pow(Bx0/Bx_profile,1.5);
-
-    /*
-    if (params->mpi.IS_PARTICLES_ROOT)
-    {
-        cout << "################" <<  endl;
-        cout << "################" <<  endl;
-        cout << densityFraction_profile <<  endl;
-        cout << "################" <<  endl;
-        cout << "################" <<  endl;
-    }
-    */
-
-    // Axial position query point:
-    arma::vec xx(1,1);
-    xx(0,0)= X;
-
-    arma::vec TT3(1,1);
-    interp1(x_profile,Tpar_profile,xx,TT3);
-    double T3 = TT3(0,0);   //Temperature profile in x
-
-    arma::vec TT2(1,1);
-    interp1(x_profile,Tper_profile,xx,TT2);
-    double T2 = TT2(0,0);   //Temperature profile in y
-
-    arma::vec TT1(1,1);
-    interp1(x_profile,Tper_profile,xx,TT1);
-    double T1 = TT1(0,0);   //Temperature profile in z
-
-    double k3=sqrt((IONS->M)/(2.0*M_PI*F_KB*T3));
-    double k2=sqrt((IONS->M)/(2.0*M_PI*F_KB*T2));
-    double k1=sqrt((IONS->M)/(2.0*M_PI*F_KB*T1));
-    double s3=sqrt((IONS->M)/(2.0*F_KB*T3));
-    double s2=sqrt((IONS->M)/(2.0*F_KB*T2));
-    double s1=sqrt((IONS->M)/(2.0*F_KB*T1));
-
-    double h= (k1*k2*k3)*exp(-sqrt(2)*(((V1*V1)*(s1*s1))+((V2*V2)*(s2*s2))+((V3*V3)*(s3*s3)))); // Pdf for 3-Velocities with temperature profile
-
-    arma::vec gg(1,1);
-    interp1(x_profile,densityFraction_profile,xx,gg); //Ne is multiplied with the compression factor
-    double g = gg(0,0); //density profile
-
-    return(g*h); //target 4-D Pdf
-}
-
-
 void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, ionSpecies_TYP * IONS, const int speciesIndex)
 {
-    // Initialize ion variables:
-    // =========================
-    //IONS->X_p = zeros(IONS->NSP);
-    //IONS->V_p = zeros(IONS->NSP,2);
+    if (params->initialConditionRandomSeed >= 0)
+        arma_rng::set_seed(initialConditionSeed(params, speciesIndex));
+    else
+        arma_rng::set_seed_random();
 
-    // Apply MH algorith for sampling the 4-D target PDF:
-    // ==================================================
-    arma::vec X(IONS->NSP,fill::zeros);  // Particles position along x-axis that will be generated using M-H.
-    arma::vec V3(IONS->NSP,fill::zeros); //Velocity profile in X
-    arma::vec V2(IONS->NSP,fill::zeros); //Velocity profile in Y
-    arma::vec V1(IONS->NSP,fill::zeros); //Velocity profile in Z
+    const arma::vec &x = IONS->p_IC.x_profile;
+    arma::vec spatialPdf = IONS->p_IC.densityFraction_profile
+                         % (params->em_IC.BX/params->em_IC.Bx_profile);
+    arma::vec cdf(x.n_elem, fill::zeros);
+    for (arma::uword ii=1; ii<x.n_elem; ++ii)
+        cdf(ii) = cdf(ii-1) + 0.5*(spatialPdf(ii-1) + spatialPdf(ii))*(x(ii) - x(ii-1));
+    if (!(cdf(cdf.n_elem-1) > 0.0))
+        throw std::runtime_error("Nonuniform initial-condition density integral must be positive");
+    cdf /= cdf(cdf.n_elem-1);
 
-    // Initial state of search:
-    // ========================
-    double X_test = 0.0;
-    double V3_test= 0.0;
-    double V2_test= 0.0;
-    double V1_test= 0.0;
+    arma::vec X;
+    interp1(cdf, x, randu<vec>(IONS->NSP), X, "linear");
 
-    // Seed the random number generator:
-    // ================================
-    std::default_random_engine generator(
-        params->initialConditionRandomSeed >= 0
-        ? initialConditionSeed(params, speciesIndex)
-        : static_cast<std::uint_fast64_t>((params->mpi.MPI_DOMAIN_NUMBER + 1 + time(NULL))*1000)
-    );
-
-    // Create uniform random number generator in [0,1]:
-    // ================================================
-    std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0);
-
-    // Test number number generator:
-    // ============================
-    bool flagTest = false;
-    if (flagTest)
-    {
-        std::cout << "From Rank: " << params->mpi.MPI_DOMAIN_NUMBER << std::endl;
-        std::cout << uniform_distribution(generator) << " " << std::endl;
-    }
-
-    // Apply MH algorithm:
-    // ====================
-    unsigned int iterator = 1;
-    double ratio = 0.0;
-    X(0)  = params->geometry.LX_min + 0.5*(params->geometry.LX_max - params->geometry.LX_min);
-    V3(0) = 0.25*IONS->VTpar;
-    V2(0) = 0.1*IONS->VTpar;
-    V1(0) = 0.5*IONS->VTpar;
-
-    // Iterate over all particles in process:
-    while(iterator < IONS->NSP)
-    {
-        // Select search point in phase space:
-        X_test  = params->geometry.LX_min + uniform_distribution(generator)*(params->geometry.LX_max - params->geometry.LX_min);
-        V3_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);
-        V2_test = 10*(IONS->VTper)*((uniform_distribution(generator))-0.5);
-        V1_test = 10*(IONS->VTpar)*((uniform_distribution(generator))-0.5);
-
-        // Calculate the probability ratio:
-        ratio = target(params, IONS, X_test,V3_test, V2_test, V1_test)/target(params, IONS,  X(iterator - 1),V3(iterator - 1),V2(iterator - 1),V1(iterator - 1));
-
-        // Choose outcome based on "ratio":
-        if (ratio >= 1.0)
-        {
-            X(iterator) = X_test;
-            V3(iterator) = V3_test;
-            V2(iterator) = V2_test;
-            V1(iterator) = V1_test;
-            iterator += 1;
-        }
-        else
-        {
-          if (uniform_distribution(generator) < ratio)
-          {
-              X(iterator) = X_test;
-              V3(iterator) = V3_test;
-              V2(iterator) = V2_test;
-              V1(iterator) = V1_test;
-              iterator += 1;
-          }
-        }
-    }
+    arma::vec TparLocal;
+    arma::vec TperLocal;
+    interp1(x, IONS->p_IC.Tpar_profile, X, TparLocal, "linear");
+    interp1(x, IONS->p_IC.Tper_profile, X, TperLocal, "linear");
+    const arma::vec sigmaPar = (IONS->VTpar/std::sqrt(2.0))
+                             * sqrt(TparLocal/IONS->p_IC.Tpar);
+    const arma::vec sigmaPer = (IONS->VTper/std::sqrt(2.0))
+                             * sqrt(TperLocal/IONS->p_IC.Tper);
+    const arma::vec V1 = sigmaPar%randn<vec>(IONS->NSP);
+    const arma::vec V2 = sigmaPer%randn<vec>(IONS->NSP);
+    const arma::vec V3 = sigmaPer%randn<vec>(IONS->NSP);
 
     // Assign value to "V":
     // ====================
@@ -220,8 +110,6 @@ void initDist_TYP::nonuniform_maxwellianDistribution(const params_TYP * params, 
         IONS->V_p.col(1) = V4;
     }
 
-    // Assign value to "x":
-    // ====================
     IONS->X_p = X;
 
 }
