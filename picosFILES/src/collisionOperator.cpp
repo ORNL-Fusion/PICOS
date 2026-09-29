@@ -51,8 +51,8 @@ void coll_operator_TYP::u_CollisionOperator(double &w,
     {
         const double E0 = max(mof*w, 0.0);
 
-        // Random number ±2:
-        const short Rm = 4*randuni() - 2;
+        // Match the Fortran reference's Bernoulli diffusion increment.
+        const double Rm = (randuni() < 0.5) ? -2.0 : 2.0;
 
         const double C = Rm*sqrt(max(0.0, Tbnu_e_dt*E0));
         // w is actually w^2 here. Clamp negative stochastic excursions to zero.
@@ -111,8 +111,9 @@ void coll_operator_TYP:: xi_CollisionOperator(double &xi,
 
         // Stochastic part:
         // ===============
-        // Random number between 0 and 1:
-        const short Rm = 2*randuni() - 1;
+        // Make the existing integer-uniform Bernoulli convention explicit and
+        // match the Fortran reference's pitch-scattering sign.
+        const double Rm = (randuni() < 0.5) ? -1.0 : 1.0;
 
         const double C = Rm*sqrt(max(0.0, 1.0 - xi*xi)*nu_D_dt);
 
@@ -423,7 +424,11 @@ void coll_operator_TYP::ApplyCollisions_AllSpecies(const params_TYP &params, con
 
 					// Background conditions:
 					nb = iona.n_p/CS.volume;
-					Tb = 0.5*(iona.Tpar_p + iona.Tper_p)*tnorm;
+					// Tper is the temperature of each of the two perpendicular
+					// degrees of freedom.  The scalar background temperature used
+					// by the isotropic collision coefficients is therefore the
+					// three-degree-of-freedom average, not a two-axis average.
+					Tb = (iona.Tpar_p + 2.0*iona.Tper_p)*(tnorm/3.0);
 					arma::vec nbSafe = nb;
 					nbSafe.transform( [](double val) { return max(val, double_zero); } );
 					uxb = nv_p/nbSafe;

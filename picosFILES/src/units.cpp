@@ -176,9 +176,96 @@ void units_TYP::broadcastFundamentalScales(params_TYP * params, FS_TYP * FS)
     MPI_Bcast(FS->ionGyroRadius, params->numberOfParticleSpecies, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
-void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
+void units_TYP::physicsConfigurationSanityCheck(params_TYP * params, FS_TYP * FS,
+                                                const vector<ionSpecies_TYP> * IONS)
 {
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	int positiveSelfConsistentSpecies = 0;
+	int negativeSelfConsistentSpecies = 0;
+	for (int ss=0; ss<params->numberOfParticleSpecies; ss++)
+	{
+		if (IONS->at(ss).Z > 0.0) positiveSelfConsistentSpecies++;
+		if (IONS->at(ss).Z < 0.0) negativeSelfConsistentSpecies++;
+	}
+
+	if (params->SW.EfieldSolve == 0 && params->SW.fieldSolveModel != FIELD_SOLVE_OHM)
+	{
+		if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+		{
+			cout << "ERROR: kinetic electrostatic field model selected while SW_EfieldSolve=0." << endl;
+		}
+		MPI_Abort(MPI_COMM_WORLD,-121);
+	}
+	if (params->SW.fieldSolveModel == FIELD_SOLVE_OHM && negativeSelfConsistentSpecies > 0)
+	{
+		if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+		{
+			cout << "ERROR: hybrid Ohm-law mode cannot include a negative-Z species in "
+			     << "numberOfParticleSpecies. Put kinetic-electron diagnostics after the "
+			     << "self-consistent species or select a kinetic field model." << endl;
+		}
+		MPI_Abort(MPI_COMM_WORLD,-121);
+	}
+	if (isKineticElectrostaticFieldSolve(params->SW.fieldSolveModel) &&
+	    (positiveSelfConsistentSpecies == 0 || negativeSelfConsistentSpecies == 0))
+	{
+		if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+		{
+			cout << "ERROR: a kinetic electrostatic field solve requires at least one "
+			     << "positive-Z and one negative-Z self-consistent species." << endl;
+		}
+		MPI_Abort(MPI_COMM_WORLD,-121);
+	}
+	if (params->SW.fieldSolveModel == FIELD_SOLVE_POISSON &&
+	    params->SW.kineticElectronQuasiNeutralProjection != 0)
+	{
+		if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+		{
+			cout << "ERROR: the marker-weight quasineutral projection is incompatible "
+			     << "with classical charge-density Poisson PIC." << endl;
+		}
+		MPI_Abort(MPI_COMM_WORLD,-121);
+	}
+
+	params->electronDebyeLength =
+		sqrt(F_EPSILON*F_KB*params->CV.Te/(params->CV.ne*F_E*F_E));
+	params->electronDebyeLengthToGrid =
+		params->electronDebyeLength/std::max(params->mesh.DX, double_zero);
+	if (params->SW.fieldSolveModel == FIELD_SOLVE_OHM)
+	{
+		params->kineticModelQualification = KINETIC_MODEL_HYBRID;
+	}
+	else if (params->SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
+	{
+		params->kineticModelQualification =
+			(params->SW.kineticElectronQuasiNeutralProjection != 0) ?
+			KINETIC_MODEL_QUASINEUTRAL_PROJECTED : KINETIC_MODEL_REFORMULATED;
+	}
+	else
+	{
+		const bool resolvedGrid = params->mesh.DX <= params->electronDebyeLength;
+		const bool plasmaLimiter = params->SW.electronPlasmaTimeStepLimiter != 0;
+		const bool gyroLimiter = params->advanceParticleMethod != PARTICLE_PUSH_BORIS_FULL_ORBIT ||
+		                         params->SW.electronGyroTimeStepLimiter != 0;
+		const bool resolvedPolicy = resolvedGrid && plasmaLimiter && gyroLimiter;
+		params->kineticModelQualification = resolvedPolicy ?
+			KINETIC_MODEL_CLASSICAL_PIC_RESOLVED : KINETIC_MODEL_CLASSICAL_PIC_UNDERRESOLVED;
+		if (!resolvedPolicy && params->SW.allowUnderResolvedFullPIC == 0)
+		{
+			if (params->mpi.MPI_DOMAIN_NUMBER == 0)
+			{
+				cout << "ERROR: classical Poisson PIC is not resolved/configured safely." << endl;
+				cout << "  lambda_D/DX = " << scientific << params->electronDebyeLengthToGrid << fixed << endl;
+				cout << "  electron plasma limiter = " << plasmaLimiter << endl;
+				cout << "  full-orbit electron gyro limiter = " << gyroLimiter << endl;
+				cout << "Use the reformulated/quasineutral kinetic model for MPEX-scale "
+				     << "transport, or explicitly set SW_allowUnderResolvedFullPIC=1 "
+				     << "for a non-production numerical smoke test." << endl;
+			}
+			MPI_Abort(MPI_COMM_WORLD,-122);
+		}
+	}
 
     // Print to terminal:
     // =================
@@ -186,10 +273,8 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
     {
         if (isKineticElectrostaticFieldSolve(params->SW.fieldSolveModel))
         {
-            const double electronDebyeLength = sqrt(F_EPSILON*F_KB*params->CV.Te/(params->CV.ne*F_E*F_E));
-
             cout << endl << "* * * * * * * * * * * * CHECKING KINETIC ELECTROSTATIC SPATIAL SCALES * * * * * * * * * * * * * * * * * *" << endl;
-            cout << "Electron Debye length to grid size ratio: " << scientific << electronDebyeLength/params->mesh.DX << fixed << endl;
+            cout << "Electron Debye length to grid size ratio: " << scientific << params->electronDebyeLengthToGrid << fixed << endl;
             if (params->SW.fieldSolveModel == FIELD_SOLVE_REFORMULATED_POISSON)
             {
                 if (params->em_IC.reformulatedPoissonLambda > 0.0)
@@ -202,10 +287,11 @@ void units_TYP::spatialScalesSanityCheck(params_TYP * params, FS_TYP * FS)
                 }
             }
 
-            if (params->mesh.DX > electronDebyeLength)
+            if (params->mesh.DX > params->electronDebyeLength)
             {
-                cout << "WARNING: DX is larger than the electron Debye length; electrostatic kinetic PIC results may be under-resolved." << endl;
+                cout << "WARNING: DX is larger than the electron Debye length." << endl;
             }
+			cout << "Kinetic model qualification code: " << params->kineticModelQualification << endl;
 
             cout << "* * * * * * * * * * * * KINETIC ELECTROSTATIC SPATIAL SCALES CHECKED  * * * * * * * * * * * * * * * * * *" << endl;
         }
@@ -353,9 +439,20 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	            CFL_particles = true;
 	        }
 
-	        params->DT = DT;
-            params->timeIterations = (int)ceil( params->simulationTime*params->ionGyroPeriod/params->DT );
-            params->outputCadenceIterations = (int)ceil( params->outputCadence*params->ionGyroPeriod/params->DT );
+	        const double requestedDuration = params->simulationTime*params->ionGyroPeriod;
+	        params->timeIterations = std::max(1, (int)ceil(requestedDuration/DT));
+	        // Shorten (never lengthen) the stable candidate timestep so the run
+	        // ends at the requested physical time instead of overshooting it.
+	        params->DT = requestedDuration/params->timeIterations;
+            params->outputCadenceIterations = std::max(1,
+			(int)ceil(params->outputCadence*params->ionGyroPeriod/params->DT));
+		if (hasKineticElectrons)
+		{
+			params->electronPlasmaDtRatio = std::isfinite(electronPlasmaTime) ?
+				params->DT/electronPlasmaTime : 0.0;
+			params->electronGyroDtRatio = std::isfinite(electronGyroPeriod) ?
+				params->DT/electronGyroPeriod : 0.0;
+		}
 	    }
 	}
 
@@ -366,6 +463,11 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
 	MPI_Bcast(&params->timeIterations, 1, MPI_INT, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
 
 	MPI_Bcast(&params->outputCadenceIterations, 1, MPI_INT, params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
+
+	MPI_Bcast(&params->electronPlasmaDtRatio, 1, MPI_DOUBLE,
+	          params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
+	MPI_Bcast(&params->electronGyroDtRatio, 1, MPI_DOUBLE,
+	          params->mpi.PARTICLES_ROOT_WORLD_RANK, MPI_COMM_WORLD);
 
 	// Print to terminal a brief summary:
     // ==================================
@@ -400,7 +502,8 @@ void units_TYP::defineTimeStep(params_TYP * params, vector<ionSpecies_TYP> * ION
             cout << "+ Simulation time: " << scientific << params->DT*params->timeIterations << fixed << " s" << endl;
             cout << "+ Simulation time: " << params->DT*params->timeIterations/params->ionGyroPeriod << " gyroperiods" << endl;
             cout << "+ Cadence for saving outputs: " << params->outputCadenceIterations << endl;
-            cout << "+ Number of outputs: " << floor(params->timeIterations/params->outputCadenceIterations) + 1 << endl;
+			cout << "+ Number of outputs: "
+			     << 2 + (params->timeIterations - 1)/params->outputCadenceIterations << endl;
             cout << "+ Cadence for checking stability: " << params->rateOfChecking << endl;
             cout << "* * * * * * * * * * * * * * * TIME STEP COMPUTED * * * * * * * * * * * * * * * * * * * * *" << endl;
 	}
@@ -546,6 +649,8 @@ void units_TYP::normalizeVariables(params_TYP * params, vector<ionSpecies_TYP> *
 		IONS->at(ii).p_IC.Tper /= CS->temperature;
 		IONS->at(ii).p_IC.Tper_profile /= CS->temperature;
 		IONS->at(ii).p_IC.Tpar_profile /= CS->temperature;
+		IONS->at(ii).p_IC.Upar /= CS->velocity;
+		IONS->at(ii).p_IC.Upar_profile /= CS->velocity;
 		IONS->at(ii).p_IC.densityFraction_profile /= CS->density;
         IONS->at(ii).p_IC.x_profile /= CS->length;
 

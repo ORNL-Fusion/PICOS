@@ -101,6 +101,10 @@ public:
 		double E6;
     };
     dot_buffer dot_;
+    double electronEnergyLostRate_;
+    double electronEnergyInjectedRate_;
+    double cumulativeElectronEnergyLost_;
+    double cumulativeElectronEnergyInjected_;
 
     particleBC_TYP();
 

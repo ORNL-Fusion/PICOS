@@ -367,7 +367,7 @@ init_TYP::init_TYP(params_TYP * params, int argc, char* argv[])
     if (params->mpi.MPI_DOMAIN_NUMBER == 0)
     {
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
-        cout << "* PICOS++, a 1D-2V GC hybrid PIC code for Open plasma Systems           *" << endl;
+        cout << "* PICOS++, kinetic/hybrid particle simulation for open plasma systems   *" << endl;
         cout << "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *" << endl;
         cout << endl;
     }
@@ -526,6 +526,11 @@ void init_TYP::readInputFile(params_TYP * params)
     // -------------------------------------------------------------------------
     params->DTc            = stod( parametersStringMap["DTc"] );
     params->simulationTime = std::stod( parametersStringMap["simulationTime"] );
+	if (params->DTc <= 0.0 || params->simulationTime <= 0.0)
+	{
+		cout << "ERROR: DTc and simulationTime must both be positive." << endl;
+		MPI_Abort(MPI_COMM_WORLD,-105);
+	}
 
     // Switches:
     // -------------------------------------------------------------------------
@@ -545,6 +550,8 @@ void init_TYP::readInputFile(params_TYP * params)
         getInt("SW_electronGyroTimeStepLimiter", defaultElectronGyroLimiter);
     params->SW.electronPlasmaTimeStepLimiter =
         getInt("SW_electronPlasmaTimeStepLimiter", defaultElectronPlasmaLimiter);
+	params->SW.allowUnderResolvedFullPIC =
+		getInt("SW_allowUnderResolvedFullPIC", 0);
 	params->SW.kineticElectronQuasiNeutralProjection =
 		getInt("SW_kineticElectronQuasiNeutralProjection", 0);
 	params->SW.kineticElectronThermostat =
@@ -738,10 +745,42 @@ void init_TYP::readInputFile(params_TYP * params)
     };
     readRFSpecies(params->RF.ions, "RF_ion");
     readRFSpecies(params->RF.electrons, "RF_electron");
+	if (params->SW.RFheating == 1)
+	{
+		auto validateRFSpecies = [params](const RF_SPECIES_TYP& rf,
+		                                  const string& label, bool enabled)
+		{
+			if (!enabled) return;
+			const bool valid = rf.n_harmonic > 0 && rf.freq > 0.0 &&
+				rf.x1 < rf.x2 && rf.t_ON <= rf.t_OFF &&
+				(rf.handedness == -1 || rf.handedness == 0 || rf.handedness == 1) &&
+				(rf.eFieldMode == RF_EFIELD_POWER_BALANCE || rf.eFieldMode == RF_EFIELD_FIXED) &&
+				(rf.resonanceMode == RF_RESONANCE_SIGN_CROSSING ||
+				 rf.resonanceMode == RF_RESONANCE_POST_RESONANCE_WINDOW) &&
+				rf.Prf >= 0.0 && rf.eFieldAmplitude >= 0.0 &&
+				rf.maxEnergyGainFraction >= 0.0 && rf.maxParticleEnergy >= 0.0 &&
+				rf.maxVelocityFractionC >= 0.0 && rf.maxVelocityFractionC < 1.0;
+			if (!valid)
+			{
+				cout << "ERROR: invalid " << label << " RF configuration. Require n>0, "
+				     << "frequency>0, x1<x2, t_ON<=t_OFF, handedness in {-1,0,1}, "
+				     << "valid field/resonance modes, non-negative limits, and velocity "
+				     << "fraction below 1." << endl;
+				MPI_Abort(MPI_COMM_WORLD,-123);
+			}
+		};
+		validateRFSpecies(params->RF.ions, "ion/ICH", params->RF.heatIons == 1);
+		validateRFSpecies(params->RF.electrons, "electron/ECH", params->RF.heatElectrons == 1);
+	}
 
     // Output variables:
     // -------------------------------------------------------------------------
     params->outputCadence           = stod( parametersStringMap["outputCadence"] );
+	if (params->outputCadence <= 0.0)
+	{
+		cout << "ERROR: outputCadence must be positive." << endl;
+		MPI_Abort(MPI_COMM_WORLD,-105);
+	}
     string nonparsed_variables_list = parametersStringMap["outputs_variables"].substr(1, parametersStringMap["outputs_variables"].length() - 2);
     params->outputs_variables       = split(nonparsed_variables_list,",");
 
@@ -804,6 +843,11 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
             return defaultValue;
         }
         return stod(found->second);
+    };
+    auto getIonString = [&parametersMap](const string& key, const string& defaultValue)
+    {
+        auto found = parametersMap.find(key);
+        return (found == parametersMap.end() || found->second.empty()) ? defaultValue : found->second;
     };
 
     // Determine the total number of ION species:
@@ -881,6 +925,16 @@ void init_TYP::readIonPropertiesFile(params_TYP * params, vector<ionSpecies_TYP>
 
             name = "IC_Tpar_NX_" + kk.str();
             ions.p_IC.Tpar_NX = stoi(parametersMap[name]);
+            name.clear();
+
+            name = "IC_Upar_" + kk.str();
+            ions.p_IC.Upar = getIonDouble(name, 0.0);
+            name.clear();
+            name = "IC_Upar_fileName_" + kk.str();
+            ions.p_IC.Upar_fileName = getIonString(name, "none");
+            name.clear();
+            name = "IC_Upar_NX_" + kk.str();
+            ions.p_IC.Upar_NX = static_cast<int>(getIonDouble(name, 0.0));
             name.clear();
 
             // Density fraction relative to 1:
@@ -1013,12 +1067,18 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
         std::string fileName2 = inputPath + IONS->at(ss).p_IC.Tper_fileName;
         std::string fileName3 = inputPath + IONS->at(ss).p_IC.Tpar_fileName;
         std::string fileName4 = inputPath + IONS->at(ss).p_IC.densityFraction_fileName;
+		std::string fileNameU = inputPath + IONS->at(ss).p_IC.Upar_fileName;
 
         // Load data from external file:
         // ============================
         IONS->at(ss).p_IC.Tper_profile.load(fileName2);
         IONS->at(ss).p_IC.Tpar_profile.load(fileName3);
         IONS->at(ss).p_IC.densityFraction_profile.load(fileName4);
+		if (IONS->at(ss).p_IC.Upar_NX > 1 && IONS->at(ss).p_IC.Upar_fileName != "none")
+		{
+			IONS->at(ss).p_IC.Upar_profile.load(fileNameU);
+			IONS->at(ss).p_IC.Upar_profile *= IONS->at(ss).p_IC.Upar;
+		}
 
         // Rescale the plasma Profiles:
         // ================================
@@ -1030,6 +1090,10 @@ void init_TYP::readInitialConditionProfiles(params_TYP * params, electrons_TYP *
         // =================
 	        int Tper_NX = IONS->at(ss).p_IC.Tper_NX;
 	        IONS->at(ss).p_IC.x_profile = linspace(params->geometry.LX_min,params->geometry.LX_max,Tper_NX);
+		if (IONS->at(ss).p_IC.Upar_profile.n_elem == 0)
+		{
+			IONS->at(ss).p_IC.Upar_profile.zeros(Tper_NX);
+		}
 	    }
 
 	    if (params->SW.pairSource == 1 &&

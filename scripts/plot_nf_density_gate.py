@@ -38,6 +38,24 @@ def relative_l2(x: np.ndarray, values: np.ndarray, ref_x: np.ndarray, ref: np.nd
     return float(np.linalg.norm(values - target) / np.linalg.norm(target))
 
 
+def final_step(particle_file: Path) -> int:
+    text = subprocess.run(
+        ["h5ls", str(particle_file)],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+    steps = [
+        int(line.split()[0])
+        for line in text.splitlines()
+        if line.split() and line.split()[0].isdigit()
+    ]
+    if not steps:
+        raise RuntimeError(f"No numeric output groups in {particle_file}")
+    return max(steps)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -89,7 +107,11 @@ def main() -> int:
     kinetic_initial_density = read_h5(
         kinetic_hdf / "PARTICLES_FILE_0.h5", "/0/ions/spp_2/n_m"
     )
-    kinetic_final_density = read_h5(kinetic_hdf / "PARTICLES_FILE_0.h5", "/10/ions/spp_2/n_m")
+    kinetic_particle_file = kinetic_hdf / "PARTICLES_FILE_0.h5"
+    kinetic_final_density = read_h5(
+        kinetic_particle_file,
+        f"/{final_step(kinetic_particle_file)}/ions/spp_2/n_m",
+    )
 
     hybrid_error = relative_l2(hybrid_x, hybrid_density, paper_x, paper_density)
     input_error = relative_l2(

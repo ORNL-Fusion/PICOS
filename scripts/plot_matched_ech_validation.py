@@ -285,6 +285,8 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--x1", type=float, default=2.6)
     parser.add_argument("--x2", type=float, default=2.8)
+    parser.add_argument("--step", type=int, default=None,
+                        help="Plot this output index instead of the final snapshot")
     args = parser.parse_args()
     root = args.root.resolve()
     out_dir = (args.out_dir or root / "plots").resolve()
@@ -293,7 +295,7 @@ def main() -> int:
         "off": root / "profile_control_1us/picosFILES/outputFiles/HDF5",
         "on": root / "profile_ech_1us/picosFILES/outputFiles/HDF5",
     }
-    steps = {key: final_step(value) for key, value in dirs.items()}
+    steps = {key: (args.step if args.step is not None else final_step(value)) for key, value in dirs.items()}
     profiles = {key: read_profiles(dirs[key], steps[key]) for key in dirs}
     particles = {key: read_electrons(dirs[key], steps[key]) for key in dirs}
     paths = [

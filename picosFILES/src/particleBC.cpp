@@ -63,6 +63,10 @@ void resetRfHistory(ionSpecies_TYP &species, int ii)
 
 particleBC_TYP::particleBC_TYP() :
 dot_({0, 0, 0, 0, 0, 0, 0, 0}),
+electronEnergyLostRate_(0.0),
+electronEnergyInjectedRate_(0.0),
+cumulativeElectronEnergyLost_(0.0),
+cumulativeElectronEnergyInjected_(0.0),
 pairSourceBacklogIonPairs_(0.0),
 pairSourceBacklogElectronPairs_(0.0),
 sheathElectronChargeCredit_({0.0, 0.0}),
@@ -414,6 +418,7 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
         dot_.E1 = 0;
         dot_.N2 = 0;
         dot_.E2 = 0;
+        double localElectronEnergyLostRate = 0.0;
 
         // Simulation time step:
         const double DT = params.DT;
@@ -421,10 +426,11 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
         for (ionSpecies_TYP &ion : IONS)
         {
             const double NCP = ion.NCP/DT;
+            double speciesElectronEnergyLostRate = 0.0;
 
             const int iie=ion.NSP;
             #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N1 += omp_in.N1, omp_out.E1 += omp_in.E1, omp_out.N2 += omp_in.N2, omp_out.E2 += omp_in.E2)
-            #pragma omp parallel for default(none) shared(params, ion, NCP, iie) reduction(sum:dot_)
+            #pragma omp parallel for default(none) shared(params, ion, NCP, iie) reduction(sum:dot_) reduction(+:speciesElectronEnergyLostRate)
             for(int ii=0; ii<iie; ii++)
             {
                 // Boundary 1:
@@ -435,6 +441,7 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
                     // Accumulate fluxes:
                     dot_.N1 += NCP*a_p;
                     dot_.E1 += NCP*a_p*ion.dE1(ii);
+                    if (ion.Z < 0.0) speciesElectronEnergyLostRate += NCP*a_p*ion.dE1(ii);
 
                 }
 
@@ -446,15 +453,20 @@ void particleBC_TYP::getFluxesAcrossBoundaries(const params_TYP &params, const C
                     // Accumulate fluxes:
                     dot_.N2 += NCP*a_p;
                     dot_.E2 += NCP*a_p*ion.dE2(ii);
+                    if (ion.Z < 0.0) speciesElectronEnergyLostRate += NCP*a_p*ion.dE2(ii);
 
                 } // if
 
             } // omp parallel for
 
+            localElectronEnergyLostRate += speciesElectronEnergyLostRate;
+
         } // Species
 
         // Reduce over all MPI process
         MPI_AllreduceDouble<4> (params,&dot_.N1);
+        MPI_Allreduce(&localElectronEnergyLostRate, &electronEnergyLostRate_, 1,
+                      MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
 
     } // Particle MPI
 }
@@ -626,6 +638,8 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
     {
         applyPairSourceReinjection(params,CS,fields,IONS);
         getParticleInjectionRates(params,CS,fields,IONS);
+        cumulativeElectronEnergyLost_ += electronEnergyLostRate_*params.DT;
+        cumulativeElectronEnergyInjected_ += electronEnergyInjectedRate_*params.DT;
         return;
     }
 
@@ -678,6 +692,8 @@ void particleBC_TYP::applyParticleReinjection(const params_TYP &params, const CS
     // Calculate actual fueling rate and power:
     // =======================================================
     getParticleInjectionRates(params,CS,fields,IONS);
+    cumulativeElectronEnergyLost_ += electronEnergyLostRate_*params.DT;
+    cumulativeElectronEnergyInjected_ += electronEnergyInjectedRate_*params.DT;
 
 }
 
@@ -688,15 +704,17 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
         dot_.N5 = 0;
         dot_.E5 = 0;
         dot_.P5 = 0;
+        double localElectronEnergyInjectedRate = 0.0;
         const double DT = params.DT;
 
         for (ionSpecies_TYP &ion : IONS)
         {
             const double NCP = ion.NCP/DT;
+            double speciesElectronEnergyInjectedRate = 0.0;
 
             const int iie=ion.NSP;
             #pragma omp declare reduction(sum : struct dot_buffer : omp_out.N5 += omp_in.N5, omp_out.E5 += omp_in.E5, omp_out.P5 += omp_in.P5)
-            #pragma omp parallel for default(none) shared(ion, iie, NCP) reduction(sum:dot_)
+            #pragma omp parallel for default(none) shared(ion, iie, NCP) reduction(sum:dot_) reduction(+:speciesElectronEnergyInjectedRate)
             for(int ii=0; ii<iie; ii++)
             {
                 // Boundary 1:
@@ -708,6 +726,7 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
                     dot_.N5 += a_p;
                     dot_.E5 += a_p*ion.dE5(ii);
                     dot_.P5 += a_p*ion.M*ion.V_p(ii,0);
+                    if (ion.Z < 0.0) speciesElectronEnergyInjectedRate += a_p*ion.dE5(ii);
 
                     // Clear flags:
                     ion.f5(ii)  = 0;
@@ -715,10 +734,14 @@ void particleBC_TYP::getParticleInjectionRates(const params_TYP &params, const C
                 }
             } // omp parallel for
 
+            localElectronEnergyInjectedRate += speciesElectronEnergyInjectedRate;
+
         } // Species
 
         // Reduce over all MPI process
         MPI_AllreduceDouble<3> (params,&dot_.N5);
+        MPI_Allreduce(&localElectronEnergyInjectedRate, &electronEnergyInjectedRate_, 1,
+                      MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
 
     } // Particle MPI
 }
@@ -1180,15 +1203,13 @@ void particleBC_TYP::particleReinjection(const int ii, const params_TYP &params,
     //4: Periodic:
 	if (ION.p_BC.BC_type == 3)
 	{
-        if (ION.X_p(ii) > params.geometry.LX_max)
-        {
-            ION.X_p(ii) = params.geometry.LX_min;
-        }
-
-        if (ION.X_p(ii) < params.geometry.LX_min)
-        {
-            ION.X_p(ii) = params.geometry.LX_max;
-        }
+		const double length = params.geometry.LX_max - params.geometry.LX_min;
+		if (length > double_zero)
+		{
+			double wrapped = fmod(ION.X_p(ii) - params.geometry.LX_min, length);
+			if (wrapped < 0.0) wrapped += length;
+			ION.X_p(ii) = params.geometry.LX_min + wrapped;
+		}
 
 	}
 

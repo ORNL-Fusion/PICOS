@@ -304,6 +304,34 @@ HDF_TYP::HDF_TYP(params_TYP * params, FS_TYP * FS, vector<ionSpecies_TYP> * IONS
         saveToHDF5(outputFile, name, &params->SW.electronPlasmaTimeStepLimiter);
         name.clear();
 
+        name = "allowUnderResolvedFullPIC";
+        saveToHDF5(outputFile, name, &params->SW.allowUnderResolvedFullPIC);
+        name.clear();
+
+        name = "kineticModelQualification";
+        saveToHDF5(outputFile, name, &params->kineticModelQualification);
+        name.clear();
+
+        name = "electronDebyeLength";
+        cpp_type_value = params->electronDebyeLength;
+        saveToHDF5(outputFile, name, &cpp_type_value);
+        name.clear();
+
+        name = "electronDebyeLengthToGrid";
+        cpp_type_value = params->electronDebyeLengthToGrid;
+        saveToHDF5(outputFile, name, &cpp_type_value);
+        name.clear();
+
+        name = "electronPlasmaDtRatio";
+        cpp_type_value = params->electronPlasmaDtRatio;
+        saveToHDF5(outputFile, name, &cpp_type_value);
+        name.clear();
+
+        name = "electronGyroDtRatio";
+        cpp_type_value = params->electronGyroDtRatio;
+        saveToHDF5(outputFile, name, &cpp_type_value);
+        name.clear();
+
         name = "velocityDistributionModel";
         saveToHDF5(outputFile, name, &params->velocityDistributionModel);
         name.clear();
@@ -753,8 +781,53 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 					saveToHDF5(group_species_rf, name, &cpp_type_value);
 					name.clear();
 
+					name = "uE3StochasticLinear";
+					cpp_type_value = rf.uE3StochasticLinear*CS->energy/
+						(CS->time*CS->eField);
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
 					name = "E3";
 					cpp_type_value = rf.E3*CS->energy/CS->time;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "cumulativeAbsorbedEnergy";
+					cpp_type_value = rf.cumulativeAbsorbedEnergy*CS->energy;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "cumulativeTargetEnergy";
+					cpp_type_value = rf.cumulativeTargetEnergy*CS->energy;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "cumulativeActiveTime";
+					cpp_type_value = rf.cumulativeActiveTime*CS->time;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "cumulativeCoupledTargetEnergy";
+					cpp_type_value = rf.cumulativeCoupledTargetEnergy*CS->energy;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "cumulativeCoupledTime";
+					cpp_type_value = rf.cumulativeCoupledTime*CS->time;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "timeAveragedAbsorbedPower";
+					cpp_type_value = rf.cumulativeActiveTime > double_zero ?
+						rf.cumulativeAbsorbedEnergy/rf.cumulativeActiveTime*
+						CS->energy/CS->time : 0.0;
+					saveToHDF5(group_species_rf, name, &cpp_type_value);
+					name.clear();
+
+					name = "coupledTimeAveragedAbsorbedPower";
+					cpp_type_value = rf.cumulativeCoupledTime > double_zero ?
+						rf.cumulativeAbsorbedEnergy/rf.cumulativeCoupledTime*
+						CS->energy/CS->time : 0.0;
 					saveToHDF5(group_species_rf, name, &cpp_type_value);
 					name.clear();
 
@@ -784,6 +857,10 @@ void HDF_TYP::saveOutputs(const params_TYP * params, const vector<ionSpecies_TYP
 				saveBoundaryScalar("E5", particleBC->dot_.E5, CS->energy/CS->time);
 				saveBoundaryScalar("E6", particleBC->dot_.E6, CS->energy/CS->time);
 				saveBoundaryScalar("P5", particleBC->dot_.P5, CS->mass*CS->velocity/CS->time);
+				saveBoundaryScalar("electronEnergyLostRate", particleBC->electronEnergyLostRate_, CS->energy/CS->time);
+				saveBoundaryScalar("electronEnergyInjectedRate", particleBC->electronEnergyInjectedRate_, CS->energy/CS->time);
+				saveBoundaryScalar("cumulativeElectronEnergyLost", particleBC->cumulativeElectronEnergyLost_, CS->energy);
+				saveBoundaryScalar("cumulativeElectronEnergyInjected", particleBC->cumulativeElectronEnergyInjected_, CS->energy);
 				delete group_boundary;
 			}
 		else if (params->mpi.COMM_COLOR == FIELDS_MPI_COLOR)

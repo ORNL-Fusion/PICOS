@@ -25,6 +25,11 @@ using namespace std;
 #define FIELD_SOLVE_OHM 0
 #define FIELD_SOLVE_POISSON 1
 #define FIELD_SOLVE_REFORMULATED_POISSON 2
+#define KINETIC_MODEL_HYBRID 0
+#define KINETIC_MODEL_CLASSICAL_PIC_RESOLVED 1
+#define KINETIC_MODEL_REFORMULATED 2
+#define KINETIC_MODEL_QUASINEUTRAL_PROJECTED 3
+#define KINETIC_MODEL_CLASSICAL_PIC_UNDERRESOLVED 4
 #define POISSON_BC_DIRICHLET 0
 #define POISSON_BC_PERIODIC 1
 #define POISSON_BC_SHEATH 2
@@ -34,7 +39,7 @@ using namespace std;
 #define RF_EFIELD_POWER_BALANCE 0
 #define RF_EFIELD_FIXED 1
 #define RF_RESONANCE_SIGN_CROSSING 0
-#define RF_RESONANCE_FORTRAN_WINDOW 1
+#define RF_RESONANCE_POST_RESONANCE_WINDOW 1
 #define VELOCITY_DISTRIBUTION_INDEPENDENT_MAXWELLIAN 0
 #define VELOCITY_DISTRIBUTION_FORTRAN_CORRELATED_PERP 1
 #define COLLISION_OPERATOR_BOOZER 1
@@ -79,24 +84,28 @@ struct p_IC_TYP
 	// ==============================
 	double Tper;
 	double Tpar;
+	double Upar;
 	double densityFraction;
 
 	// Name of external files:
 	// =======================
 	string Tper_fileName; 				// File containing normalized spatial profile of Tper
 	string Tpar_fileName; 				// File containing normalized spatial profile of Tpar
+	string Upar_fileName;                 // File containing normalized parallel-flow profile
 	string densityFraction_fileName;	// File containing normalized spatial profile
 
 	// Number of elements of profiles:
 	// ===============================
 	int Tper_NX;
 	int Tpar_NX;
+	int Upar_NX;
 	int densityFraction_NX;
 
 	// Variables to store profiles from external files:
 	// ================================================
 	arma::vec Tper_profile;
 	arma::vec Tpar_profile;
+	arma::vec Upar_profile;
 	arma::vec densityFraction_profile;
 	arma::vec x_profile;
 	double initialWeightScale;
@@ -106,9 +115,11 @@ struct p_IC_TYP
 		IC_type = 0;
 		Tper = 0;
 		Tpar = 0;
+		Upar = 0;
 		densityFraction = 0;
 		Tper_NX = 0;
 		Tpar_NX = 0;
+		Upar_NX = 0;
 		densityFraction_NX = 0;
 		initialWeightScale = 1.0;
 	}
@@ -494,6 +505,7 @@ struct SW_TYP
 	int relativisticElectrons;
 	int electronGyroTimeStepLimiter;
 	int electronPlasmaTimeStepLimiter;
+	int allowUnderResolvedFullPIC;
 	int kineticElectronQuasiNeutralProjection;
 	int kineticElectronThermostat;
 	int kineticElectronBackgroundHeating;
@@ -516,6 +528,7 @@ struct SW_TYP
 		relativisticElectrons = 0;
 		electronGyroTimeStepLimiter = 0;
 		electronPlasmaTimeStepLimiter = 0;
+		allowUnderResolvedFullPIC = 0;
 		kineticElectronQuasiNeutralProjection = 0;
 		kineticElectronThermostat = 0;
 		kineticElectronBackgroundHeating = 0;
@@ -704,6 +717,12 @@ struct RF_SPECIES_TYP
 	// Global RF electric field:
 	// =========================
 	double Erf;
+	double uE3StochasticLinear;
+	double cumulativeAbsorbedEnergy;
+	double cumulativeTargetEnergy;
+	double cumulativeActiveTime;
+	double cumulativeCoupledTargetEnergy;
+	double cumulativeCoupledTime;
 
 	// Constructor:
 	// ============
@@ -714,8 +733,6 @@ struct RF_SPECIES_TYP
 		freq = 0;
 		x1   = 0;
 		x2   = 0;
-		t_ON = 0;
-		t_OFF = 0;
 		t_ON = 0;
 		t_OFF = 0;
 		kpar = 0;
@@ -733,6 +750,12 @@ struct RF_SPECIES_TYP
 		E3   = 0;
 		uE3  = 0;
 		Erf  = 0;
+		uE3StochasticLinear = 0;
+		cumulativeAbsorbedEnergy = 0;
+		cumulativeTargetEnergy = 0;
+		cumulativeActiveTime = 0;
+		cumulativeCoupledTargetEnergy = 0;
+		cumulativeCoupledTime = 0;
 	}
 };
 
@@ -932,6 +955,11 @@ struct params_TYP
 	double kineticElectronQuasiNeutralDensityFloor;
 	double kineticElectronThermostatRelaxation;
 	double kineticElectronBackgroundPower;
+	int kineticModelQualification;
+	double electronDebyeLength;
+	double electronDebyeLengthToGrid;
+	double electronPlasmaDtRatio;
+	double electronGyroDtRatio;
 
 	double ionLarmorRadius;
 	double ionSkinDepth;
@@ -962,6 +990,11 @@ struct params_TYP
 		kineticElectronQuasiNeutralDensityFloor = 1.0e-4;
 		kineticElectronThermostatRelaxation = 1.0;
 		kineticElectronBackgroundPower = 0.0;
+		kineticModelQualification = KINETIC_MODEL_HYBRID;
+		electronDebyeLength = 0.0;
+		electronDebyeLengthToGrid = 0.0;
+		electronPlasmaDtRatio = 0.0;
+		electronGyroDtRatio = 0.0;
 	}
 };
 
