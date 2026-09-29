@@ -239,13 +239,14 @@ int main(int argc, char* argv[])
 		// external electron heat reservoir.  This optional kinetic counterpart
 		// restores only the cell thermal spread; density and parallel flow are
 		// unchanged.  Keep it off during the subsequent ECH evolution.
+		particleBC.dot_.E6 = 0.0;
 		if (params.SW.kineticElectronThermostat == 1)
 		{
-			particleBC.dot_.E6 = PIC.applyKineticElectronThermostat(params, IONS);
+			particleBC.dot_.E6 += PIC.applyKineticElectronThermostat(params, IONS);
 		}
-		else
+		if (params.SW.kineticElectronBackgroundHeating == 1)
 		{
-			particleBC.dot_.E6 = 0.0;
+			particleBC.dot_.E6 += PIC.applyKineticElectronBackgroundHeating(params, IONS);
 		}
 
         // Apply RF operator:

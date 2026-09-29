@@ -496,6 +496,7 @@ struct SW_TYP
 	int electronPlasmaTimeStepLimiter;
 	int kineticElectronQuasiNeutralProjection;
 	int kineticElectronThermostat;
+	int kineticElectronBackgroundHeating;
 	int linearSolve;
 	int advancePos;
 
@@ -517,6 +518,7 @@ struct SW_TYP
 		electronPlasmaTimeStepLimiter = 0;
 		kineticElectronQuasiNeutralProjection = 0;
 		kineticElectronThermostat = 0;
+		kineticElectronBackgroundHeating = 0;
 		linearSolve   = 0;
 		advancePos    = 0;
 	}
@@ -929,6 +931,7 @@ struct params_TYP
 	double kineticElectronQuasiNeutralMaxScale;
 	double kineticElectronQuasiNeutralDensityFloor;
 	double kineticElectronThermostatRelaxation;
+	double kineticElectronBackgroundPower;
 
 	double ionLarmorRadius;
 	double ionSkinDepth;
@@ -958,6 +961,7 @@ struct params_TYP
 		kineticElectronQuasiNeutralMaxScale = 4.0;
 		kineticElectronQuasiNeutralDensityFloor = 1.0e-4;
 		kineticElectronThermostatRelaxation = 1.0;
+		kineticElectronBackgroundPower = 0.0;
 	}
 };
 

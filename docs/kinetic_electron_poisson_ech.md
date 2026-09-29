@@ -56,11 +56,25 @@ kineticElectronThermostatRelaxation 0.05
 
 The thermostat rescales the parallel and perpendicular thermal spreads in each
 cell toward the prescribed `Te_m` profile while preserving marker weights and
-cell-averaged parallel electron flow.  Use it only while preparing or checking
-an ECH-off steady background.  Set `SW_kineticElectronThermostat=0` in the ECH
-stage so the electron distribution and high-energy tail evolve without a
-temperature clamp.  This option makes the hybrid heat-bath assumption explicit;
-it does not claim that a source-only open kinetic plasma is energetically closed.
+cell-averaged parallel electron flow. Use it only while preparing or checking
+an ECH-off steady background and disable it for a short freely evolving ECH
+continuation.
+
+For long steady/ECH-on/recovery cycles, first measure the converged thermostat
+power and replace the temperature clamp with a fixed background power that is
+identical in every stage:
+
+```text
+SW_kineticElectronThermostat       0
+SW_kineticElectronBackgroundHeating 1
+kineticElectronBackgroundPower     2.28e5
+```
+
+The fixed-power operator scales electron thermal velocities around each cell's
+weighted parallel flow and supplies exactly `power*DT` globally. It never removes
+ECH energy and does not change when ECH is toggled. These options make the hybrid
+heat-bath assumption explicit; they do not claim that a source-only open kinetic
+plasma is energetically closed.
 The supplied reservoir power is written as `boundary/E6` in each particle HDF5
 output, in watts after output normalization.  This makes the otherwise implicit
 power required by the hybrid prescribed-`Te` closure measurable.

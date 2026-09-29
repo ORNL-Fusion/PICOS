@@ -51,6 +51,9 @@ collisionRandomSeed        -1
 // Enable only in the ECH-off steady stage; disable for free kinetic/ECH evolution.
 SW_kineticElectronThermostat 0
 kineticElectronThermostatRelaxation 0.05
+// Fixed background power can remain unchanged through steady, ECH-on, and recovery.
+SW_kineticElectronBackgroundHeating 0
+kineticElectronBackgroundPower 0.0
 SW_RFheating                1
 SW_RFheatingIons            0
 SW_RFheatingElectrons       1

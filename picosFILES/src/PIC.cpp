@@ -659,6 +659,111 @@ double PIC_TYP::applyKineticElectronThermostat(const params_TYP &params,
 	return params.DT > double_zero ? energyChange/params.DT : 0.0;
 }
 
+// Supply a fixed background power to kinetic electrons. The same power can
+// remain enabled during background, ECH-on, and recovery stages, so ECH is the
+// only changing energy source. A common thermal-velocity scale preserves every
+// cell's weighted parallel flow and adds exactly P*DT globally.
+double PIC_TYP::applyKineticElectronBackgroundHeating(const params_TYP &params,
+                                                       vector<ionSpecies_TYP> &IONS)
+{
+	if (params.mpi.COMM_COLOR != PARTICLES_MPI_COLOR ||
+	    params.SW.kineticElectronBackgroundHeating == 0 ||
+	    params.kineticElectronBackgroundPower <= 0.0 ||
+	    params.DT <= double_zero)
+	{
+		return 0.0;
+	}
+
+	const int cellCount = params.mesh.NX_IN_SIM;
+	constexpr int momentsPerCell = 4;
+	vector<vector<double>> meanVpar(IONS.size());
+	double totalThermalEnergy = 0.0;
+
+	for (size_t speciesIndex=0; speciesIndex<IONS.size(); speciesIndex++)
+	{
+		ionSpecies_TYP &species = IONS[speciesIndex];
+		if (species.Z >= 0.0 || species.M <= double_zero)
+		{
+			continue;
+		}
+
+		vector<double> moments(static_cast<size_t>(cellCount)*momentsPerCell, 0.0);
+		auto index = [](const int cell, const int moment)
+		{
+			return static_cast<size_t>(cell)*momentsPerCell + moment;
+		};
+		for (int ii=0; ii<static_cast<int>(species.NSP); ii++)
+		{
+			const double weight = species.NCP*species.a_p(ii);
+			if (weight <= double_zero)
+			{
+				continue;
+			}
+			const int cell = std::clamp(static_cast<int>(species.mn(ii)), 0, cellCount - 1);
+			const double vpar = species.V_p(ii,0);
+			const double vper = perpendicularSpeed(species, ii, params);
+			moments[index(cell,0)] += weight;
+			moments[index(cell,1)] += weight*vpar;
+			moments[index(cell,2)] += weight*vpar*vpar;
+			moments[index(cell,3)] += weight*vper*vper;
+		}
+		MPI_Allreduce(MPI_IN_PLACE, moments.data(), static_cast<int>(moments.size()),
+		              MPI_DOUBLE, MPI_SUM, params.mpi.COMM);
+
+		meanVpar[speciesIndex].assign(cellCount, 0.0);
+		double thermalSquare = 0.0;
+		for (int cell=0; cell<cellCount; cell++)
+		{
+			const double weight = moments[index(cell,0)];
+			if (weight <= double_zero)
+			{
+				continue;
+			}
+			const double mean = moments[index(cell,1)]/weight;
+			meanVpar[speciesIndex][cell] = mean;
+			thermalSquare += max(moments[index(cell,2)] - weight*mean*mean, 0.0) +
+			                 max(moments[index(cell,3)], 0.0);
+		}
+		totalThermalEnergy += 0.5*species.M*thermalSquare;
+	}
+
+	if (totalThermalEnergy <= double_zero)
+	{
+		return 0.0;
+	}
+	const double requestedEnergy = params.kineticElectronBackgroundPower*params.DT;
+	const double velocityScale = sqrt(1.0 + requestedEnergy/totalThermalEnergy);
+
+	for (size_t speciesIndex=0; speciesIndex<IONS.size(); speciesIndex++)
+	{
+		ionSpecies_TYP &species = IONS[speciesIndex];
+		if (species.Z >= 0.0 || meanVpar[speciesIndex].empty())
+		{
+			continue;
+		}
+		const int particleCount = species.NSP;
+		const vector<double> &cellMean = meanVpar[speciesIndex];
+		#pragma omp parallel for default(none) shared(species, params, cellMean, particleCount, cellCount) firstprivate(velocityScale)
+		for (int ii=0; ii<particleCount; ii++)
+		{
+			if (species.a_p(ii) <= double_zero)
+			{
+				continue;
+			}
+			const int cell = std::clamp(static_cast<int>(species.mn(ii)), 0, cellCount - 1);
+			const double mean = cellMean[cell];
+			species.V_p(ii,0) = mean + velocityScale*(species.V_p(ii,0) - mean);
+			setPerpendicularSpeed(species, ii, params,
+			                      velocityScale*perpendicularSpeed(species, ii, params));
+			const double vper = perpendicularSpeed(species, ii, params);
+			species.mu_p(ii) = 0.5*species.M*vper*vper/
+			                   std::max(species.BX_p(ii), double_zero);
+		}
+	}
+
+	return requestedEnergy/params.DT;
+}
+
 double PIC_TYP::perpendicularSpeed(const ionSpecies_TYP &ION, int ii, const params_TYP &params)
 {
 	if (params.advanceParticleMethod == PARTICLE_PUSH_BORIS_FULL_ORBIT && ION.V_p.n_cols > 2)
